@@ -1,0 +1,13 @@
+node_modules/
+dist/
+*.log
+
+# Baza danych i kopie — nigdy do repozytorium
+*.db
+*.db-shm
+*.db-wal
+dane/
+
+# Sekrety
+.env
+.env.local
