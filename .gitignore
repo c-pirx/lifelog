@@ -18,3 +18,6 @@ dist-rozszerzenie/
 
 # Prywatne dane wdrożenia — poza repozytorium publicznym
 MOJE.md
+
+# Katalog roboczy narzędzi Claude Code (mieści też worktree wewnątrz repo)
+.claude/

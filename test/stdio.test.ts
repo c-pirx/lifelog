@@ -9,8 +9,17 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+// Ścieżki liczymy względem tego pliku i przez mechanizm rozwiązywania Node,
+// a nie względem katalogu roboczego. W git worktree (i przy hoistowanych
+// zależnościach) katalog node_modules leży piętro wyżej, więc dosłowne
+// "node_modules/tsx/dist/cli.mjs" nie istnieje — proces potomny wstawał
+// wtedy martwy, a test padał na mylącym „Connection closed".
+const TSX = fileURLToPath(import.meta.resolve("tsx/cli"));
+const SERWER_STDIO = fileURLToPath(new URL("../src/mcp/stdio.ts", import.meta.url));
 
 let katalogTymczasowy: string;
 let klient: Client;
@@ -29,7 +38,7 @@ beforeAll(async () => {
   await klient.connect(
     new StdioClientTransport({
       command: process.execPath,
-      args: [resolve("node_modules/tsx/dist/cli.mjs"), resolve("src/mcp/stdio.ts")],
+      args: [TSX, SERWER_STDIO],
       env: {
         ...process.env,
         DB_PATH: join(katalogTymczasowy, "test.db"),

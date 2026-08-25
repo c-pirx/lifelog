@@ -192,6 +192,38 @@ export function posilkiZZakresu(db: Baza, od: string, doDaty: string): WierszPos
     .all(od, doDaty);
 }
 
+export type WierszCzestegoPosilku = {
+  opis: string;
+  ile: number;
+  ostatnio: string;
+  kcal: number;
+  bialko_g: number;
+  wegle_g: number;
+  tluszcz_g: number;
+};
+
+/**
+ * Najczęściej powtarzane posiłki z ostatnich dni — do podpowiedzi w aplikacji.
+ *
+ * Makro pochodzą z NAJNOWSZEGO wystąpienia, nie ze średniej: gdy porcja się
+ * zmieniła, świeższa wartość jest bliższa prawdy niż uśredniona historia.
+ * Kolumny bez agregatu obok MAX() zwraca w SQLite ten wiersz, który dał
+ * maksimum — zachowanie udokumentowane i celowo tu wykorzystane.
+ */
+export function czestePosilki(db: Baza, od: string, limit: number): WierszCzestegoPosilku[] {
+  return db
+    .prepare<[string, number], WierszCzestegoPosilku>(
+      `SELECT opis, COUNT(*) AS ile, MAX(ts) AS ostatnio,
+              kcal, bialko_g, wegle_g, tluszcz_g
+       FROM posilki
+       WHERE data_lokalna >= ?
+       GROUP BY opis
+       ORDER BY ile DESC, ostatnio DESC
+       LIMIT ?`,
+    )
+    .all(od, limit);
+}
+
 /** Sumy dzienne liczone w bazie — do wykresów za dłuższy okres. */
 export function sumyDzienne(
   db: Baza,

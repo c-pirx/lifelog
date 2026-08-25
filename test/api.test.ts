@@ -177,6 +177,51 @@ describe("trening przez API", () => {
     expect(((await odpowiedz.json()) as { blad: string }).blad).toMatch(/aktywn/i);
   });
 
+  it("zapisuje serię pod godziną podaną przez klienta", async () => {
+    // Fundament kolejki offline: seria wpisana o 18:05 i wysłana o 19:30
+    // musi wylądować pod 18:05, inaczej historia treningu kłamie.
+    await wyslij("/api/trening/seria", {
+      cwiczenie: "przysiad",
+      powtorzenia: 3,
+      ciezar_kg: 102.5,
+      czas: "2026-08-24T16:05:00.000Z",
+    });
+
+    const stan = await pobierz<StanTreningu>("/api/trening");
+    const zapisana = stan.wg_planu[0]?.serie.find((s) => s.ciezar_kg === 102.5);
+
+    expect(zapisana?.ts).toBe("2026-08-24T16:05:00.000Z");
+    // Serie sortują się po ts (repo.serieSesji), więc wpis z wcześniejszą
+    // godziną wchodzi na swoje miejsce w kolejności, a nie na koniec listy.
+    expect(stan.wg_planu[0]?.serie[0]?.ciezar_kg).toBe(102.5);
+  });
+
+  it("przyjmuje ćwiczenie spoza planu w podanym typie", async () => {
+    const po = (await (
+      await wyslij("/api/trening/seria", { cwiczenie: "ergometr", typ: "cardio", czas_s: 600 })
+    ).json()) as StanTreningu;
+
+    const dodatkowe = po.poza_planem.find((c) => c.nazwa === "ergometr");
+
+    expect(dodatkowe?.typ).toBe("cardio");
+    expect(dodatkowe?.serie[0]?.czas_s).toBe(600);
+  });
+
+  it("usuwa serię przez /api/wpis", async () => {
+    const przed = await pobierz<StanTreningu>("/api/trening");
+    const doUsuniecia = przed.poza_planem.find((c) => c.nazwa === "ergometr")?.serie[0];
+
+    const odpowiedz = await wyslij("/api/wpis", {
+      typ: "seria",
+      id: doUsuniecia?.id,
+      akcja: "usun",
+    });
+    expect(odpowiedz.status).toBe(200);
+
+    const po = await pobierz<StanTreningu>("/api/trening");
+    expect(po.poza_planem.find((c) => c.nazwa === "ergometr")).toBeUndefined();
+  });
+
   it("zamyka sesję", async () => {
     const odpowiedz = await wyslij("/api/trening/koniec", { notatki: "ok" });
     expect(odpowiedz.status).toBe(200);

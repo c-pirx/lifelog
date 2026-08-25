@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { otworzBaze, type Baza } from "../src/db/index.js";
-import { podsumowanieDnia, ustawCele, zapiszPosilek } from "../src/domain/diet.js";
+import {
+  czestePosilki,
+  podsumowanieDnia,
+  ustawCele,
+  zapiszPosilek,
+} from "../src/domain/diet.js";
 
 let db: Baza;
 
@@ -247,5 +252,58 @@ describe("cele w czasie", () => {
     ustawCele(db, { ...CELE, kcal: 1800, obowiazuje_od: "2026-08-15" });
 
     expect(podsumowanieDnia(db, "2026-08-20").cele?.kcal).toBe(1800);
+  });
+});
+
+describe("częste posiłki", () => {
+  /** Data odniesienia podawana jawnie — inaczej testy zaczęłyby padać z czasem. */
+  const DO = "2026-08-25";
+
+  function zapisz(opis: string, kcal: number, data: string) {
+    zapiszPosilek(db, { opis, kcal, bialko_g: kcal / 10, ts: `${data}T12:00:00.000Z` });
+  }
+
+  it("porządkuje po liczbie powtórzeń", () => {
+    zapisz("owsianka", 400, "2026-08-20");
+    zapisz("owsianka", 400, "2026-08-21");
+    zapisz("owsianka", 400, "2026-08-22");
+    zapisz("kanapka", 300, "2026-08-23");
+    zapisz("kanapka", 300, "2026-08-24");
+    zapisz("sałatka", 200, "2026-08-24");
+
+    const czeste = czestePosilki(db, { do: DO });
+
+    expect(czeste.map((p) => [p.opis, p.ile])).toEqual([
+      ["owsianka", 3],
+      ["kanapka", 2],
+      ["sałatka", 1],
+    ]);
+  });
+
+  it("bierze makro z najnowszego wystąpienia, nie ze średniej", () => {
+    // Porcja urosła — podpowiedź ma proponować to, co jadło się ostatnio.
+    zapisz("owsianka", 400, "2026-08-20");
+    zapisz("owsianka", 600, "2026-08-24");
+
+    expect(czestePosilki(db, { do: DO })[0]).toMatchObject({ opis: "owsianka", kcal: 600 });
+  });
+
+  it("pomija posiłki spoza okna", () => {
+    zapisz("stare danie", 500, "2026-07-01");
+    zapisz("świeże danie", 500, "2026-08-24");
+
+    const czeste = czestePosilki(db, { dni: 30, do: DO });
+
+    expect(czeste.map((p) => p.opis)).toEqual(["świeże danie"]);
+  });
+
+  it("przycina listę do podanego limitu", () => {
+    for (const nazwa of ["a", "b", "c", "d", "e"]) zapisz(nazwa, 100, "2026-08-24");
+
+    expect(czestePosilki(db, { limit: 3, do: DO })).toHaveLength(3);
+  });
+
+  it("na pustej bazie zwraca pustą listę", () => {
+    expect(czestePosilki(db, { do: DO })).toEqual([]);
   });
 });

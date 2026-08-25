@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 136 testów
+npm test             # 164 testy
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -98,9 +98,23 @@ docierają do użytkownika.
 w **każdej** rozmowie. Nowe możliwości dokładaj przez parametry istniejących
 narzędzi (wzorzec: `zmien_wpis`), nie przez kolejne pozycje. Pilnuje tego test.
 
-**Testy nie mogą zależeć od dzisiejszej daty.** `trendWagi` przyjmuje datę
-odniesienia właśnie dlatego — wcześniejsza wersja testów zaczęłaby padać po
-90 dniach bez żadnej zmiany w kodzie.
+**Testy nie mogą zależeć od dzisiejszej daty.** `trendWagi` i `czestePosilki`
+przyjmują datę odniesienia właśnie dlatego — wcześniejsza wersja testów
+zaczęłaby padać po 90 dniach bez żadnej zmiany w kodzie.
+
+**Testy nie mogą zależeć od katalogu roboczego.** `test/stdio.test.ts` sięga
+po `tsx` przez `import.meta.resolve`, a nie po ścieżkę `node_modules/…`.
+W git worktree zależności leżą piętro wyżej i dosłowna ścieżka nie istnieje —
+proces potomny wstawał martwy, a vitest raportował mylące „Connection closed".
+
+**Timer przerwy żyje poza `#widok`.** `odswiez()` podmienia całą zawartość
+widoku, więc odliczanie umieszczone w środku ginęłoby przy każdej zapisanej
+serii — czyli dokładnie wtedy, kiedy jest potrzebne.
+
+**Blokada podwójnego zapisu siedzi na formularzu, nie na przycisku.**
+Formularz wysyła się też klawiszem „Gotowe" z klawiatury telefonu, a ta droga
+omija wyłączony przycisk. Przy słabym zasięgu żądanie odrzuca się po kilku
+sekundach i bez blokady wpis zapisywał się dwa razy.
 
 **Certyfikat pobierany przez `--webroot`, nie wtyczką `--nginx`**, żeby
 certbot nie przepisywał naszej konfiguracji. Ustawienia TLS są wpisane wprost.
@@ -133,7 +147,30 @@ Poza zakresem: nawodnienie, suplementy, sen, samopoczucie.
 konkretnym opisie zapis od razu, przy ogólniku dopytanie o porcję. To jedyny
 element, którego nie da się dostroić testami — wymaga obserwacji w praktyce.
 
+## Warstwa offline
+
+Aplikacja działa bez zasięgu i to nie jest dodatek — do siłowni wchodzi się
+z zamkniętą aplikacją. Trzy pliki, każdy z osobnym zadaniem:
+
+- **`public/sw.js`** — cache powłoki i ostatnich odpowiedzi GET. POST-y
+  świadomie tędy **nie** przechodzą; umiałby najwyżej udać, że się udało.
+- **`public/kolejka.js`** — zapisy odłożone w IndexedDB. Wysyłka **ściśle
+  sekwencyjna**, bo numer serii nadaje serwer licząc dotychczasowe. 401
+  zatrzymuje kolejkę, 400 wyrzuca wpis (inaczej jeden zły zapis blokuje ją
+  na zawsze).
+- **`public/nakladka.js`** — czyste funkcje pokazujące wpisy z kolejki na tle
+  stanu z serwera. **Nie liczą niczego domenowego**: nie oceniają słabszej
+  serii, nie wnioskują pory posiłku. To jedyny kawałek offline'u objęty
+  testami (`test/offline.test.ts`) — reszta wymaga przeglądarki.
+
+Każdy zapis z aplikacji niesie `czas` powstania wpisu. Bez tego seria wpisana
+o 18:05 i wysłana o 19:30 wylądowałaby w historii pod złą godziną.
+
 ## Po MVP (kolejność wg wartości)
 
-Szablony posiłków → kody kreskowe (Open Food Facts, bez klucza API) → wykresy
-→ tygodniowy raport z zadania cyklicznego → eksport CSV.
+Szablony posiłków z własną tabelą → kody kreskowe (Open Food Facts, bez klucza
+API) → tygodniowy raport z zadania cyklicznego → eksport CSV.
+
+Zrobione: wykresy (SVG wprost w `app.js`, bez biblioteki) oraz tani wariant
+szablonów — podpowiedzi z najczęstszych posiłków (`czestePosilki`), które
+wypełniają formularz, ale go nie wysyłają.

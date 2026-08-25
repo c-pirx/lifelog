@@ -167,7 +167,15 @@ export function aktywnaSesja(db: Baza): Sesja | null {
   return wiersz ? zbudujSesje(wiersz) : null;
 }
 
-export type OpcjeStartu = Opcje & { kod?: string };
+export type OpcjeStartu = Opcje & {
+  kod?: string;
+  /**
+   * Sesja bez dnia planu — świadomie, a nie z braku kodu. Samo pominięcie
+   * `kod` sięga do harmonogramu, więc w poniedziałek otworzyłoby dzień A
+   * zamiast pustego treningu.
+   */
+  bez_planu?: boolean;
+};
 
 export function rozpocznijTrening(db: Baza, opcje: OpcjeStartu = {}): Sesja {
   const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
@@ -183,13 +191,19 @@ export function rozpocznijTrening(db: Baza, opcje: OpcjeStartu = {}): Sesja {
     );
   }
 
-  // Jawnie wskazany dzień ma pierwszeństwo; harmonogram jest tylko podpowiedzią.
-  const dzien = opcje.kod
-    ? (repo.dzienPlanuPoKodzie(db, opcje.kod) ??
-      (() => {
-        throw new BladDomeny(`Nie znaleziono dnia planu o kodzie "${opcje.kod}"`, "nieznany_dzien");
-      })())
-    : repo.dzienPlanuNaDzienTygodnia(db, dzienTygodnia(ts, strefa));
+  // Jawnie wskazany dzień ma pierwszeństwo; harmonogram jest tylko podpowiedzią,
+  // a bez_planu bije jedno i drugie.
+  const dzien = opcje.bez_planu
+    ? undefined
+    : opcje.kod
+      ? (repo.dzienPlanuPoKodzie(db, opcje.kod) ??
+        (() => {
+          throw new BladDomeny(
+            `Nie znaleziono dnia planu o kodzie "${opcje.kod}"`,
+            "nieznany_dzien",
+          );
+        })())
+      : repo.dzienPlanuNaDzienTygodnia(db, dzienTygodnia(ts, strefa));
 
   const id = repo.wstawSesje(db, {
     dzien_id: dzien?.id ?? null,
@@ -254,7 +268,7 @@ export function zapiszSerie(db: Baza, dane: NowaSeria, opcje: Opcje = {}): Seria
     );
   }
 
-  const cwiczenie = zapewnijCwiczenie(db, dane.cwiczenie);
+  const cwiczenie = zapewnijCwiczenie(db, dane.cwiczenie, dane.typ ?? "silowe");
   sprawdzPolaSerii(cwiczenie.typ, dane, cwiczenie.nazwa);
 
   // Pola nienależące do typu ćwiczenia zostają puste, żeby historia się nie mieszała.

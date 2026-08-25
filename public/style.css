@@ -72,6 +72,42 @@ header .data {
   font-variant-numeric: tabular-nums;
 }
 
+/* === Stan sieci i wpisy czekające ====================================== */
+
+#stan-sieci {
+  font-size: 0.75rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+#stan-sieci.czeka {
+  background: color-mix(in srgb, var(--ostrzezenie) 18%, transparent);
+  color: var(--ostrzezenie);
+}
+
+#stan-sieci.bez-sieci {
+  background: var(--powierzchnia-2);
+  color: var(--tekst-cichy);
+}
+
+/* Wpis czekający w kolejce jest przygaszony — widać, że jeszcze nie jest
+   faktem, ale nadal daje się przeczytać. */
+.wpis.oczekuje,
+.seria.oczekuje {
+  opacity: 0.68;
+}
+
+.seria.oczekuje {
+  background: var(--powierzchnia-2);
+  color: var(--tekst-cichy);
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 8px;
+}
+
 main {
   padding: var(--odstep);
   max-width: 640px;
@@ -117,6 +153,78 @@ nav button .znak {
 
 nav button[aria-current="page"] {
   color: var(--akcent);
+}
+
+/* === Timer przerwy ===================================================== */
+
+/* Siedzi tuż nad nawigacją, żeby był widoczny bez względu na to, jak daleko
+   użytkownik przewinął listę ćwiczeń. */
+#timer {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--wysokosc-nawigacji) + env(safe-area-inset-bottom) + 10px);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(calc(100% - 24px), 420px);
+  padding: 8px 10px 8px 14px;
+  background: var(--powierzchnia-2);
+  border: 1px solid var(--obramowanie);
+  border-radius: var(--promien);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+#timer .odliczanie {
+  font-size: 1.35rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  min-width: 62px;
+}
+
+#timer.minela {
+  border-color: var(--akcent);
+}
+
+#timer.minela .odliczanie {
+  color: var(--akcent);
+}
+
+#timer .wybor {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+#timer .wybor button {
+  appearance: none;
+  min-height: 40px;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--obramowanie);
+  border-radius: 9px;
+  background: var(--powierzchnia);
+  color: var(--tekst-cichy);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+#timer .wybor button[aria-pressed="true"] {
+  border-color: var(--akcent);
+  color: var(--akcent);
+}
+
+#timer-zamknij {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--tekst-cichy);
+  min-height: 40px;
+  min-width: 36px;
+  font-size: 1rem;
+  cursor: pointer;
 }
 
 /* === Karty ============================================================= */
@@ -276,13 +384,19 @@ nav button[aria-current="page"] {
   margin-bottom: 10px;
 }
 
+/* Zapisana seria jest przyciskiem, nie etykietą: stuknięcie otwiera poprawkę.
+   Rozmiar dotyku celowo większy niż sam tekst — na siłowni trafia się gorzej. */
 .seria {
+  appearance: none;
+  border: 0;
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
-  padding: 5px 10px;
+  min-height: 36px;
+  padding: 7px 12px;
   border-radius: 8px;
   background: var(--akcent-ciemny);
   color: var(--akcent);
+  cursor: pointer;
 }
 
 .seria.slabsza {
@@ -290,11 +404,167 @@ nav button[aria-current="page"] {
   color: var(--ostrzezenie);
 }
 
+.seria.edytowana {
+  outline: 2px solid var(--akcent);
+}
+
+.seria:active {
+  transform: scale(0.96);
+}
+
+/* Krokowa zmiana ciężaru: dwa duże przyciski obok pola. Wpisywanie „82.5”
+   spoconym kciukiem między seriami jest wolniejsze niż dwa stuknięcia. */
+.stopien {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  gap: 6px;
+}
+
+.stopien button {
+  appearance: none;
+  min-height: 48px;
+  border: 1px solid var(--obramowanie);
+  border-radius: 10px;
+  background: var(--powierzchnia-2);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stopien button:active {
+  transform: scale(0.96);
+}
+
 .poprzednio {
   font-size: 0.8rem;
   color: var(--tekst-cichy);
   margin-bottom: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* === Pasek dat ========================================================= */
+
+.paskodat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.paskodat .etykieta-daty {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.paskodat button {
+  font-size: 1.4rem;
+  line-height: 1;
+  min-width: 48px;
+}
+
+.paskodat button[disabled] {
+  opacity: 0.3;
+}
+
+/* === Podpowiedzi posiłków ============================================= */
+
+.podpowiedzi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.podpowiedz {
+  appearance: none;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--obramowanie);
+  border-radius: 999px;
+  background: var(--powierzchnia-2);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.podpowiedz .ile {
+  color: var(--tekst-cichy);
+  font-variant-numeric: tabular-nums;
+}
+
+.podpowiedz:active {
+  transform: scale(0.96);
+}
+
+/* Formularz poprawki wchodzi na miejsce wpisu — stąd obramowanie zamiast tła,
+   żeby było widać, którą pozycję listy się właśnie edytuje. */
+.wpis-edycja {
+  border: 1px solid var(--akcent);
+  border-radius: var(--promien);
+  padding: 12px;
+  margin: 10px 0;
+}
+
+/* === Wykresy =========================================================== */
+
+.wykres {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 14px;
+  overflow: visible;
+}
+
+.wykres .linia {
+  fill: none;
+  stroke: var(--akcent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.wykres .punkt {
+  fill: var(--tekst-cichy);
+}
+
+.wykres .slupek {
+  fill: var(--akcent-ciemny);
+}
+
+.wykres .slupek.ponad {
+  fill: color-mix(in srgb, var(--ostrzezenie) 45%, transparent);
+}
+
+.wykres .cel-linia {
+  stroke: var(--tekst-cichy);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.podpis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--tekst-cichy);
+  font-variant-numeric: tabular-nums;
+}
+
+.teraz {
+  margin-top: 14px;
+  font-size: 1.4rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.teraz .cel {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--tekst-cichy);
 }
 
 /* === Formularze i przyciski =========================================== */
@@ -414,6 +684,25 @@ label {
 .komunikat.blad {
   border-color: var(--blad);
   color: var(--blad);
+}
+
+.komunikat .cofnij {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--akcent);
+  font: inherit;
+  font-weight: 650;
+  margin-left: 14px;
+  padding: 4px 2px;
+  cursor: pointer;
+}
+
+/* Komunikat i timer zajmują to samo miejsce nad nawigacją, a pojawiają się
+   razem — po zapisaniu serii. Przy włączonym timerze komunikat idzie wyżej,
+   zamiast zasłaniać odliczanie w chwili, w której zaczyna biec. */
+body:has(#timer:not([hidden])) .komunikat {
+  bottom: calc(var(--wysokosc-nawigacji) + env(safe-area-inset-bottom) + 78px);
 }
 
 /* === Logowanie ======================================================== */
