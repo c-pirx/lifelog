@@ -18,22 +18,9 @@ const KORZEN = resolve(import.meta.dirname, "..");
 const ZRODLO = join(KORZEN, "rozszerzenie");
 const BUDOWA = join(KORZEN, "dist-rozszerzenie");
 
-function odczytajToken() {
-  const plik = join(KORZEN, ".env");
-  if (!existsSync(plik)) throw new Error("Brak pliku .env — skopiuj .env.example i uzupełnij");
-
-  const token = readFileSync(plik, "utf8")
-    .split("\n")
-    .find((linia) => linia.startsWith("MCP_TOKEN="))
-    ?.slice("MCP_TOKEN=".length)
-    .trim();
-
-  if (!token) throw new Error("MCP_TOKEN jest pusty w pliku .env");
-  return token;
+if (!existsSync(join(KORZEN, "dist", "mcp", "stdio.js"))) {
+  throw new Error("Brak dist/mcp/stdio.js — zbuduj projekt: npm run build");
 }
-
-const port = process.env.PORT ?? "3000";
-const adres = `http://localhost:${port}/mcp/${odczytajToken()}`;
 
 const manifest = {
   manifest_version: "0.3",
@@ -43,8 +30,8 @@ const manifest = {
   description: "Dziennik posiłków i treningów — zapis i podsumowania z rozmowy.",
   long_description:
     "Zapisuje posiłki z makroskładnikami, prowadzi przez trening według stałego planu " +
-    "i pilnuje realizacji celów. Łączy się z serwerem działającym na tym komputerze, " +
-    "więc dane nie opuszczają Twojej maszyny.",
+    "i pilnuje realizacji celów. Działa lokalnie — dane nie opuszczają tego komputera " +
+    "i nic nie musi działać w tle: Claude uruchamia serwer wtedy, kiedy go potrzebuje.",
   author: { name: "Projekt osobisty" },
   icon: "icon.png",
   server: {
@@ -53,17 +40,18 @@ const manifest = {
     mcp_config: {
       command: "node",
       args: ["${__dirname}/server/index.js"],
-      env: { MCP_URL: "${user_config.adres_serwera}" },
+      env: { KATALOG_PROJEKTU: "${user_config.katalog_projektu}" },
     },
   },
   user_config: {
-    adres_serwera: {
-      type: "string",
-      title: "Adres serwera",
+    katalog_projektu: {
+      type: "directory",
+      title: "Katalog projektu",
       description:
-        "Pełny adres serwera MCP wraz z tokenem. Serwer musi działać (npm run dev).",
+        "Katalog z zbudowanym projektem (musi zawierać dist/mcp/stdio.js po npm run build).",
       required: true,
-      default: adres,
+      multiple: false,
+      default: [KORZEN],
     },
   },
   compatibility: { runtimes: { node: ">=20.0.0" } },
@@ -84,4 +72,4 @@ execFileSync("npx", ["-y", "@anthropic-ai/mcpb", "pack", BUDOWA, join(KORZEN, "a
 console.log("\nGotowe: asystent.mcpb");
 console.log("Instalacja: Claude Desktop → Ustawienia → Extensions → Advanced settings");
 console.log("            → Extension Developer → Install Extension… → wskaż ten plik");
-console.log("\nUWAGA: paczka zawiera token dostępu do Twoich danych. Nie udostępniaj jej.");
+console.log("\nSerwer nie musi działać w tle — Claude uruchamia go sam, gdy jest potrzebny.");

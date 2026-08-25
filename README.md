@@ -108,30 +108,36 @@ Serwer MCP działa pod `/mcp/<MCP_TOKEN>`. Token siedzi w ścieżce, bo konektor
 Claude przyjmuje wyłącznie adres URL — uwierzytelnianie nagłówkiem jest po
 stronie Anthropic wciąż w wersji beta.
 
-Która droga jest potrzebna, zależy od tego, **gdzie działa klient**:
+Projekt ma **dwa wejścia MCP** do tej samej bazy:
 
-| Klient | Sięga do localhost? | Jak podłączyć |
+| Wejście | Plik | Dla kogo |
 |---|---|---|
-| **Claude Code** | tak | `claude mcp add --transport http` — natywnie, bez mostu |
-| **Claude Desktop (czat)** | tak, ale tylko przez stdio | most `mcp-remote` (`npm run podlacz`) |
-| **claude.ai i aplikacja mobilna** | **nie** | wymaga publicznego HTTPS — Etap 4 |
+| **stdio** (lokalny serwer) | `dist/mcp/stdio.js` | Claude Code, Claude Desktop |
+| **HTTP** | `/mcp/<token>` w serwerze | aplikacja webowa, docelowo telefon |
 
-Publiczny adres jest potrzebny wyłącznie dla claude.ai i telefonu, bo tam
-Claude łączy się z chmury Anthropic. Klienty działające na Twoim komputerze
-sięgają do `localhost` bez żadnego hostingu.
+**Domyślnie używaj stdio.** Claude uruchamia ten proces sam, kiedy go
+potrzebuje, i zamyka po zakończeniu — nic nie musi działać w tle. Serwer HTTP
+zostaje potrzebny tylko dla aplikacji webowej i dla dostępu z telefonu po
+wdrożeniu. Oba mogą pracować równocześnie: baza działa w trybie WAL, który
+dopuszcza czytanie w trakcie zapisu.
 
-### Claude Code — najprostsza droga
+### Podłączenie
 
 ```bash
-claude mcp add --transport http --scope user asystent-diety \
-  "http://localhost:3000/mcp/<MCP_TOKEN>"
+npm run build
+claude mcp add --scope user asystent-diety -- node <ścieżka>/dist/mcp/stdio.js
 ```
 
 Sprawdzenie: `claude mcp list` powinno pokazać `✓ Connected`. Narzędzia
 pojawiają się w **nowej** sesji — serwery MCP wczytują się przy jej starcie.
 
-Jeśli widzisz `✗ Failed to connect`, prawie zawsze znaczy to, że serwer nie
-działa. Uruchom `npm run dev`.
+Po każdej zmianie w kodzie serwera trzeba przebudować (`npm run build`),
+bo Claude uruchamia skompilowaną wersję z `dist/`.
+
+### Telefon i claude.ai — dopiero po wdrożeniu
+
+Tam Claude łączy się z chmury Anthropic, więc potrzebny jest publiczny adres
+HTTPS i wejście HTTP. To Etap 4.
 
 ### Claude Desktop (czat) — jako rozszerzenie
 
@@ -140,19 +146,19 @@ konektory działają na poziomie konta i łączy się z nimi chmura Anthropic.
 Lokalny serwer dodaje się inaczej — jako rozszerzenie:
 
 ```bash
-npm run rozszerzenie
+npm run build && npm run rozszerzenie
 ```
 
 Powstaje `asystent.mcpb`. Instalacja: **Ustawienia → Extensions → Advanced
 settings → Extension Developer → Install Extension…** i wskazanie pliku.
-Adres serwera jest wpisany w paczce, ale można go zmienić w polu
-konfiguracyjnym rozszerzenia.
 
-Ta droga jest odporna na nadpisywanie pliku konfiguracyjnego (patrz niżej)
-i nie wymaga zamykania aplikacji.
+Paczka nie zawiera serwera — tylko go uruchamia z katalogu projektu, którego
+ścieżkę podaje się w polu konfiguracyjnym rozszerzenia. Powód: serwer używa
+natywnego modułu SQLite i potrzebuje dostępu do pliku bazy, więc pakowanie go
+w archiwum nic by nie dało.
 
-> **Paczka zawiera token dostępu do Twoich danych.** Jest w `.gitignore`
-> i nie powinna trafić do nikogo innego.
+Ta droga nie wymaga zamykania aplikacji i jest odporna na nadpisywanie pliku
+konfiguracyjnego (patrz niżej).
 
 ### Claude Desktop — wariant przez plik konfiguracyjny
 
