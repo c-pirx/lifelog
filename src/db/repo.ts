@@ -668,3 +668,134 @@ export function aktualizujWage(
 export function usunWage(db: Baza, id: number): number {
   return db.prepare("DELETE FROM waga_ciala WHERE id = ?").run(id).changes;
 }
+
+// === RAPORTY TYGODNIOWE =================================================
+
+export type WierszRaportu = {
+  id: number;
+  tydzien_od: string;
+  tydzien_do: string;
+  dane: string;
+  komentarz: string | null;
+  komentarz_ts: string | null;
+  utworzono: string;
+};
+
+const KOLUMNY_RAPORTU = `id, tydzien_od, tydzien_do, dane, komentarz, komentarz_ts, utworzono`;
+
+/**
+ * Zapis raportu jest idempotentny dzięki UNIQUE na `tydzien_od` — ponowne
+ * generowanie tego samego tygodnia nie nadpisze migawki ani komentarza.
+ */
+export function wstawRaport(
+  db: Baza,
+  dane: { tydzien_od: string; tydzien_do: string; dane: string; utworzono: string },
+): void {
+  db.prepare(
+    `INSERT OR IGNORE INTO raporty_tygodniowe (tydzien_od, tydzien_do, dane, utworzono)
+     VALUES (@tydzien_od, @tydzien_do, @dane, @utworzono)`,
+  ).run(dane);
+}
+
+export function raportPoTygodniu(db: Baza, tydzienOd: string): WierszRaportu | undefined {
+  return db
+    .prepare<[string], WierszRaportu>(
+      `SELECT ${KOLUMNY_RAPORTU} FROM raporty_tygodniowe WHERE tydzien_od = ?`,
+    )
+    .get(tydzienOd);
+}
+
+export function ostatnieRaporty(db: Baza, limit: number): WierszRaportu[] {
+  return db
+    .prepare<[number], WierszRaportu>(
+      `SELECT ${KOLUMNY_RAPORTU} FROM raporty_tygodniowe ORDER BY tydzien_od DESC LIMIT ?`,
+    )
+    .all(limit);
+}
+
+export function tygodnieZRaportem(db: Baza, od: string, doDaty: string): string[] {
+  return db
+    .prepare<[string, string], { tydzien_od: string }>(
+      `SELECT tydzien_od FROM raporty_tygodniowe WHERE tydzien_od BETWEEN ? AND ?`,
+    )
+    .all(od, doDaty)
+    .map((w) => w.tydzien_od);
+}
+
+export function ustawKomentarzRaportu(
+  db: Baza,
+  tydzienOd: string,
+  komentarz: string,
+  ts: string,
+): number {
+  return db
+    .prepare("UPDATE raporty_tygodniowe SET komentarz = ?, komentarz_ts = ? WHERE tydzien_od = ?")
+    .run(komentarz, ts, tydzienOd).changes;
+}
+
+/** Najstarszy dzień z jakimkolwiek wpisem — punkt startowy generowania raportów. */
+export function najwczesniejszaData(db: Baza): string | undefined {
+  return (
+    db
+      .prepare<[], { data: string | null }>(
+        `SELECT MIN(data) AS data FROM (
+           SELECT MIN(data_lokalna) AS data FROM posilki
+           UNION ALL SELECT MIN(data_lokalna) FROM sesje
+           UNION ALL SELECT MIN(data_lokalna) FROM waga_ciala
+         )`,
+      )
+      .get()?.data ?? undefined
+  );
+}
+
+/** Ile wpisów dowolnego rodzaju wpadło w zakres — tygodnie puste pomijamy. */
+export function ileWpisow(db: Baza, od: string, doDaty: string): number {
+  return (
+    db
+      .prepare<[string, string, string, string, string, string], { ile: number }>(
+        `SELECT (SELECT COUNT(*) FROM posilki WHERE data_lokalna BETWEEN ? AND ?)
+              + (SELECT COUNT(*) FROM sesje WHERE data_lokalna BETWEEN ? AND ?)
+              + (SELECT COUNT(*) FROM waga_ciala WHERE data_lokalna BETWEEN ? AND ?) AS ile`,
+      )
+      .get(od, doDaty, od, doDaty, od, doDaty)?.ile ?? 0
+  );
+}
+
+export function ileSesjiZakonczonych(db: Baza, od: string, doDaty: string): number {
+  return (
+    db
+      .prepare<[string, string], { ile: number }>(
+        `SELECT COUNT(*) AS ile FROM sesje
+         WHERE status = 'zakonczona' AND data_lokalna BETWEEN ? AND ?`,
+      )
+      .get(od, doDaty)?.ile ?? 0
+  );
+}
+
+/**
+ * Serie z zakończonych sesji w zakresie, zsumowane per ćwiczenie.
+ *
+ * Objętość ma sens wyłącznie dla ćwiczeń siłowych — przy cardio i „na czas"
+ * kolumny `ciezar_kg` i `powtorzenia` są puste, więc iloczyn dawałby zero
+ * udające wynik. Stąd jawny warunek na typ zamiast cichego COALESCE.
+ */
+export function agregatSerii(
+  db: Baza,
+  od: string,
+  doDaty: string,
+): { nazwa: string; typ: TypCwiczenia; serie: number; objetosc_kg: number }[] {
+  return db
+    .prepare<[string, string], { nazwa: string; typ: TypCwiczenia; serie: number; objetosc_kg: number }>(
+      `SELECT c.nazwa, c.typ, COUNT(*) AS serie,
+              COALESCE(SUM(CASE WHEN c.typ = 'silowe'
+                                THEN COALESCE(se.ciezar_kg, 0) * COALESCE(se.powtorzenia, 0)
+                                ELSE 0 END), 0) AS objetosc_kg
+       FROM serie se
+       JOIN cwiczenia c ON c.id = se.cwiczenie_id
+       JOIN sesje s ON s.id = se.sesja_id
+       WHERE s.status = 'zakonczona' AND s.data_lokalna BETWEEN ? AND ?
+       GROUP BY c.id
+       ORDER BY objetosc_kg DESC, serie DESC, c.nazwa`,
+    )
+    .all(od, doDaty);
+}

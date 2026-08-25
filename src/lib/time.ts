@@ -190,3 +190,22 @@ export function zakresDat(od: string, doDaty: string): string[] {
   }
   return wynik;
 }
+
+/** Dzień tygodnia dla daty YYYY-MM-DD: 1 = poniedziałek … 7 = niedziela. */
+export function dzienTygodniaDaty(data: string): number {
+  const [rok, miesiac, dzien] = rozbijDate(data);
+  const numer = new Date(Date.UTC(rok, miesiac - 1, dzien)).getUTCDay();
+  return numer === 0 ? 7 : numer;
+}
+
+/**
+ * Tydzień raportu, w którym leży podana data — od niedzieli do soboty.
+ *
+ * Granica jest przesunięta wobec tygodnia ISO celowo: raport powstaje
+ * w niedzielę rano, a wtedy tydzień poniedziałek–niedziela jeszcze trwa.
+ * Niedziela–sobota daje siedem dni zamkniętych i świeże dane.
+ */
+export function tydzienRaportu(data: string): { od: string; do: string } {
+  const od = przesunDate(data, -(dzienTygodniaDaty(data) % 7));
+  return { od, do: przesunDate(od, 6) };
+}
