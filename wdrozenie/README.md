@@ -55,16 +55,55 @@ ssh asystent 'sudo systemctl restart asystent'    # restart
 ssh asystent 'sudo /usr/local/bin/asystent-kopia' # kopia na żądanie
 ```
 
+## Sprawdzenie kopii bez ruszania produkcji
+
+Warto powtarzać co jakiś czas — sprawdza **dzisiejszą** kopię, a nie to, że
+procedura zadziałała kiedyś. Nie zatrzymuje usługi i nie dotyka żywej bazy.
+
+```bash
+ssh asystent 'D=$(ls -t /var/backups/asystent/*.db.gz | head -1); \
+  gunzip -c "$D" > /tmp/proba.db && \
+  echo "kopia: $D" && \
+  sqlite3 /tmp/proba.db "PRAGMA integrity_check;" && \
+  sqlite3 /tmp/proba.db "SELECT (SELECT COUNT(*) FROM posilki) AS posilki, (SELECT COUNT(*) FROM serie) AS serie, (SELECT MAX(data_lokalna) FROM posilki) AS ostatni_dzien;"; \
+  rm -f /tmp/proba.db'
+```
+
+Oczekiwany wynik: `ok`, liczby porównywalne z produkcją i `ostatni_dzien`
+z wczoraj albo z dzisiaj. Liczby z produkcji do porównania:
+
+```bash
+ssh asystent 'sudo -u asystent sqlite3 /var/lib/asystent/asystent.db "SELECT (SELECT COUNT(*) FROM posilki), (SELECT COUNT(*) FROM serie);"'
+```
+
+Jeżeli `ostatni_dzien` jest sprzed kilku dni, to nie jest problem z kopią, tylko
+sygnał, że timer `asystent-kopia.timer` przestał chodzić — sprawdź
+`systemctl list-timers asystent-kopia`.
+
 ## Odtworzenie bazy z kopii
 
 ```bash
 ssh asystent
 sudo systemctl stop asystent
+
+# Bieżąca baza idzie na bok, a nie do kosza — gdyby kopia okazała się gorsza
+# niż to, co jest, bez tego kroku nie ma już do czego wrócić.
+sudo mv /var/lib/asystent/asystent.db /var/lib/asystent/asystent.db.przed-odtworzeniem
+
+# Pliki WAL należą do STAREJ bazy. Zostawione obok nowej, SQLite spróbuje je
+# do niej doczytać — usuwamy je razem z nią.
+sudo rm -f /var/lib/asystent/asystent.db-wal /var/lib/asystent/asystent.db-shm
+
 sudo gunzip -c /var/backups/asystent/asystent-RRRR-MM-DD.db.gz \
   | sudo tee /var/lib/asystent/asystent.db >/dev/null
 sudo chown asystent:asystent /var/lib/asystent/asystent.db
+sudo -u asystent sqlite3 /var/lib/asystent/asystent.db "PRAGMA integrity_check;"
+
 sudo systemctl start asystent
 ```
+
+Plik `.przed-odtworzeniem` kasujemy dopiero po sprawdzeniu, że aplikacja wstała
+i pokazuje spodziewane dane.
 
 Kopie powstają przez `sqlite3 .backup`, a nie przez kopiowanie pliku — baza
 działa w trybie WAL, w którym część zapisów siedzi w osobnym pliku `-wal`,
