@@ -108,7 +108,32 @@ Serwer MCP działa pod `/mcp/<MCP_TOKEN>`. Token siedzi w ścieżce, bo konektor
 Claude przyjmuje wyłącznie adres URL — uwierzytelnianie nagłówkiem jest po
 stronie Anthropic wciąż w wersji beta.
 
-### Claude Desktop — działa lokalnie, bez hostingu
+Która droga jest potrzebna, zależy od tego, **gdzie działa klient**:
+
+| Klient | Sięga do localhost? | Jak podłączyć |
+|---|---|---|
+| **Claude Code** | tak | `claude mcp add --transport http` — natywnie, bez mostu |
+| **Claude Desktop (czat)** | tak, ale tylko przez stdio | most `mcp-remote` (`npm run podlacz`) |
+| **claude.ai i aplikacja mobilna** | **nie** | wymaga publicznego HTTPS — Etap 4 |
+
+Publiczny adres jest potrzebny wyłącznie dla claude.ai i telefonu, bo tam
+Claude łączy się z chmury Anthropic. Klienty działające na Twoim komputerze
+sięgają do `localhost` bez żadnego hostingu.
+
+### Claude Code — najprostsza droga
+
+```bash
+claude mcp add --transport http --scope user asystent-diety \
+  "http://localhost:3000/mcp/<MCP_TOKEN>"
+```
+
+Sprawdzenie: `claude mcp list` powinno pokazać `✓ Connected`. Narzędzia
+pojawiają się w **nowej** sesji — serwery MCP wczytują się przy jej starcie.
+
+Jeśli widzisz `✗ Failed to connect`, prawie zawsze znaczy to, że serwer nie
+działa. Uruchom `npm run dev`.
+
+### Claude Desktop (czat) — przez most
 
 Konektory na claude.ai wymagają publicznego adresu HTTPS, bo Claude łączy się
 z chmury Anthropic. **Claude Desktop to omija**: uruchamia most `mcp-remote`
