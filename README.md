@@ -79,8 +79,28 @@ przez `src/lib/time.ts` — nigdy przez `getDate()` i podobne.
 - [x] **Etap 0** — szkielet: baza, migracje, konfiguracja, serwer, testy
 - [x] **Etap 1** — rdzeń domenowy (dieta, treningi, pomiary, poprawki)
 - [x] **Etap 2** — serwer MCP (11 narzędzi)
-- [ ] **Etap 3** — aplikacja webowa
+- [x] **Etap 3** — aplikacja webowa (PWA)
 - [ ] **Etap 4** — wdrożenie (po wyborze hostingu)
+
+## Aplikacja webowa
+
+Trzy ekrany, nawigacja przy kciuku na dole, ciemny motyw:
+
+- **Dziś** — paski makro wobec celów, lista posiłków z oznaczeniem szacunków, dodawanie i usuwanie
+- **Trening** — start dnia proponowanego z harmonogramu; w trakcie sesji lista ćwiczeń
+  z wynikami z poprzedniego razu, formularz serii wstępnie wypełniony ostatnim wynikiem
+- **Postępy** — waga ze średnią kroczącą i kalorie z ostatnich dni
+
+Instalacja na iPhonie: Safari → Udostępnij → „Do ekranu początkowego".
+
+Dane poglądowe do pracy nad wyglądem:
+
+```bash
+node tools/dane-demo.mjs http://localhost:3000
+```
+
+Ikony PWA generuje `node tools/generuj-ikony.mjs` (własny enkoder PNG, bez
+zależności graficznych — iOS wymaga PNG dla `apple-touch-icon`).
 
 ## Podłączenie do Claude
 

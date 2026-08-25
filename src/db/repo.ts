@@ -192,6 +192,25 @@ export function posilkiZZakresu(db: Baza, od: string, doDaty: string): WierszPos
     .all(od, doDaty);
 }
 
+/** Sumy dzienne liczone w bazie — do wykresów za dłuższy okres. */
+export function sumyDzienne(
+  db: Baza,
+  od: string,
+  doDaty: string,
+): { data_lokalna: string; kcal: number; bialko_g: number; wegle_g: number; tluszcz_g: number }[] {
+  return db
+    .prepare<[string, string], { data_lokalna: string; kcal: number; bialko_g: number; wegle_g: number; tluszcz_g: number }>(
+      `SELECT data_lokalna,
+              SUM(kcal) AS kcal, SUM(bialko_g) AS bialko_g,
+              SUM(wegle_g) AS wegle_g, SUM(tluszcz_g) AS tluszcz_g
+       FROM posilki
+       WHERE data_lokalna BETWEEN ? AND ?
+       GROUP BY data_lokalna
+       ORDER BY data_lokalna`,
+    )
+    .all(od, doDaty);
+}
+
 export function posilekPoId(db: Baza, id: number): WierszPosilku | undefined {
   return db
     .prepare<[number], WierszPosilku>(`SELECT ${KOLUMNY_POSILKU} FROM posilki WHERE id = ?`)

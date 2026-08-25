@@ -1,0 +1,11 @@
+// Kontrola typów obejmująca testy. Build (tsconfig.json) celowo ich nie widzi,
+// ale bez tego pliku zmiana sygnatury funkcji nie zepsułaby kompilacji testów
+// i wyszłaby dopiero przy uruchomieniu.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
+}

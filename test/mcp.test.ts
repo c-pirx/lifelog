@@ -34,7 +34,12 @@ async function wywolaj(nazwa: string, argumenty: Record<string, unknown> = {}): 
 
 beforeAll(async () => {
   db = otworzBaze({ sciezka: ":memory:" });
-  const app = utworzApp(db, { mcpToken: TOKEN, strefa: "Europe/Warsaw" });
+  const app = utworzApp(db, {
+    mcpToken: TOKEN,
+    haslo: "nieuzywane-w-tym-tescie",
+    sekretSesji: "nieuzywany-w-tym-tescie",
+    strefa: "Europe/Warsaw",
+  });
 
   serwer = serve({ fetch: app.fetch, port: 0 });
   await new Promise((gotowe) => serwer.once("listening", gotowe));

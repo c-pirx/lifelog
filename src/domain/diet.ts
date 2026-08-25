@@ -161,6 +161,24 @@ function zsumujMakro(posilki: Posilek[]): Makro {
   return posilki.reduce<Makro>((suma, p) => dodajMakro(suma, p), MAKRO_ZERO);
 }
 
+export type SumaDnia = Makro & { data: string; cel_kcal: number | null };
+
+/**
+ * Sumy dzienne za okres — do wykresów. Zwraca tylko dni z jakimkolwiek
+ * posiłkiem; puste dni nie są zmyślane, żeby wykres nie sugerował głodówki
+ * tam, gdzie po prostu nic nie zapisano.
+ */
+export function sumyDzienne(db: Baza, od: string, doDaty: string): SumaDnia[] {
+  return repo.sumyDzienne(db, od, doDaty).map((w) => ({
+    data: w.data_lokalna,
+    kcal: w.kcal,
+    bialko_g: w.bialko_g,
+    wegle_g: w.wegle_g,
+    tluszcz_g: w.tluszcz_g,
+    cel_kcal: repo.celeNaDzien(db, w.data_lokalna)?.kcal ?? null,
+  }));
+}
+
 export function podsumowanieDnia(db: Baza, data?: string, opcje: Opcje = {}): PodsumowanieDnia {
   const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
   const dzien = data ?? dzisiaj(strefa);

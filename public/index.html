@@ -3,12 +3,50 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0f1115" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Asystent" />
     <title>Asystent</title>
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/icons/ikona-180.png" />
+    <link rel="icon" href="/icons/ikona-192.png" />
+    <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
-    <main>
-      <h1>Asystent diety i treningu</h1>
-      <p>Aplikacja webowa powstaje w Etapie 3. Serwer działa.</p>
-    </main>
+    <div id="logowanie" hidden>
+      <form id="formularz-logowania">
+        <h1>Asystent</h1>
+        <p>Dziennik diety i treningów.</p>
+        <label for="haslo">Hasło</label>
+        <input id="haslo" type="password" autocomplete="current-password" required />
+        <div class="przyciski">
+          <button class="przycisk glowny" type="submit">Zaloguj</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="aplikacja" hidden>
+      <header>
+        <h1 id="tytul-ekranu">Dziś</h1>
+        <span class="data" id="data-ekranu"></span>
+      </header>
+
+      <main id="widok"></main>
+
+      <nav>
+        <button data-ekran="dzis" aria-current="page">
+          <span class="znak" aria-hidden="true">◍</span> Dziś
+        </button>
+        <button data-ekran="trening">
+          <span class="znak" aria-hidden="true">▦</span> Trening
+        </button>
+        <button data-ekran="postepy">
+          <span class="znak" aria-hidden="true">◈</span> Postępy
+        </button>
+      </nav>
+    </div>
+
+    <script src="/app.js" type="module"></script>
   </body>
 </html>

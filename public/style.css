@@ -1,0 +1,450 @@
+/*
+ * Ciemny motyw na stałe: aplikacja jest używana głównie na siłowni i wieczorem.
+ * Cele układu: duże pola dotyku (min. 44 px), nawigacja przy kciuku na dole,
+ * zero elementów wymagających precyzji podczas treningu.
+ */
+
+:root {
+  --tlo: #0f1115;
+  --powierzchnia: #171a21;
+  --powierzchnia-2: #1f232c;
+  --obramowanie: #2a2f3a;
+  --tekst: #e8eaed;
+  --tekst-cichy: #9aa3b2;
+  --akcent: #7dd3a0;
+  --akcent-ciemny: #2c4438;
+  --ostrzezenie: #f0b26b;
+  --blad: #e58b8b;
+
+  --promien: 14px;
+  --odstep: 16px;
+  --wysokosc-nawigacji: 64px;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--tlo);
+  color: var(--tekst);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.45;
+  overscroll-behavior-y: contain;
+}
+
+body {
+  /* Zapas na pasek nawigacji i obszar bezpieczny iPhone'a. */
+  padding-bottom: calc(var(--wysokosc-nawigacji) + env(safe-area-inset-bottom) + 8px);
+}
+
+/* === Nagłówek ========================================================== */
+
+header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: calc(env(safe-area-inset-top) + 14px) var(--odstep) 12px;
+  background: color-mix(in srgb, var(--tlo) 92%, transparent);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--obramowanie);
+}
+
+header h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+header .data {
+  color: var(--tekst-cichy);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+main {
+  padding: var(--odstep);
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* === Nawigacja dolna =================================================== */
+
+nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: color-mix(in srgb, var(--powierzchnia) 96%, transparent);
+  backdrop-filter: blur(12px);
+  border-top: 1px solid var(--obramowanie);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+nav button {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--tekst-cichy);
+  font: inherit;
+  font-size: 0.78rem;
+  height: var(--wysokosc-nawigacji);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  cursor: pointer;
+}
+
+nav button .znak {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+nav button[aria-current="page"] {
+  color: var(--akcent);
+}
+
+/* === Karty ============================================================= */
+
+.karta {
+  background: var(--powierzchnia);
+  border: 1px solid var(--obramowanie);
+  border-radius: var(--promien);
+  padding: var(--odstep);
+  margin-bottom: 12px;
+}
+
+.karta h2 {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--tekst-cichy);
+}
+
+/* === Paski postępu makro =============================================== */
+
+.makro + .makro {
+  margin-top: 14px;
+}
+
+.makro .etykieta {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+}
+
+.makro .etykieta b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.makro .etykieta .cel {
+  color: var(--tekst-cichy);
+  font-weight: 400;
+}
+
+.pasek {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--powierzchnia-2);
+  overflow: hidden;
+}
+
+.pasek > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--akcent);
+  transition: width 0.25s ease;
+}
+
+.pasek.przekroczony > span {
+  background: var(--ostrzezenie);
+}
+
+/* === Listy wpisów ====================================================== */
+
+.wpis {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--obramowanie);
+}
+
+.wpis:first-of-type {
+  border-top: 0;
+}
+
+.wpis .tresc {
+  flex: 1;
+  min-width: 0;
+}
+
+.wpis .naglowek {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.wpis .godzina {
+  color: var(--tekst-cichy);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.wpis .opis {
+  font-weight: 550;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wpis .szczegoly {
+  color: var(--tekst-cichy);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.znacznik {
+  display: inline-block;
+  font-size: 0.7rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--powierzchnia-2);
+  color: var(--tekst-cichy);
+  vertical-align: 1px;
+}
+
+/* === Ćwiczenia ========================================================= */
+
+.cwiczenie {
+  border-top: 1px solid var(--obramowanie);
+  padding: 14px 0;
+}
+
+.cwiczenie:first-of-type {
+  border-top: 0;
+}
+
+.cwiczenie .tytul {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.cwiczenie .nazwa {
+  font-weight: 600;
+}
+
+.cwiczenie.zrobione .nazwa {
+  color: var(--akcent);
+}
+
+.cwiczenie .licznik {
+  font-size: 0.85rem;
+  color: var(--tekst-cichy);
+  font-variant-numeric: tabular-nums;
+}
+
+.serie {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.seria {
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--akcent-ciemny);
+  color: var(--akcent);
+}
+
+.seria.slabsza {
+  background: color-mix(in srgb, var(--ostrzezenie) 18%, transparent);
+  color: var(--ostrzezenie);
+}
+
+.poprzednio {
+  font-size: 0.8rem;
+  color: var(--tekst-cichy);
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* === Formularze i przyciski =========================================== */
+
+button,
+input,
+select {
+  font: inherit;
+  color: var(--tekst);
+}
+
+input,
+select {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  background: var(--powierzchnia-2);
+  border: 1px solid var(--obramowanie);
+  border-radius: 10px;
+  outline: none;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--akcent);
+}
+
+label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--tekst-cichy);
+  margin-bottom: 5px;
+}
+
+.pola {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.pola .szeroko {
+  grid-column: 1 / -1;
+}
+
+.przycisk {
+  appearance: none;
+  min-height: 48px;
+  padding: 12px 18px;
+  border: 1px solid var(--obramowanie);
+  border-radius: 10px;
+  background: var(--powierzchnia-2);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.przycisk.glowny {
+  background: var(--akcent);
+  border-color: var(--akcent);
+  color: #10231a;
+}
+
+.przycisk.pelny {
+  width: 100%;
+}
+
+.przycisk.duzy {
+  min-height: 56px;
+  font-size: 1.05rem;
+}
+
+.przycisk.cichy {
+  background: none;
+  border: 0;
+  color: var(--tekst-cichy);
+  min-height: 44px;
+  padding: 8px 10px;
+}
+
+.przycisk:active {
+  transform: scale(0.985);
+}
+
+.przyciski {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.przyciski > * {
+  flex: 1;
+}
+
+/* === Komunikaty ======================================================= */
+
+.pusto {
+  color: var(--tekst-cichy);
+  text-align: center;
+  padding: 22px 0;
+  font-size: 0.9rem;
+}
+
+.komunikat {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--wysokosc-nawigacji) + env(safe-area-inset-bottom) + 16px);
+  transform: translateX(-50%);
+  z-index: 30;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 12px 16px;
+  border-radius: 10px;
+  background: var(--powierzchnia-2);
+  border: 1px solid var(--obramowanie);
+  box-shadow: 0 8px 28px rgb(0 0 0 / 45%);
+  font-size: 0.9rem;
+}
+
+.komunikat.blad {
+  border-color: var(--blad);
+  color: var(--blad);
+}
+
+/* === Logowanie ======================================================== */
+
+#logowanie {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--odstep);
+  background: var(--tlo);
+}
+
+#logowanie form {
+  width: 100%;
+  max-width: 340px;
+}
+
+#logowanie h1 {
+  font-size: 1.3rem;
+  margin: 0 0 6px;
+}
+
+#logowanie p {
+  color: var(--tekst-cichy);
+  font-size: 0.9rem;
+  margin: 0 0 20px;
+}
+
+[hidden] {
+  display: none !important;
+}
