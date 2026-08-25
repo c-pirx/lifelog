@@ -1235,9 +1235,18 @@ widok.addEventListener("click", (zdarzenie) => {
 
   const anuluj = cel.closest("[data-anuluj]");
   if (anuluj) {
-    const formularz = document.getElementById(anuluj.dataset.anuluj);
-    formularz.hidden = true;
-    formularz.nextElementSibling.hidden = false;
+    const id = anuluj.dataset.anuluj;
+    document.getElementById(id).hidden = true;
+
+    // Ten sam formularz otwierają dwa przyciski — „Odhacz serię" obok „+ Seria"
+    // oraz „inny wynik" — a każdy chowa własnego rodzica. Przy anulowaniu
+    // wracają wszystkie: przywracanie samego sąsiada formularza zostawiało
+    // „odhacz całe ćwiczenie" ukryte aż do następnego odświeżenia.
+    // Porównanie zamiast selektora, bo id ćwiczenia z kolejki niesie nazwę
+    // i potrafi zawierać spacje.
+    for (const otwierajacy of document.querySelectorAll("[data-pokaz]")) {
+      if (otwierajacy.dataset.pokaz === id) otwierajacy.parentElement.hidden = false;
+    }
     return;
   }
 
