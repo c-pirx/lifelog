@@ -5,7 +5,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "rootDir": "."
+    "rootDir": ".",
+    // Testy sięgają po moduły aplikacji webowej (public/*.js), żeby czysta
+    // logika offline nie została bez pokrycia. Build ich nie widzi.
+    "allowJs": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
 }

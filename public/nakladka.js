@@ -1,0 +1,173 @@
+/**
+ * Nakładka wpisów czekających w kolejce na stan pobrany z serwera.
+ *
+ * Bez niej trening bez zasięgu wyglądałby tak, jakby nic się nie zapisywało:
+ * seria trafia do kolejki, ale ekran nadal pokazuje stan sprzed niej.
+ *
+ * Świadomie NIE liczy niczego domenowego. Nie ocenia, czy seria była słabsza
+ * niż poprzednio, nie wnioskuje pory posiłku, nie przelicza celów. To wszystko
+ * należy do src/domain/ i pojawi się dopiero wtedy, gdy serwer przyjmie wpis.
+ * Jedyna arytmetyka tutaj to dodanie makro do sum dnia — bez tego pasek bilansu
+ * stałby w miejscu mimo zapisanego posiłku.
+ *
+ * Moduł jest czysty (bez DOM, bez sieci, bez IndexedDB) właśnie po to, żeby dało
+ * się go objąć testami — reszta warstwy offline sprawdzalna jest tylko ręcznie.
+ */
+
+/** Godzina HH:MM ze znacznika ISO, w strefie przeglądarki. */
+function godzina(iso) {
+  const data = new Date(iso);
+  if (Number.isNaN(data.getTime())) return "--:--";
+  return `${String(data.getHours()).padStart(2, "0")}:${String(data.getMinutes()).padStart(2, "0")}`;
+}
+
+const dopasujSciezke = (wpis, sciezka) => wpis.sciezka === sciezka;
+
+/**
+ * Podsumowanie dnia z doliczonymi posiłkami z kolejki i bez tych, których
+ * usunięcie czeka na wysłanie.
+ */
+export function nalozNaDzien(dzien, kolejka = []) {
+  const dodane = kolejka.filter((w) => dopasujSciezke(w, "/posilki"));
+  const usuwane = new Set(
+    kolejka
+      .filter((w) => dopasujSciezke(w, "/wpis"))
+      .filter((w) => w.dane?.typ === "posilek" && w.dane?.akcja === "usun")
+      .map((w) => w.dane.id),
+  );
+
+  if (dodane.length === 0 && usuwane.size === 0) return dzien;
+
+  const zostajace = dzien.posilki.filter((p) => !usuwane.has(p.id));
+
+  const oczekujace = dodane.map((wpis) => ({
+    id: `oczekuje-${wpis.id}`,
+    oczekuje: true,
+    godzina: godzina(wpis.dane.czas ?? wpis.czas_lokalny),
+    opis: wpis.dane.opis,
+    kcal: wpis.dane.kcal ?? 0,
+    bialko_g: wpis.dane.bialko_g ?? 0,
+    wegle_g: wpis.dane.wegle_g ?? 0,
+    tluszcz_g: wpis.dane.tluszcz_g ?? 0,
+    // Pora zostaje pusta: wnioskuje ją domena, nie my.
+    pora: null,
+    pewnosc: "dokladne",
+  }));
+
+  const posilki = [...zostajace, ...oczekujace];
+  const suma = (pole) => posilki.reduce((s, p) => s + (Number(p[pole]) || 0), 0);
+
+  return {
+    ...dzien,
+    posilki,
+    spozyte: {
+      kcal: suma("kcal"),
+      bialko_g: suma("bialko_g"),
+      wegle_g: suma("wegle_g"),
+      tluszcz_g: suma("tluszcz_g"),
+    },
+  };
+}
+
+/** Sesja udawana na czas, w którym jej rozpoczęcie czeka w kolejce. */
+function sesjaZKolejki(wpis, plan) {
+  const dzien = wpis.dane?.kod ? plan.find((d) => d.kod === wpis.dane.kod) : null;
+
+  return {
+    id: null,
+    oczekuje: true,
+    dzien_id: dzien?.id ?? null,
+    dzien_kod: dzien?.kod ?? null,
+    dzien_nazwa: dzien?.nazwa ?? null,
+    start_ts: wpis.czas_lokalny,
+    data_lokalna: (wpis.czas_lokalny ?? "").slice(0, 10),
+    koniec_ts: null,
+    status: "aktywna",
+    notatki: null,
+  };
+}
+
+/** Karta ćwiczenia zbudowana wyłącznie z serii czekających w kolejce. */
+function postepZKolejki(nazwa, typ) {
+  return {
+    cwiczenie_id: `oczekuje-${nazwa}`,
+    nazwa,
+    typ: typ ?? "silowe",
+    serie_cel: null,
+    powt_cel: null,
+    serie_zrobione: 0,
+    serie: [],
+    poprzednio: [],
+    slabsze_niz_poprzednio: [],
+    ukonczone: false,
+  };
+}
+
+/**
+ * Stan treningu z doliczonymi seriami z kolejki. `plan` służy tylko do nazwania
+ * dnia w sesji odtworzonej z kolejki.
+ */
+export function nalozNaTrening(trening, kolejka = [], plan = []) {
+  // Zakończenie treningu czekające w kolejce zamyka sesję także na ekranie —
+  // inaczej przycisk „Zakończ" kusiłby do drugiego kliknięcia.
+  if (kolejka.some((w) => dopasujSciezke(w, "/trening/koniec"))) {
+    return { ...trening, sesja: null, wg_planu: [], poza_planem: [] };
+  }
+
+  const start = kolejka.find((w) => dopasujSciezke(w, "/trening/start"));
+  const serie = kolejka.filter((w) => dopasujSciezke(w, "/trening/seria"));
+
+  if (!start && serie.length === 0) return trening;
+
+  const sesja = trening.sesja ?? (start ? sesjaZKolejki(start, plan) : null);
+  if (!sesja) return trening;
+
+  const wgPlanu = trening.wg_planu.map((c) => ({ ...c, serie: [...c.serie] }));
+  const pozaPlanem = trening.poza_planem.map((c) => ({ ...c, serie: [...c.serie] }));
+
+  const znajdz = (nazwa) => {
+    const szukana = nazwa.trim().toLowerCase();
+    const pasuje = (c) => c.nazwa.trim().toLowerCase() === szukana;
+    return wgPlanu.find(pasuje) ?? pozaPlanem.find(pasuje);
+  };
+
+  for (const wpis of serie) {
+    const nazwa = wpis.dane?.cwiczenie ?? "";
+    let cwiczenie = znajdz(nazwa);
+
+    if (!cwiczenie) {
+      cwiczenie = postepZKolejki(nazwa, wpis.dane?.typ);
+      pozaPlanem.push(cwiczenie);
+    }
+
+    cwiczenie.serie.push({
+      id: `oczekuje-${wpis.id}`,
+      oczekuje: true,
+      nr_serii: cwiczenie.serie.length + 1,
+      powtorzenia: wpis.dane?.powtorzenia ?? null,
+      ciezar_kg: wpis.dane?.ciezar_kg ?? null,
+      czas_s: wpis.dane?.czas_s ?? null,
+      dystans_m: wpis.dane?.dystans_m ?? null,
+      rpe: wpis.dane?.rpe ?? null,
+      ts: wpis.dane?.czas ?? wpis.czas_lokalny,
+    });
+  }
+
+  const przelicz = (c) => ({
+    ...c,
+    serie_zrobione: c.serie.length,
+    ukonczone: c.serie_cel ? c.serie.length >= c.serie_cel : c.serie.length > 0,
+  });
+
+  const gotowePlan = wgPlanu.map(przelicz);
+
+  return {
+    ...trening,
+    sesja,
+    wg_planu: gotowePlan,
+    poza_planem: pozaPlanem.map(przelicz),
+    ukonczone_cwiczen: gotowePlan.filter((c) => c.ukonczone).length,
+    wszystkich_cwiczen: gotowePlan.length,
+    pozostalo: gotowePlan.filter((c) => !c.ukonczone).map((c) => c.nazwa),
+  };
+}

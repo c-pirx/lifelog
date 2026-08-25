@@ -72,6 +72,42 @@ header .data {
   font-variant-numeric: tabular-nums;
 }
 
+/* === Stan sieci i wpisy czekające ====================================== */
+
+#stan-sieci {
+  font-size: 0.75rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+#stan-sieci.czeka {
+  background: color-mix(in srgb, var(--ostrzezenie) 18%, transparent);
+  color: var(--ostrzezenie);
+}
+
+#stan-sieci.bez-sieci {
+  background: var(--powierzchnia-2);
+  color: var(--tekst-cichy);
+}
+
+/* Wpis czekający w kolejce jest przygaszony — widać, że jeszcze nie jest
+   faktem, ale nadal daje się przeczytać. */
+.wpis.oczekuje,
+.seria.oczekuje {
+  opacity: 0.68;
+}
+
+.seria.oczekuje {
+  background: var(--powierzchnia-2);
+  color: var(--tekst-cichy);
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 8px;
+}
+
 main {
   padding: var(--odstep);
   max-width: 640px;

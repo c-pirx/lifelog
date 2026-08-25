@@ -6,9 +6,13 @@
  * ciężaru. Dlatego formularz serii jest wstępnie wypełniony poprzednim wynikiem.
  */
 
+import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
+import { nalozNaDzien, nalozNaTrening } from "./nakladka.js";
+
 const widok = document.getElementById("widok");
 const tytulEkranu = document.getElementById("tytul-ekranu");
 const dataEkranu = document.getElementById("data-ekranu");
+const stanSieci = document.getElementById("stan-sieci");
 const ekranLogowania = document.getElementById("logowanie");
 const aplikacja = document.getElementById("aplikacja");
 
@@ -37,6 +41,20 @@ async function api(sciezka, opcje = {}) {
       body: opcje.dane === undefined ? opcje.body : JSON.stringify(opcje.dane),
     });
   } catch {
+    // Zapis bez sieci nie przepada — idzie do kolejki i pojedzie później.
+    // Odczyt nie ma czego kolejkować, więc leci błędem jak dotąd.
+    if (opcje.method === "POST" && opcje.kolejkuj !== false) {
+      await dodajDoKolejki({
+        sciezka,
+        dane: opcje.dane ?? {},
+        // Godzina powstania wpisu, a nie godzina wysyłki — inaczej seria
+        // z 18:05 wylądowałaby w historii pod 19:30.
+        czas_lokalny: new Date().toISOString(),
+      });
+      await pokazStanSieci();
+      return { oczekuje: true };
+    }
+
     // Brak sieci albo serwer nie odpowiada — to zupełnie inna sytuacja
     // niż odrzucone hasło i użytkownik musi ją odróżnić.
     throw new BladApi("Brak połączenia z serwerem", 0);
@@ -68,16 +86,105 @@ function komunikat(tekst, czyBlad = false) {
   uchwytKomunikatu = setTimeout(() => element.remove(), czyBlad ? 5000 : 2500);
 }
 
-/** Opakowanie akcji: pokazuje błąd zamiast cichej porażki i odświeża widok. */
-async function akcja(wykonaj, potwierdzenie) {
+/**
+ * Opakowanie akcji: pokazuje błąd zamiast cichej porażki i odświeża widok.
+ *
+ * `formularz` blokuje na czas zapisu jego przycisk. Przy zerwanym połączeniu
+ * żądanie odrzuca się dopiero po kilku sekundach i bez blokady wygląda to tak,
+ * jakby przycisk nie zadziałał — a drugie stuknięcie zapisuje serię dwa razy.
+ */
+async function akcja(wykonaj, potwierdzenie, formularz) {
+  const przycisk = formularz?.querySelector('button[type="submit"]');
+  const etykieta = przycisk?.textContent;
+
+  if (formularz) {
+    // Znacznik na formularzu, a nie sama blokada przycisku: formularz wysyła
+    // się też klawiszem „Gotowe" z klawiatury telefonu, a ta droga omija
+    // wyłączony przycisk.
+    formularz.dataset.zapisuje = "1";
+  }
+
+  if (przycisk) {
+    przycisk.disabled = true;
+    przycisk.textContent = "Zapisuję…";
+  }
+
   try {
     await wykonaj();
     if (potwierdzenie) komunikat(potwierdzenie);
     await odswiez();
+    void wyslijCzekajace();
   } catch (blad) {
     komunikat(blad.message, true);
+  } finally {
+    // Przy powodzeniu widok jest już przerysowany i tego formularza nie ma;
+    // przywracamy go tylko wtedy, gdy nadal wisi na ekranie po błędzie.
+    if (formularz?.isConnected) delete formularz.dataset.zapisuje;
+    if (przycisk?.isConnected) {
+      przycisk.disabled = false;
+      przycisk.textContent = etykieta;
+    }
   }
 }
+
+// === Kolejka offline ====================================================
+
+async function pokazStanSieci() {
+  const wpisy = await wpisyKolejki();
+  const bezSieci = !navigator.onLine;
+
+  if (!bezSieci && wpisy.length === 0) {
+    stanSieci.hidden = true;
+    return wpisy;
+  }
+
+  stanSieci.hidden = false;
+  stanSieci.className = wpisy.length ? "czeka" : "bez-sieci";
+  stanSieci.textContent = wpisy.length ? `⏳ ${wpisy.length} do wysłania` : "bez sieci";
+  return wpisy;
+}
+
+let wysylkaTrwa = false;
+
+/** Próba opróżnienia kolejki. Cicha, gdy nie ma czego wysyłać. */
+async function wyslijCzekajace() {
+  if (wysylkaTrwa || !navigator.onLine) return;
+  wysylkaTrwa = true;
+
+  try {
+    const wynik = await wyslijKolejke(async (wpis) => {
+      try {
+        const odpowiedz = await fetch(`/api${wpis.sciezka}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          // `czas` przed rozwinięciem danych: gdy wpis niesie własną godzinę
+          // (posiłek zapisany wstecz), ma ona pierwszeństwo.
+          body: JSON.stringify({ czas: wpis.czas_lokalny, ...wpis.dane }),
+        });
+        return odpowiedz.status;
+      } catch {
+        return 0;
+      }
+    });
+
+    if (wynik.wyslane > 0) komunikat(`Wysłano zaległe wpisy: ${wynik.wyslane}`);
+    if (wynik.odrzucone > 0) {
+      komunikat(`Serwer odrzucił zaległe wpisy: ${wynik.odrzucone}`, true);
+    }
+    if (wynik.zatrzymana) pokazLogowanie();
+    if (wynik.wyslane > 0 || wynik.odrzucone > 0) await odswiez();
+  } finally {
+    wysylkaTrwa = false;
+    await pokazStanSieci();
+  }
+}
+
+window.addEventListener("online", () => {
+  void pokazStanSieci();
+  void wyslijCzekajace();
+});
+
+window.addEventListener("offline", () => void pokazStanSieci());
 
 // === Timer przerwy ======================================================
 
@@ -274,18 +381,25 @@ function ekranDzis(dzien) {
     ? dzien.posilki
         .map(
           (p) => `
-          <div class="wpis">
+          <div class="wpis ${p.oczekuje ? "oczekuje" : ""}">
             <div class="tresc">
               <div class="naglowek">
                 <span class="godzina">${esc(p.godzina)}</span>
                 <span class="opis">${esc(p.opis)}</span>
                 ${p.pewnosc === "szacowane" ? '<span class="znacznik">szacunek</span>' : ""}
+                ${p.oczekuje ? '<span class="znacznik">⏳ czeka</span>' : ""}
               </div>
               <div class="szczegoly">
                 ${zaokr(p.kcal)} kcal · B ${zaokr(p.bialko_g)} · W ${zaokr(p.wegle_g)} · T ${zaokr(p.tluszcz_g)}
               </div>
             </div>
-            <button class="przycisk cichy" data-usun-posilek="${p.id}" aria-label="Usuń">✕</button>
+            ${
+              // Wpis bez id z bazy nie ma czego usuwać — kasowanie wróci,
+              // gdy kolejka go wyśle.
+              p.oczekuje
+                ? ""
+                : `<button class="przycisk cichy" data-usun-posilek="${p.id}" aria-label="Usuń">✕</button>`
+            }
           </div>`,
         )
         .join("")
@@ -416,12 +530,15 @@ function kartaCwiczenia(cwiczenie) {
       ${
         cwiczenie.serie.length
           ? `<div class="serie">${cwiczenie.serie
-              .map(
-                (s) =>
-                  `<button type="button" data-edytuj-serie="${s.id}"
-                     class="seria ${cwiczenie.slabsze_niz_poprzednio.includes(s.nr_serii) ? "slabsza" : ""} ${s.id === edytowanaSeria ? "edytowana" : ""}">
-                     ${esc(seriaWTekscie(s))}
-                   </button>`,
+              .map((s) =>
+                // Seria czekająca w kolejce nie ma jeszcze id w bazie, więc nie
+                // ma czego poprawiać — zostaje etykietą do czasu wysłania.
+                s.oczekuje
+                  ? `<span class="seria oczekuje">⏳ ${esc(seriaWTekscie(s))}</span>`
+                  : `<button type="button" data-edytuj-serie="${s.id}"
+                       class="seria ${cwiczenie.slabsze_niz_poprzednio.includes(s.nr_serii) ? "slabsza" : ""} ${s.id === edytowanaSeria ? "edytowana" : ""}">
+                       ${esc(seriaWTekscie(s))}
+                     </button>`,
               )
               .join("")}</div>`
           : ""
@@ -578,9 +695,10 @@ const TYTULY = { dzis: "Dziś", trening: "Trening", postepy: "Postępy" };
 
 async function odswiez() {
   tytulEkranu.textContent = TYTULY[ekran];
+  const kolejka = await pokazStanSieci();
 
   if (ekran === "dzis") {
-    stan.dzien = await api("/dzien");
+    stan.dzien = nalozNaDzien(await api("/dzien"), kolejka);
     dataEkranu.textContent = stan.dzien.data;
     widok.innerHTML = ekranDzis(stan.dzien);
     return;
@@ -598,7 +716,7 @@ async function odswiez() {
     const dzisiajKod = plan.find((d) => d.dzien_tygodnia === numerDnia)?.kod;
 
     dataEkranu.textContent = zdrowie.dzisiaj;
-    widok.innerHTML = ekranTrening(trening, plan, dzisiajKod);
+    widok.innerHTML = ekranTrening(nalozNaTrening(trening, kolejka, plan), plan, dzisiajKod);
     return;
   }
 
@@ -721,6 +839,9 @@ widok.addEventListener("submit", (zdarzenie) => {
   zdarzenie.preventDefault();
   const formularz = zdarzenie.target;
 
+  // Zapis już trwa — drugie wysłanie zapisałoby ten sam wpis po raz drugi.
+  if (formularz.dataset.zapisuje === "1") return;
+
   if (formularz.id === "formularz-posilku") {
     akcja(
       () =>
@@ -735,18 +856,23 @@ widok.addEventListener("submit", (zdarzenie) => {
           },
         }),
       "Zapisano posiłek",
+      formularz,
     );
     return;
   }
 
   if (formularz.id.startsWith("seria-")) {
-    akcja(async () => {
-      await api("/trening/seria", {
-        method: "POST",
-        dane: { cwiczenie: formularz.dataset.cwiczenie, ...wynikZFormularza(formularz) },
-      });
-      startujPrzerwe();
-    });
+    akcja(
+      async () => {
+        await api("/trening/seria", {
+          method: "POST",
+          dane: { cwiczenie: formularz.dataset.cwiczenie, ...wynikZFormularza(formularz) },
+        });
+        startujPrzerwe();
+      },
+      undefined,
+      formularz,
+    );
     return;
   }
 
@@ -760,6 +886,7 @@ widok.addEventListener("submit", (zdarzenie) => {
           dane: { typ: "seria", id, akcja: "popraw", dane: wynikZFormularza(formularz) },
         }),
       "Poprawiono serię",
+      formularz,
     );
     return;
   }
@@ -768,24 +895,28 @@ widok.addEventListener("submit", (zdarzenie) => {
     const nazwa = formularz.elements.cwiczenie.value.trim();
     if (!nazwa) return komunikat("Podaj nazwę ćwiczenia", true);
 
-    akcja(async () => {
-      await api("/trening/seria", {
-        method: "POST",
-        dane: {
-          cwiczenie: nazwa,
-          typ: formularz.elements.typ.value,
-          ...wynikZFormularza(formularz),
-        },
-      });
-      startujPrzerwe();
-    }, "Dodano ćwiczenie");
+    akcja(
+      async () => {
+        await api("/trening/seria", {
+          method: "POST",
+          dane: {
+            cwiczenie: nazwa,
+            typ: formularz.elements.typ.value,
+            ...wynikZFormularza(formularz),
+          },
+        });
+        startujPrzerwe();
+      },
+      "Dodano ćwiczenie",
+      formularz,
+    );
     return;
   }
 
   if (formularz.id === "formularz-wagi") {
     const kg = liczbaZPola(formularz, "kg");
     if (!kg) return komunikat("Podaj wagę", true);
-    akcja(() => api("/waga", { method: "POST", dane: { kg } }), "Zapisano wagę");
+    akcja(() => api("/waga", { method: "POST", dane: { kg } }), "Zapisano wagę", formularz);
   }
 });
 
@@ -819,7 +950,14 @@ document.getElementById("formularz-logowania")?.addEventListener("submit", async
   przycisk.textContent = "Logowanie…";
 
   try {
-    await api("/logowanie", { method: "POST", dane: { haslo }, bezPrzekierowania: true });
+    // Logowania nie kolejkujemy: hasło wysłane za godzinę jest bezużyteczne,
+    // a użytkownik musi od razu wiedzieć, że nie ma połączenia.
+    await api("/logowanie", {
+      method: "POST",
+      dane: { haslo },
+      bezPrzekierowania: true,
+      kolejkuj: false,
+    });
     ekranLogowania.hidden = true;
     aplikacja.hidden = false;
     await odswiez();
@@ -838,12 +976,27 @@ document.getElementById("formularz-logowania")?.addEventListener("submit", async
 
 // === Start ==============================================================
 
+// Rejestracja service workera nie może blokować startu: bez niego aplikacja
+// nadal działa, tyle że wymaga sieci.
+navigator.serviceWorker?.register("/sw.js").catch(() => {
+  /* np. przeglądarka bez obsługi albo strona po http */
+});
+
 (async () => {
   try {
     await api("/dzien");
     aplikacja.hidden = false;
     await odswiez();
-  } catch {
+    void wyslijCzekajace();
+  } catch (blad) {
+    // Brak sieci to nie to samo co brak sesji. Przy pustej kolejce i tak nie ma
+    // co pokazać, ale z zaległymi wpisami wyrzucenie na logowanie skasowałoby
+    // widok treningu, który użytkownik właśnie wypełnił bez zasięgu.
+    if (blad.status === 0 && (await wpisyKolejki()).length > 0) {
+      aplikacja.hidden = false;
+      await odswiez().catch(() => pokazLogowanie());
+      return;
+    }
     pokazLogowanie();
   }
 })();
