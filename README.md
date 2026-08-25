@@ -112,24 +112,24 @@ stronie Anthropic wciąż w wersji beta.
 
 Konektory na claude.ai wymagają publicznego adresu HTTPS, bo Claude łączy się
 z chmury Anthropic. **Claude Desktop to omija**: uruchamia most `mcp-remote`
-jako lokalny proces, który sięga do `localhost`. Wpis w
-`%APPDATA%\Claude\claude_desktop_config.json`:
+jako lokalny proces, który sięga do `localhost`.
 
-```json
-"asystent-diety": {
-  "command": "S:\\szymo\\node.exe",
-  "args": [
-    "S:\\21agency\\personal-guirde\\node_modules\\mcp-remote\\dist\\proxy.js",
-    "http://localhost:3000/mcp/<MCP_TOKEN>"
-  ]
-}
-```
+Podłączenie — kolejność ma znaczenie:
 
-Wskazujemy `node.exe` i plik mostu wprost, zamiast `npx`. Claude Desktop
-uruchamia komendę bez powłoki, więc `npx` na Windowsie bywa nieznajdowany.
+1. **Zamknij Claude Desktop całkowicie** (także ikona w zasobniku).
+2. `npm run podlacz`
+3. Uruchom Claude Desktop.
+4. Serwer musi działać: `npm run dev`.
 
-Warunek: serwer musi być uruchomiony (`npm run dev`). Po zmianie konfiguracji
-trzeba zrestartować Claude Desktop.
+> **Dlaczego akurat w tej kolejności.** Claude Desktop nadpisuje
+> `claude_desktop_config.json` z własnej pamięci w trakcie działania i przy
+> zamykaniu. Wpis dodany przy włączonej aplikacji zostaje skasowany —
+> sprawdzone dwukrotnie. Dlatego `npm run podlacz` odmawia pracy, gdy proces
+> `Claude.exe` żyje, i robi kopię pliku przed zapisem.
+
+Skrypt wskazuje `node.exe` i plik mostu wprost, zamiast `npx`: Claude Desktop
+uruchamia komendę bez powłoki, więc `npx` na Windowsie bywa nieznajdowany —
+to najczęstsza przyczyna „konektor się nie pojawia".
 
 ### Telefon — dopiero po wdrożeniu
 

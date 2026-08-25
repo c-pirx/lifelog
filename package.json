@@ -15,6 +15,7 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
+    "podlacz": "node tools/podlacz-claude-desktop.mjs",
     "demo": "node tools/dane-demo.mjs",
     "reset": "node tools/wyczysc.mjs",
     "ikony": "node tools/generuj-ikony.mjs"
