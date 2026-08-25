@@ -4,6 +4,11 @@ Documentation=https://github.com/
 After=network-online.target
 Wants=network-online.target
 
+# Limity restartów należą do [Unit], nie do [Service] — w [Service]
+# systemd je ignoruje z ostrzeżeniem w dzienniku.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
 [Service]
 Type=simple
 User=asystent
@@ -17,9 +22,6 @@ ExecStart=/usr/bin/node /opt/asystent/dist/server.js
 
 Restart=always
 RestartSec=3
-# Nie zapętlaj restartów w nieskończoność, jeśli aplikacja jest trwale zepsuta.
-StartLimitBurst=5
-StartLimitIntervalSec=60
 
 StandardOutput=journal
 StandardError=journal
