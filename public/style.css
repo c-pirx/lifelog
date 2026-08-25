@@ -119,6 +119,78 @@ nav button[aria-current="page"] {
   color: var(--akcent);
 }
 
+/* === Timer przerwy ===================================================== */
+
+/* Siedzi tuż nad nawigacją, żeby był widoczny bez względu na to, jak daleko
+   użytkownik przewinął listę ćwiczeń. */
+#timer {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(var(--wysokosc-nawigacji) + env(safe-area-inset-bottom) + 10px);
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(calc(100% - 24px), 420px);
+  padding: 8px 10px 8px 14px;
+  background: var(--powierzchnia-2);
+  border: 1px solid var(--obramowanie);
+  border-radius: var(--promien);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+#timer .odliczanie {
+  font-size: 1.35rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  min-width: 62px;
+}
+
+#timer.minela {
+  border-color: var(--akcent);
+}
+
+#timer.minela .odliczanie {
+  color: var(--akcent);
+}
+
+#timer .wybor {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+#timer .wybor button {
+  appearance: none;
+  min-height: 40px;
+  min-width: 44px;
+  padding: 0 8px;
+  border: 1px solid var(--obramowanie);
+  border-radius: 9px;
+  background: var(--powierzchnia);
+  color: var(--tekst-cichy);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+#timer .wybor button[aria-pressed="true"] {
+  border-color: var(--akcent);
+  color: var(--akcent);
+}
+
+#timer-zamknij {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--tekst-cichy);
+  min-height: 40px;
+  min-width: 36px;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
 /* === Karty ============================================================= */
 
 .karta {
@@ -276,18 +348,55 @@ nav button[aria-current="page"] {
   margin-bottom: 10px;
 }
 
+/* Zapisana seria jest przyciskiem, nie etykietą: stuknięcie otwiera poprawkę.
+   Rozmiar dotyku celowo większy niż sam tekst — na siłowni trafia się gorzej. */
 .seria {
+  appearance: none;
+  border: 0;
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
-  padding: 5px 10px;
+  min-height: 36px;
+  padding: 7px 12px;
   border-radius: 8px;
   background: var(--akcent-ciemny);
   color: var(--akcent);
+  cursor: pointer;
 }
 
 .seria.slabsza {
   background: color-mix(in srgb, var(--ostrzezenie) 18%, transparent);
   color: var(--ostrzezenie);
+}
+
+.seria.edytowana {
+  outline: 2px solid var(--akcent);
+}
+
+.seria:active {
+  transform: scale(0.96);
+}
+
+/* Krokowa zmiana ciężaru: dwa duże przyciski obok pola. Wpisywanie „82.5”
+   spoconym kciukiem między seriami jest wolniejsze niż dwa stuknięcia. */
+.stopien {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  gap: 6px;
+}
+
+.stopien button {
+  appearance: none;
+  min-height: 48px;
+  border: 1px solid var(--obramowanie);
+  border-radius: 10px;
+  background: var(--powierzchnia-2);
+  font-size: 1.1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stopien button:active {
+  transform: scale(0.96);
 }
 
 .poprzednio {
@@ -414,6 +523,13 @@ label {
 .komunikat.blad {
   border-color: var(--blad);
   color: var(--blad);
+}
+
+/* Komunikat i timer zajmują to samo miejsce nad nawigacją, a pojawiają się
+   razem — po zapisaniu serii. Przy włączonym timerze komunikat idzie wyżej,
+   zamiast zasłaniać odliczanie w chwili, w której zaczyna biec. */
+body:has(#timer:not([hidden])) .komunikat {
+  bottom: calc(var(--wysokosc-nawigacji) + env(safe-area-inset-bottom) + 78px);
 }
 
 /* === Logowanie ======================================================== */

@@ -55,11 +55,14 @@ const schematPosilku = z.object({
 
 const schematSerii = z.object({
   cwiczenie: z.string().min(1),
+  /** Bierze udział tylko przy tworzeniu nowego ćwiczenia — patrz `NowaSeria.typ`. */
+  typ: z.enum(TYPY_CWICZEN as unknown as [string, ...string[]]).optional(),
   powtorzenia: z.number().int().positive().optional(),
   ciezar_kg: z.number().nonnegative().optional(),
   czas_s: z.number().int().positive().optional(),
   dystans_m: z.number().positive().optional(),
   rpe: z.number().min(1).max(10).optional(),
+  czas: z.string().optional(),
 });
 
 const schematCelow = z.object({
@@ -177,21 +180,45 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
 
   api.get("/trening", (c) => c.json(stanTreningu(db)));
 
+  // Pole `czas` w trzech trasach poniżej jest po to, żeby zapis odłożony
+  // w kolejce offline trafił pod godzinę, o której użytkownik go wpisał,
+  // a nie pod godzinę, o której telefon odzyskał zasięg.
+
   api.post("/trening/start", async (c) => {
-    const { kod } = (await c.req.json().catch(() => ({}))) as { kod?: string };
-    rozpocznijTrening(db, { kod, strefa: ustawienia.strefa });
+    const {
+      kod,
+      bez_planu: bezPlanu,
+      czas: kiedy,
+    } = (await c.req.json().catch(() => ({}))) as {
+      kod?: string;
+      bez_planu?: boolean;
+      czas?: string;
+    };
+    rozpocznijTrening(db, {
+      kod,
+      bez_planu: bezPlanu,
+      ts: czas(kiedy),
+      strefa: ustawienia.strefa,
+    });
     return c.json(stanTreningu(db), 201);
   });
 
   api.post("/trening/seria", async (c) => {
     const dane = schematSerii.parse(await c.req.json());
-    zapiszSerie(db, dane, { strefa: ustawienia.strefa });
+    zapiszSerie(db, { ...dane, typ: dane.typ as never, ts: czas(dane.czas) }, {
+      strefa: ustawienia.strefa,
+    });
     return c.json(stanTreningu(db), 201);
   });
 
   api.post("/trening/koniec", async (c) => {
-    const { notatki } = (await c.req.json().catch(() => ({}))) as { notatki?: string };
-    return c.json(zakonczTrening(db, { notatki, strefa: ustawienia.strefa }));
+    const { notatki, czas: kiedy } = (await c.req.json().catch(() => ({}))) as {
+      notatki?: string;
+      czas?: string;
+    };
+    return c.json(
+      zakonczTrening(db, { notatki, ts: czas(kiedy), strefa: ustawienia.strefa }),
+    );
   });
 
   api.get("/historia/:cwiczenie", (c) =>

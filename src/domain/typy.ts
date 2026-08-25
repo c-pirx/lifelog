@@ -148,6 +148,12 @@ export type Seria = {
 
 export type NowaSeria = {
   cwiczenie: string;
+  /**
+   * Typ używany tylko wtedy, gdy ćwiczenie trzeba dopiero utworzyć. Istniejące
+   * ćwiczenie zachowuje swój typ — inaczej jedna pomyłka w aplikacji
+   * przepisałaby historię wszystkich poprzednich serii.
+   */
+  typ?: TypCwiczenia;
   nr_serii?: number;
   powtorzenia?: number;
   ciezar_kg?: number;

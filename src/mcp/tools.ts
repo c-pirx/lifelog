@@ -254,16 +254,26 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       title: "Rozpocznij trening",
       description:
         "Otwiera sesję treningową. Bez argumentu wybiera dzień z harmonogramu tygodniowego; " +
-        "podaj kod, żeby trenować inny dzień niż przewiduje harmonogram. " +
+        "podaj kod, żeby trenować inny dzień niż przewiduje harmonogram, albo bez_planu " +
+        "dla treningu zupełnie poza planem. " +
         "Naraz może być otwarta tylko jedna sesja — zakończ poprzednią, jeśli została otwarta.",
       inputSchema: {
         kod: z.string().optional().describe("Kod dnia planu. Pomiń, aby użyć harmonogramu."),
+        bez_planu: z
+          .boolean()
+          .optional()
+          .describe("Sesja bez dnia planu, nawet jeśli harmonogram coś dziś przewiduje."),
         czas: z.string().optional().describe(OPIS_CZASU),
       },
     },
     async (args) =>
       zBezpiecznikiem(() => {
-        rozpocznijTrening(db, { kod: args.kod, ts: czas(args.czas), strefa });
+        rozpocznijTrening(db, {
+          kod: args.kod,
+          bez_planu: args.bez_planu,
+          ts: czas(args.czas),
+          strefa,
+        });
         return stanTreninguWTekscie(stanTreningu(db));
       }),
   );
@@ -277,10 +287,14 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "chyba że podasz nr_serii (przydatne przy uzupełnianiu luk).\n\n" +
         "Wypełniaj pola zgodnie z typem ćwiczenia: siłowe — powtorzenia (i ciezar_kg); " +
         "cardio — czas_s lub dystans_m; na czas — czas_s. " +
-        "Nieznane ćwiczenie zostanie utworzone jako siłowe; jeśli to cardio lub ćwiczenie " +
-        "izometryczne, dodaj je najpierw przez zarzadzaj_planem z właściwym typem.",
+        "Nieznane ćwiczenie zostanie utworzone — domyślnie jako siłowe, więc przy cardio " +
+        "lub ćwiczeniu izometrycznym podaj typ. Ćwiczenie już znane zachowuje swój typ.",
       inputSchema: {
         cwiczenie: z.string().describe("Nazwa ćwiczenia, wielkość liter bez znaczenia"),
+        typ: z
+          .enum(TYPY_CWICZEN as unknown as [string, ...string[]])
+          .optional()
+          .describe("Tylko przy pierwszym wystąpieniu ćwiczenia. Domyślnie silowe."),
         powtorzenia: z.number().int().positive().optional(),
         ciezar_kg: z.number().nonnegative().optional(),
         czas_s: z.number().int().positive().optional(),
@@ -292,7 +306,11 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
     },
     async (args) =>
       zBezpiecznikiem(() => {
-        const seria = zapiszSerie(db, { ...args, ts: czas(args.czas) }, { strefa });
+        const seria = zapiszSerie(
+          db,
+          { ...args, typ: args.typ as never, ts: czas(args.czas) },
+          { strefa },
+        );
         const stan = stanTreningu(db);
         const postep = [...stan.wg_planu, ...stan.poza_planem].find(
           (c) => c.cwiczenie_id === seria.cwiczenie_id,

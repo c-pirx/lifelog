@@ -116,6 +116,16 @@ describe("rozpoczynanie treningu", () => {
     expect(sesja.status).toBe("aktywna");
   });
 
+  it("bez_planu otwiera pustą sesję nawet wtedy, gdy harmonogram coś przewiduje", () => {
+    planA();
+    // Poniedziałek, a więc dzień A wg harmonogramu — ale dziś improwizujemy.
+    const sesja = rozpocznijTrening(db, { bez_planu: true, ts: "2026-08-24T09:00:00.000Z" });
+
+    expect(sesja.dzien_id).toBeNull();
+    expect(sesja.dzien_kod).toBeNull();
+    expect(stanTreningu(db).wg_planu).toEqual([]);
+  });
+
   it("odmawia rozpoczęcia drugiej sesji, gdy jedna jest otwarta", () => {
     planA();
     rozpocznijTrening(db, { ts: "2026-08-24T09:00:00.000Z" });
@@ -224,6 +234,29 @@ describe("typy ćwiczeń", () => {
 
     expect(historia.serie).toHaveLength(1);
     expect(historia.typ).toBe("cardio");
+  });
+
+  it("tworzy nieznane ćwiczenie w podanym typie", () => {
+    // Bez tego wiosłowanie na ergometrze dorzucone w trakcie treningu wpadłoby
+    // jako siłowe i zażądało powtórzeń.
+    const seria = zapiszSerie(db, { cwiczenie: "ergometr", typ: "cardio", czas_s: 600 });
+
+    expect(seria).toMatchObject({ czas_s: 600, powtorzenia: null });
+    expect(historiaCwiczenia(db, "ergometr").typ).toBe("cardio");
+  });
+
+  it("domyślnie tworzy nieznane ćwiczenie jako siłowe", () => {
+    zapiszSerie(db, { cwiczenie: "wyciskanie francuskie", powtorzenia: 12, ciezar_kg: 30 });
+
+    expect(historiaCwiczenia(db, "wyciskanie francuskie").typ).toBe("silowe");
+  });
+
+  it("nie przepisuje typu ćwiczenia, które już istnieje", () => {
+    // Pomyłka w aplikacji nie może przekwalifikować bieżni na siłową —
+    // przepisałaby wtedy sens wszystkich wcześniejszych serii.
+    zapiszSerie(db, { cwiczenie: "bieżnia", typ: "silowe", czas_s: 1200 });
+
+    expect(historiaCwiczenia(db, "bieżnia").typ).toBe("cardio");
   });
 });
 

@@ -15,6 +15,9 @@ const aplikacja = document.getElementById("aplikacja");
 let ekran = "dzis";
 let stan = {};
 
+/** Id serii otwartej do poprawki. Przeżywa odswiez(), bo widok jest bezstanowy. */
+let edytowanaSeria = null;
+
 // === Warstwa komunikacji ================================================
 
 /** Błąd niosący kod odpowiedzi — pozwala odróżnić złe hasło od awarii sieci. */
@@ -76,6 +79,95 @@ async function akcja(wykonaj, potwierdzenie) {
   }
 }
 
+// === Timer przerwy ======================================================
+
+/**
+ * Odliczanie między seriami.
+ *
+ * Czas liczymy od znacznika docelowego, a nie odejmując sekundy w interwale:
+ * przeglądarka na wygaszonym ekranie dławi setInterval i licznik oparty na
+ * dekrementacji zacząłby się spóźniać o kilkadziesiąt sekund. Przy takim
+ * dławieniu wibracja potrafi przyjść z opóźnieniem, ale pokazany czas jest
+ * zawsze prawdziwy.
+ */
+
+const KROKI_PRZERWY = [90, 120, 180];
+const DOMYSLNA_PRZERWA = 120;
+
+const elementTimera = document.getElementById("timer");
+const czasTimera = document.getElementById("timer-czas");
+
+// localStorage potrafi rzucić w trybie prywatnym — brak zapamiętanej przerwy
+// nie jest powodem, żeby timer przestał działać.
+const zapamietaj = (klucz, wartosc) => {
+  try {
+    localStorage.setItem(klucz, wartosc);
+  } catch {
+    /* pusto */
+  }
+};
+
+const zapamietane = (klucz) => {
+  try {
+    return localStorage.getItem(klucz);
+  } catch {
+    return null;
+  }
+};
+
+let koniecPrzerwy = null;
+let tykanie;
+
+function wybranaPrzerwa() {
+  const zapisana = Number(zapamietane("przerwa_s"));
+  return KROKI_PRZERWY.includes(zapisana) ? zapisana : DOMYSLNA_PRZERWA;
+}
+
+function odswiezTimer() {
+  const pozostalo = Math.round((koniecPrzerwy - Date.now()) / 1000);
+
+  if (pozostalo <= 0) {
+    czasTimera.textContent = "gotowe";
+    elementTimera.classList.add("minela");
+    clearInterval(tykanie);
+    koniecPrzerwy = null;
+    navigator.vibrate?.([180, 90, 180]);
+    return;
+  }
+
+  czasTimera.textContent = `${Math.floor(pozostalo / 60)}:${String(pozostalo % 60).padStart(2, "0")}`;
+}
+
+function startujPrzerwe(sekundy = wybranaPrzerwa()) {
+  zapamietaj("przerwa_s", String(sekundy));
+  koniecPrzerwy = Date.now() + sekundy * 1000;
+
+  elementTimera.hidden = false;
+  elementTimera.classList.remove("minela");
+  elementTimera
+    .querySelectorAll("[data-przerwa]")
+    .forEach((b) =>
+      b.setAttribute("aria-pressed", String(Number(b.dataset.przerwa) === sekundy)),
+    );
+
+  clearInterval(tykanie);
+  tykanie = setInterval(odswiezTimer, 250);
+  odswiezTimer();
+}
+
+function zatrzymajPrzerwe() {
+  clearInterval(tykanie);
+  koniecPrzerwy = null;
+  elementTimera.hidden = true;
+  elementTimera.classList.remove("minela");
+}
+
+elementTimera?.addEventListener("click", (zdarzenie) => {
+  const wybor = zdarzenie.target.closest("[data-przerwa]");
+  if (wybor) return startujPrzerwe(Number(wybor.dataset.przerwa));
+  if (zdarzenie.target.closest("#timer-zamknij")) zatrzymajPrzerwe();
+});
+
 // === Pomocnicze =========================================================
 
 const esc = (tekst) =>
@@ -90,6 +182,16 @@ const liczbaZPola = (formularz, nazwa) => {
   const wartosc = formularz.elements[nazwa]?.value?.replace(",", ".").trim();
   return wartosc ? Number(wartosc) : undefined;
 };
+
+/** Wynik serii z formularza. Pola nieobecne dla danego typu wychodzą jako
+    undefined i nie trafiają do żądania. */
+const wynikZFormularza = (formularz) => ({
+  powtorzenia: liczbaZPola(formularz, "powtorzenia"),
+  ciezar_kg: liczbaZPola(formularz, "ciezar_kg"),
+  czas_s: liczbaZPola(formularz, "czas_s"),
+  dystans_m: liczbaZPola(formularz, "dystans_m"),
+  rpe: liczbaZPola(formularz, "rpe"),
+});
 
 function pasekMakro(etykieta, spozyte, cel, jednostka) {
   const procent = cel ? Math.min(100, (spozyte / cel) * 100) : 0;
@@ -113,6 +215,54 @@ function seriaWTekscie(seria) {
   if (seria.czas_s != null) czesci.push(`${seria.czas_s} s`);
   if (seria.dystans_m != null) czesci.push(`${(seria.dystans_m / 1000).toFixed(2)} km`);
   return czesci.join(", ") || "—";
+}
+
+/** Puste zamiast null/undefined — inaczej w polu formularza wylądowałoby „null". */
+const wartosciSerii = (seria = {}) => ({
+  powtorzenia: seria.powtorzenia ?? "",
+  ciezar_kg: seria.ciezar_kg ?? "",
+  czas_s: seria.czas_s ?? "",
+  dystans_m: seria.dystans_m ?? "",
+  rpe: seria.rpe ?? "",
+});
+
+/**
+ * Pola wyniku serii — te same przy dopisywaniu i przy poprawianiu, żeby jedno
+ * i drugie zawsze pytało o to samo.
+ */
+function polaSerii(typ, wartosci) {
+  const ciezar = `
+    <div class="szeroko">
+      <label>Ciężar (kg)</label>
+      <div class="stopien">
+        <button type="button" data-krok="-2.5" aria-label="Mniej o 2,5 kg">−</button>
+        <input name="ciezar_kg" inputmode="decimal" value="${wartosci.ciezar_kg}" />
+        <button type="button" data-krok="2.5" aria-label="Więcej o 2,5 kg">+</button>
+      </div>
+    </div>`;
+
+  const rpe = (szeroko = false) =>
+    `<div class="${szeroko ? "szeroko" : ""}">
+       <label>RPE (1–10)</label>
+       <input name="rpe" inputmode="decimal" value="${wartosci.rpe}" />
+     </div>`;
+
+  const czas = `<div><label>Czas (s)</label><input name="czas_s" inputmode="numeric" value="${wartosci.czas_s}" /></div>`;
+
+  // Kolejność dobrana pod siatkę dwukolumnową, żeby nie zostawały puste połówki.
+  if (typ === "silowe") {
+    return `<div><label>Powtórzenia</label><input name="powtorzenia" inputmode="numeric" value="${wartosci.powtorzenia}" /></div>
+      ${rpe()}
+      ${ciezar}`;
+  }
+
+  if (typ === "cardio") {
+    return `${czas}
+      <div><label>Dystans (m)</label><input name="dystans_m" inputmode="numeric" value="${wartosci.dystans_m}" /></div>
+      ${rpe(true)}`;
+  }
+
+  return `${czas}${rpe()}`;
 }
 
 // === Ekran: Dziś ========================================================
@@ -194,10 +344,16 @@ function kartaBezSesji(plan, dzisiajKod) {
   const proponowany = plan.find((d) => d.kod === dzisiajKod);
   const pozostale = plan.filter((d) => d.kod !== dzisiajKod);
 
+  const bezPlanu = `
+    <div class="przyciski">
+      <button class="przycisk pelny" data-start-bez-planu>Trening bez planu</button>
+    </div>`;
+
   if (!plan.length) {
     return `<section class="karta">
       <h2>Trening</h2>
       <div class="pusto">Plan jest pusty. Podyktuj go Claude'owi — zapisze go sam.</div>
+      ${bezPlanu}
     </section>`;
   }
 
@@ -220,28 +376,32 @@ function kartaBezSesji(plan, dzisiajKod) {
              </button></div>`,
         )
         .join("")}
+      ${bezPlanu}
     </section>`;
+}
+
+/** Poprawka zapisanej serii. Usuwanie siedzi tutaj, a nie przy samej serii —
+    jeden przycisk ✕ obok wyniku byłby na telefonie za łatwy do trafienia. */
+function formularzPoprawkiSerii(typ, seria) {
+  return `
+    <form id="edycja-serii-${seria.id}" data-seria="${seria.id}">
+      <div class="pola">${polaSerii(typ, wartosciSerii(seria))}</div>
+      <div class="przyciski">
+        <button class="przycisk glowny" type="submit">Popraw</button>
+        <button class="przycisk" type="button" data-anuluj-edycji>Anuluj</button>
+      </div>
+      <div class="przyciski">
+        <button class="przycisk cichy pelny" type="button" data-usun-serie="${seria.id}">
+          Usuń serię ${seria.nr_serii}
+        </button>
+      </div>
+    </form>`;
 }
 
 function kartaCwiczenia(cwiczenie) {
   const ostatnia = cwiczenie.serie.at(-1) ?? cwiczenie.poprzednio.at(-1);
-  const prefill = {
-    powtorzenia: ostatnia?.powtorzenia ?? "",
-    ciezar_kg: ostatnia?.ciezar_kg ?? "",
-    czas_s: ostatnia?.czas_s ?? "",
-    dystans_m: ostatnia?.dystans_m ?? "",
-  };
-
-  const polaTypu =
-    cwiczenie.typ === "silowe"
-      ? `<div><label>Powtórzenia</label><input name="powtorzenia" inputmode="numeric" value="${prefill.powtorzenia}" /></div>
-         <div><label>Ciężar (kg)</label><input name="ciezar_kg" inputmode="decimal" value="${prefill.ciezar_kg}" /></div>`
-      : cwiczenie.typ === "cardio"
-        ? `<div><label>Czas (s)</label><input name="czas_s" inputmode="numeric" value="${prefill.czas_s}" /></div>
-           <div><label>Dystans (m)</label><input name="dystans_m" inputmode="numeric" value="${prefill.dystans_m}" /></div>`
-        : `<div class="szeroko"><label>Czas (s)</label><input name="czas_s" inputmode="numeric" value="${prefill.czas_s}" /></div>`;
-
   const idFormularza = `seria-${cwiczenie.cwiczenie_id}`;
+  const wPoprawce = cwiczenie.serie.find((s) => s.id === edytowanaSeria);
 
   return `
     <div class="cwiczenie ${cwiczenie.ukonczone ? "zrobione" : ""}">
@@ -258,13 +418,16 @@ function kartaCwiczenia(cwiczenie) {
           ? `<div class="serie">${cwiczenie.serie
               .map(
                 (s) =>
-                  `<span class="seria ${cwiczenie.slabsze_niz_poprzednio.includes(s.nr_serii) ? "slabsza" : ""}">
+                  `<button type="button" data-edytuj-serie="${s.id}"
+                     class="seria ${cwiczenie.slabsze_niz_poprzednio.includes(s.nr_serii) ? "slabsza" : ""} ${s.id === edytowanaSeria ? "edytowana" : ""}">
                      ${esc(seriaWTekscie(s))}
-                   </span>`,
+                   </button>`,
               )
               .join("")}</div>`
           : ""
       }
+
+      ${wPoprawce ? formularzPoprawkiSerii(cwiczenie.typ, wPoprawce) : ""}
 
       ${
         cwiczenie.poprzednio.length
@@ -273,7 +436,10 @@ function kartaCwiczenia(cwiczenie) {
       }
 
       <form id="${idFormularza}" data-cwiczenie="${esc(cwiczenie.nazwa)}" hidden>
-        <div class="pola">${polaTypu}</div>
+        <!-- Ciężar i powtórzenia z poprzedniej serii, ale RPE już nie:
+             trudność jest oceną tej konkretnej serii, a podpowiedziana
+             po cichu zapisałaby się jako prawdziwa. -->
+        <div class="pola">${polaSerii(cwiczenie.typ, wartosciSerii({ ...ostatnia, rpe: null }))}</div>
         <div class="przyciski">
           <button class="przycisk glowny" type="submit">Zapisz serię</button>
           <button class="przycisk" type="button" data-anuluj="${idFormularza}">Anuluj</button>
@@ -303,6 +469,36 @@ function ekranTrening(trening, plan, dzisiajKod) {
 
     <section class="karta">
       ${wszystkie.map(kartaCwiczenia).join("")}
+    </section>
+
+    <section class="karta">
+      <h2>Coś jeszcze</h2>
+      <!-- Ćwiczenie spoza planu pojawia się w stanie treningu dopiero razem
+           z pierwszą serią, więc formularz od razu pyta o wynik. -->
+      <form id="nowe-cwiczenie" hidden>
+        <div class="pola">
+          <div class="szeroko">
+            <label for="nowe-nazwa">Ćwiczenie</label>
+            <input id="nowe-nazwa" name="cwiczenie" required autocomplete="off" />
+          </div>
+          <div class="szeroko">
+            <label for="nowe-typ">Rodzaj</label>
+            <select id="nowe-typ" name="typ">
+              <option value="silowe">siłowe</option>
+              <option value="cardio">cardio</option>
+              <option value="na_czas">na czas</option>
+            </select>
+          </div>
+        </div>
+        <div class="pola" id="nowe-pola">${polaSerii("silowe", wartosciSerii())}</div>
+        <div class="przyciski">
+          <button class="przycisk glowny" type="submit">Dodaj i zapisz serię</button>
+          <button class="przycisk" type="button" data-anuluj="nowe-cwiczenie">Anuluj</button>
+        </div>
+      </form>
+      <div class="przyciski">
+        <button class="przycisk pelny" data-pokaz="nowe-cwiczenie">+ Ćwiczenie spoza planu</button>
+      </div>
     </section>
 
     <div class="przyciski">
@@ -446,6 +642,47 @@ widok.addEventListener("click", (zdarzenie) => {
     return;
   }
 
+  // Krok ciężaru: działa na polu leżącym w tym samym kontenerze co przycisk.
+  const krok = cel.closest("[data-krok]");
+  if (krok) {
+    const pole = krok.parentElement.querySelector("input");
+    const teraz = Number(String(pole.value).replace(",", ".")) || 0;
+    const po = Math.max(0, teraz + Number(krok.dataset.krok));
+    pole.value = Number.isInteger(po) ? String(po) : po.toFixed(1);
+    return;
+  }
+
+  const edytuj = cel.closest("[data-edytuj-serie]");
+  if (edytuj) {
+    const id = Number(edytuj.dataset.edytujSerie);
+    // Ponowne stuknięcie w tę samą serię zamyka poprawkę.
+    edytowanaSeria = edytowanaSeria === id ? null : id;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  if (cel.closest("[data-anuluj-edycji]")) {
+    edytowanaSeria = null;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  const usunSerie = cel.closest("[data-usun-serie]");
+  if (usunSerie) {
+    const id = Number(usunSerie.dataset.usunSerie);
+    edytowanaSeria = null;
+    akcja(
+      () => api("/wpis", { method: "POST", dane: { typ: "seria", id, akcja: "usun" } }),
+      "Usunięto serię",
+    );
+    return;
+  }
+
+  if (cel.closest("[data-start-bez-planu]")) {
+    akcja(() => api("/trening/start", { method: "POST", dane: { bez_planu: true } }));
+    return;
+  }
+
   const start = cel.closest("[data-start]");
   if (start) {
     akcja(() => api("/trening/start", { method: "POST", dane: { kod: start.dataset.start } }));
@@ -468,6 +705,16 @@ widok.addEventListener("click", (zdarzenie) => {
   if (cel.closest("#zakoncz-trening")) {
     akcja(() => api("/trening/koniec", { method: "POST", dane: {} }), "Trening zakończony");
   }
+});
+
+// Zmiana rodzaju ćwiczenia przestawia pola wyniku — cardio nie pyta
+// o powtórzenia, siłowe nie pyta o dystans.
+widok.addEventListener("change", (zdarzenie) => {
+  if (zdarzenie.target.id !== "nowe-typ") return;
+  document.getElementById("nowe-pola").innerHTML = polaSerii(
+    zdarzenie.target.value,
+    wartosciSerii(),
+  );
 });
 
 widok.addEventListener("submit", (zdarzenie) => {
@@ -493,18 +740,45 @@ widok.addEventListener("submit", (zdarzenie) => {
   }
 
   if (formularz.id.startsWith("seria-")) {
-    akcja(() =>
-      api("/trening/seria", {
+    akcja(async () => {
+      await api("/trening/seria", {
+        method: "POST",
+        dane: { cwiczenie: formularz.dataset.cwiczenie, ...wynikZFormularza(formularz) },
+      });
+      startujPrzerwe();
+    });
+    return;
+  }
+
+  if (formularz.id.startsWith("edycja-serii-")) {
+    const id = Number(formularz.dataset.seria);
+    edytowanaSeria = null;
+    akcja(
+      () =>
+        api("/wpis", {
+          method: "POST",
+          dane: { typ: "seria", id, akcja: "popraw", dane: wynikZFormularza(formularz) },
+        }),
+      "Poprawiono serię",
+    );
+    return;
+  }
+
+  if (formularz.id === "nowe-cwiczenie") {
+    const nazwa = formularz.elements.cwiczenie.value.trim();
+    if (!nazwa) return komunikat("Podaj nazwę ćwiczenia", true);
+
+    akcja(async () => {
+      await api("/trening/seria", {
         method: "POST",
         dane: {
-          cwiczenie: formularz.dataset.cwiczenie,
-          powtorzenia: liczbaZPola(formularz, "powtorzenia"),
-          ciezar_kg: liczbaZPola(formularz, "ciezar_kg"),
-          czas_s: liczbaZPola(formularz, "czas_s"),
-          dystans_m: liczbaZPola(formularz, "dystans_m"),
+          cwiczenie: nazwa,
+          typ: formularz.elements.typ.value,
+          ...wynikZFormularza(formularz),
         },
-      }),
-    );
+      });
+      startujPrzerwe();
+    }, "Dodano ćwiczenie");
     return;
   }
 
