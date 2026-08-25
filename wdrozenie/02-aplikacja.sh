@@ -37,7 +37,14 @@ sudo chmod 750 "$KATALOG_DANYCH"
 sudo chmod 750 "$KATALOG_KONFIGURACJI"
 
 echo "==> Konfiguracja i sekrety"
-if [ ! -f "$KATALOG_KONFIGURACJI/env" ]; then
+# Test MUSI iść przez sudo. Katalog /etc/asystent ma prawa 750 root:root,
+# a skrypt uruchamiamy jako zwykły użytkownik — bez sudo `[ -f ]` nie wejdzie
+# do katalogu i odpowiada „pliku nie ma" nawet wtedy, gdy plik tam jest.
+# Kosztowało to unieważnienie sekretów przy wdrożeniu: skrypt uznawał serwer
+# za świeży i generował nowy token konektora oraz nowe hasło do aplikacji.
+if sudo test -f "$KATALOG_KONFIGURACJI/env"; then
+  echo "    plik env już istnieje — zostawiam bez zmian"
+else
   # Sekrety produkcyjne generujemy na miejscu i nigdy nie przenosimy
   # z maszyny deweloperskiej — tamte służą wyłącznie do pracy lokalnej.
   MCP_TOKEN=$(openssl rand -hex 32)
@@ -56,9 +63,13 @@ MCP_TOKEN=$MCP_TOKEN
 SESSION_SECRET=$SESSION_SECRET
 APP_PASSWORD=$APP_PASSWORD
 KONIEC
-  echo "    wygenerowano nowe sekrety"
-else
-  echo "    plik env już istnieje — zostawiam bez zmian"
+  echo
+  echo "    !!! WYGENEROWANO NOWE SEKRETY !!!"
+  echo "    Token konektora, hasło do aplikacji i klucz sesji ZMIENIŁY SIĘ."
+  echo "    Jeśli to nie jest pierwsza instalacja, konektor na claude.ai"
+  echo "    przestał działać — trzeba wkleić tam nowy adres."
+  echo "    Odczyt nowych wartości: patrz INSTRUKCJA.md, część 5."
+  echo
 fi
 
 sudo chown root:"$UZYTKOWNIK" "$KATALOG_KONFIGURACJI/env"

@@ -75,6 +75,14 @@ Bez tego git na Windowsie robi CRLF, a bash na serwerze przerywa na
 domyślnie zapisuje pełne ścieżki. Mapowanie w `wdrozenie/nginx-asystent.conf`
 podmienia go na `[token-ukryty]`. Nie usuwaj przy edycji konfiguracji.
 
+**Testy plików w skryptach wdrożeniowych idą przez `sudo test -f`.** Skrypty
+uruchamiamy jako `ubuntu`, a `/etc/asystent` ma prawa `750 root:root`. Zwykłe
+`[ -f /etc/asystent/env ]` nie potrafi wejść do katalogu i odpowiada „pliku
+nie ma" — przez co `02-aplikacja.sh` uznawał serwer za świeży i przy **każdym**
+wdrożeniu generował nowy token konektora, hasło i klucz sesji. Objaw: po
+wdrożeniu konektor na claude.ai przestaje działać, a hasło do aplikacji jest
+nieaktualne. Baza pozostaje nietknięta, ale dostęp trzeba konfigurować od nowa.
+
 **Kolejność plików SSH.** Plik nazywa się `00-utwardzenie.conf`, nie `99-`:
 w SSH wygrywa **pierwsze** wystąpienie ustawienia, a obraz Ubuntu ma
 `50-cloud-init.conf` z włączonymi hasłami.
