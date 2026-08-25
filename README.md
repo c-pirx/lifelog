@@ -108,16 +108,44 @@ Serwer MCP działa pod `/mcp/<MCP_TOKEN>`. Token siedzi w ścieżce, bo konektor
 Claude przyjmuje wyłącznie adres URL — uwierzytelnianie nagłówkiem jest po
 stronie Anthropic wciąż w wersji beta.
 
-Konektor wymaga publicznego adresu HTTPS (Claude łączy się z chmury Anthropic,
-nie z telefonu), więc realne podłączenie następuje po wdrożeniu — Etap 4.
-Do tego czasu narzędzia testujemy lokalnie:
+### Claude Desktop — działa lokalnie, bez hostingu
+
+Konektory na claude.ai wymagają publicznego adresu HTTPS, bo Claude łączy się
+z chmury Anthropic. **Claude Desktop to omija**: uruchamia most `mcp-remote`
+jako lokalny proces, który sięga do `localhost`. Wpis w
+`%APPDATA%\Claude\claude_desktop_config.json`:
+
+```json
+"asystent-diety": {
+  "command": "S:\\szymo\\node.exe",
+  "args": [
+    "S:\\21agency\\personal-guirde\\node_modules\\mcp-remote\\dist\\proxy.js",
+    "http://localhost:3000/mcp/<MCP_TOKEN>"
+  ]
+}
+```
+
+Wskazujemy `node.exe` i plik mostu wprost, zamiast `npx`. Claude Desktop
+uruchamia komendę bez powłoki, więc `npx` na Windowsie bywa nieznajdowany.
+
+Warunek: serwer musi być uruchomiony (`npm run dev`). Po zmianie konfiguracji
+trzeba zrestartować Claude Desktop.
+
+### Telefon — dopiero po wdrożeniu
+
+Aplikacja mobilna Claude korzysta z konektorów dodanych na claude.ai, a te
+wymagają publicznego HTTPS. To Etap 4. Na próbę można wystawić lokalny serwer
+tymczasowym tunelem (`cloudflared tunnel --url http://localhost:3000`) i dodać
+otrzymany adres jako konektor — ale adres znika po zamknięciu tunelu.
+
+### Sprawdzenie narzędzi bez Claude'a
 
 ```bash
 npx @modelcontextprotocol/inspector
 ```
 
-i wskazujemy `http://localhost:3000/mcp/<MCP_TOKEN>` jako serwer typu
-Streamable HTTP. Ten sam przepływ pokrywa automatycznie `test/mcp.test.ts`.
+Serwer typu Streamable HTTP, adres `http://localhost:3000/mcp/<MCP_TOKEN>`.
+Ten sam przepływ pokrywa automatycznie `test/mcp.test.ts`.
 
 ### Narzędzia
 
