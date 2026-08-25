@@ -23,10 +23,10 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 134 testy
+npm test             # 136 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
-npm run demo         # dane poglądowe do pracy nad wyglądem
+npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
 npm run reset -- --tak   # czyszczenie lokalnej bazy
 npm run rozszerzenie # paczka .mcpb dla Claude Desktop
 ```

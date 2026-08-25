@@ -42,8 +42,13 @@ za mocno, żeby czytać je wprost.
 
 ## Wymagania
 
-- Node.js 20 lub nowszy
-- Nic poza tym. Baza to jeden plik SQLite — bez serwera bazy danych.
+- Node.js **20.12 lub nowszy** (aplikacja używa `process.loadEnvFile`, dostępnego
+  od tej wersji)
+- Bez serwera bazy danych. Baza to jeden plik SQLite.
+
+`npm install` buduje natywny moduł SQLite. Gotowe binaria pokrywają typowe
+systemy; jeśli Twojego wśród nich nie ma, npm przechodzi do kompilacji
+i potrzebne będą narzędzia C++ — patrz [rozwiązywanie problemów](INSTRUKCJA.md#część-5-gdy-coś-nie-działa).
 
 Używanie tego jako konektora Claude na telefonie wymaga dodatkowo publicznego
 adresu HTTPS, czyli w praktyce małego VPS-a i własnej domeny.
@@ -59,8 +64,10 @@ npm run dev
 ```
 
 Wejdź na http://localhost:3000 i zaloguj się hasłem, które wypisał
-`npm run setup`. `npm run demo` wypełni bazę danymi poglądowymi, jeśli chcesz
-zobaczyć ekrany z zawartością.
+`npm run setup`.
+
+Żeby zobaczyć ekrany z zawartością, zostaw serwer uruchomiony i w drugim oknie
+terminala odpal `npm run demo` — wypełni bazę przykładowym dniem.
 
 ## Podłączenie Claude'a
 
@@ -101,12 +108,15 @@ automatyczne aktualizacje bezpieczeństwa, aplikacja jako ograniczona usługa
 systemd, nginx z certyfikatem Let's Encrypt i codzienne kopie bazy.
 
 ```bash
+bash wdrozenie/wyslij.sh ty@twoj-serwer
 ssh ty@twoj-serwer 'bash /opt/asystent/wdrozenie/01-zabezpiecz.sh'
-bash wdrozenie/wyslij.sh twoj-serwer
 ssh ty@twoj-serwer 'bash /opt/asystent/wdrozenie/02-aplikacja.sh'
 ssh ty@twoj-serwer 'bash /opt/asystent/wdrozenie/03-https.sh twoja.domena'
 ssh ty@twoj-serwer 'bash /opt/asystent/wdrozenie/04-kopie.sh'
 ```
+
+`wyslij.sh` idzie pierwszy — pozostałe skrypty uruchamiamy *z* `/opt/asystent`,
+a to on je tam wgrywa.
 
 Pełny opis, razem z odtwarzaniem bazy z kopii: [wdrozenie/README.md](wdrozenie/README.md).
 
@@ -160,7 +170,7 @@ pytanie o dzień to porównanie tekstu, a nie arytmetyka stref w SQL.
 ## Testy
 
 ```bash
-npm test         # 134 testy
+npm test         # 136 testów
 npm run typecheck
 ```
 

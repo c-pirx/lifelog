@@ -40,7 +40,9 @@ there is no way around it.
 
 # Part 2. Option A — on your own machine
 
-You need **Node.js 20+**, **git**, and a **Claude subscription** (Pro or Max).
+You need **Node.js 20.12 or newer**, **git**, and a **Claude subscription**
+(Pro or Max). Check with `node -v` — on an older 20.x the app stops with a
+message telling you to upgrade.
 
 ## Step 1. Clone and configure
 
@@ -307,6 +309,18 @@ trend, so that average is the meaningful number, not any single reading.
 ---
 
 # Part 5. When something breaks
+
+**`npm install` fails on `better-sqlite3`.**
+That is the native SQLite module. npm normally downloads a prebuilt binary; if
+there is none for your platform and Node version, it tries to compile and needs
+a C++ toolchain — `sudo apt install build-essential python3` on Debian/Ubuntu,
+Xcode Command Line Tools on macOS, or the "Desktop development with C++"
+workload from the Visual Studio Build Tools on Windows. Upgrading to the
+current Node LTS often fixes it outright, because prebuilds exist for it.
+
+**The app says environment variables are missing, but `.env` exists.**
+Your Node is older than 20.12 and cannot read `.env` on its own. `node -v`,
+then upgrade.
 
 **Claude does not see the tools.**
 Open a **new conversation** — MCP servers load at session start. If that does

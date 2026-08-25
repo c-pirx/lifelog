@@ -35,8 +35,9 @@ się tego obejść.
 
 # Część 2. Wariant A — na własnym komputerze
 
-Potrzebujesz: **Node.js 20 lub nowszy**, **git** i **subskrypcji Claude**
-(Pro albo Max).
+Potrzebujesz: **Node.js 20.12 lub nowszy**, **git** i **subskrypcji Claude**
+(Pro albo Max). Sprawdź przez `node -v` — na starszym 20.x aplikacja przerywa
+z komunikatem o konieczności aktualizacji.
 
 ## Krok 1. Pobranie i konfiguracja
 
@@ -301,6 +302,18 @@ przykryć rzeczywisty trend, więc to ona jest miarodajna, nie pojedynczy odczyt
 ---
 
 # Część 5. Gdy coś nie działa
+
+**`npm install` przerywa na `better-sqlite3`.**
+To natywny moduł SQLite. Zwykle npm pobiera gotowe binarium; jeśli dla Twojego
+systemu i wersji Node'a go nie ma, próbuje kompilować i potrzebuje narzędzi
+C++ — `sudo apt install build-essential python3` na Debianie/Ubuntu, Xcode
+Command Line Tools na macOS, albo pakiet „Programowanie aplikacji klasycznych
+w C++" z Visual Studio Build Tools na Windowsie. Często wystarczy przejść na
+aktualne Node LTS, bo dla niego gotowe binaria istnieją.
+
+**Aplikacja twierdzi, że brakuje zmiennych środowiskowych, choć `.env` jest.**
+Masz Node starszy niż 20.12 i nie potrafi on sam czytać `.env`. Sprawdź
+`node -v` i zaktualizuj.
 
 **Claude nie widzi narzędzi.**
 Otwórz **nową rozmowę** — serwery MCP wczytują się przy starcie sesji.

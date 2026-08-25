@@ -12,7 +12,7 @@ dane/
 .env
 .env.local
 
-# Paczka rozszerzenia zawiera token — nigdy do repozytorium
+# Paczka rozszerzenia — wynik budowania, zawiera lokalną ścieżkę do projektu
 asystent.mcpb
 dist-rozszerzenie/
 

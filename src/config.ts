@@ -16,8 +16,33 @@ export type Konfiguracja = {
   strefa: string;
 };
 
+/**
+ * Najniższa wersja Node, na której aplikacja działa. Musi zgadzać się z polem
+ * `engines.node` w package.json — pilnuje tego test w `test/wersja.test.ts`.
+ * Próg wyznacza `process.loadEnvFile()`, dostępne od 20.12.
+ */
+export const WYMAGANY_NODE = "20.12.0";
+
+/**
+ * Przerywa z czytelnym komunikatem, jeśli Node jest za stary.
+ *
+ * Bez tego objaw był mylący: `process.loadEnvFile` nie istniało, wyjątek
+ * ginął w `catch`, a użytkownik dostawał komunikat o brakujących zmiennych
+ * środowiskowych — mimo poprawnie wypełnionego .env.
+ */
+export function sprawdzWersjeNode(): void {
+  if (typeof process.loadEnvFile !== "function") {
+    throw new Error(
+      `Potrzebny Node.js ${WYMAGANY_NODE} lub nowszy (masz ${process.versions.node}).\n` +
+        "Aktualizacja: https://nodejs.org — weź wersję LTS.",
+    );
+  }
+}
+
 /** Wczytuje plik .env, jeśli istnieje. Brak pliku nie jest błędem. */
 export function wczytajPlikEnv(): void {
+  sprawdzWersjeNode();
+
   try {
     process.loadEnvFile();
   } catch {
@@ -54,8 +79,8 @@ export function wczytajKonfiguracje(): Konfiguracja {
   if (braki.length > 0) {
     throw new Error(
       `Brak wymaganych zmiennych środowiskowych: ${braki.join(", ")}.\n` +
-        "Skopiuj .env.example do .env i uzupełnij. Sekrety wygenerujesz przez:\n" +
-        '  node -e "console.log(require(\'node:crypto\').randomBytes(32).toString(\'hex\'))"',
+        "Uruchom: npm run setup — utworzy .env z wygenerowanymi sekretami.\n" +
+        "(Na serwerze zmienne przychodzą z /etc/asystent/env, nie z pliku .env.)",
     );
   }
 

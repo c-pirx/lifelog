@@ -47,8 +47,12 @@ too much to read directly.
 
 ## Requirements
 
-- Node.js 20+
-- Nothing else. The database is a single SQLite file — no database server.
+- Node.js **20.12+** (the app uses `process.loadEnvFile`, added in that release)
+- No database server. The database is a single SQLite file.
+
+`npm install` builds a native SQLite module. Prebuilt binaries cover the usual
+platforms; if yours is not one of them, npm falls back to compiling and you
+will need a C++ toolchain — see [troubleshooting](GUIDE.md#part-5-when-something-breaks).
 
 Running it as a Claude connector on your phone additionally needs a public
 HTTPS address, which in practice means a small VPS and a domain you control.
@@ -64,8 +68,10 @@ npm run dev
 ```
 
 Open http://localhost:3000 and log in with the password `npm run setup`
-printed. `npm run demo` fills the database with sample data if you want to see
-the screens populated.
+printed.
+
+To see the screens with content, leave the server running and, in a second
+terminal, run `npm run demo` — it fills the database with a sample day.
 
 ## Connecting Claude
 
@@ -106,12 +112,15 @@ as a locked-down systemd unit, nginx with a Let's Encrypt certificate, and
 daily database backups.
 
 ```bash
+bash wdrozenie/wyslij.sh you@your-server
 ssh you@your-server 'bash /opt/asystent/wdrozenie/01-zabezpiecz.sh'
-bash wdrozenie/wyslij.sh your-server
 ssh you@your-server 'bash /opt/asystent/wdrozenie/02-aplikacja.sh'
 ssh you@your-server 'bash /opt/asystent/wdrozenie/03-https.sh your.domain'
 ssh you@your-server 'bash /opt/asystent/wdrozenie/04-kopie.sh'
 ```
+
+`wyslij.sh` goes first — the other scripts are run *from* `/opt/asystent`, and
+that is what puts them there.
 
 Full walkthrough, including how to restore a backup: [wdrozenie/README.md](wdrozenie/README.md).
 
@@ -167,7 +176,7 @@ SQL.
 ## Tests
 
 ```bash
-npm test         # 134 tests
+npm test         # 136 tests
 npm run typecheck
 ```
 

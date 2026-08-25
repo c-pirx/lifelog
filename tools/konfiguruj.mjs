@@ -7,12 +7,37 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { existsSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const KORZEN = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PLIK = join(KORZEN, ".env");
+
+// Wersję czytamy z `engines` w package.json, żeby próg był zapisany w jednym
+// miejscu. Sprawdzamy WSZYSTKIE trzy człony, nie samą główną: aplikacja używa
+// `process.loadEnvFile()`, dostępnego dopiero od 20.12. Wcześniejsza wersja
+// tego skryptu porównywała tylko „20" i przepuszczała Node 20.5, po którym
+// serwer twierdził, że brakuje zmiennych środowiskowych — mimo poprawnego .env.
+const WYMAGANA = JSON.parse(readFileSync(join(KORZEN, "package.json"), "utf8")).engines.node.replace(
+  /^[^\d]*/,
+  "",
+);
+
+function starszaNiz(mamy, wymagana) {
+  const a = mamy.split(".").map(Number);
+  const b = wymagana.split(".").map(Number);
+  for (let i = 0; i < 3; i += 1) {
+    if ((a[i] ?? 0) !== (b[i] ?? 0)) return (a[i] ?? 0) < (b[i] ?? 0);
+  }
+  return false;
+}
+
+if (starszaNiz(process.versions.node, WYMAGANA)) {
+  console.error(`Potrzebny Node.js ${WYMAGANA} lub nowszy (masz ${process.versions.node}).`);
+  console.error("Aktualizacja: https://nodejs.org — weź wersję LTS.");
+  process.exit(1);
+}
 
 if (existsSync(PLIK)) {
   console.log(
@@ -20,12 +45,6 @@ if (existsSync(PLIK)) {
       "Jeśli chcesz zacząć od nowa, usuń go najpierw i uruchom ponownie.",
   );
   process.exit(0);
-}
-
-const [wersjaGlowna] = process.versions.node.split(".").map(Number);
-if (wersjaGlowna < 20) {
-  console.error(`Potrzebny Node.js 20 lub nowszy (masz ${process.versions.node}).`);
-  process.exit(1);
 }
 
 const sekret = () => randomBytes(32).toString("hex");
@@ -62,5 +81,5 @@ console.log("Hasło do aplikacji webowej:");
 console.log(`  ${haslo}\n`);
 console.log("Zapisz je — drugi raz nie zostanie pokazane (choć zawsze możesz zajrzeć do .env).\n");
 console.log("Dalej:");
-console.log("  npm run dev     — uruchom serwer");
-console.log("  npm run demo    — wypełnij bazę danymi poglądowymi (opcjonalnie)");
+console.log("  npm run dev     — uruchom serwer, potem otwórz http://localhost:3000");
+console.log("  npm run demo    — dane poglądowe (opcjonalnie, przy działającym serwerze)");

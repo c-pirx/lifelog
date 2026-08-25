@@ -19,6 +19,7 @@ import { existsSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { sprawdzWersjeNode } from "../config.js";
 import { otworzBaze } from "../db/index.js";
 import { zarejestrujNarzedzia } from "./tools.js";
 
@@ -44,6 +45,12 @@ const KORZEN = korzenProjektu();
 // mają pierwszeństwo nad plikiem. Dzięki temu testy mogą wskazać własną bazę.
 const dbZWywolania = process.env["DB_PATH"];
 const strefaZWywolania = process.env["TZ_APP"];
+
+// Sprawdzamy przed wczytaniem .env. Na starym Node `loadEnvFile` nie istnieje,
+// wyjątek wpadłby w `catch` poniżej i proces po cichu wziąłby domyślną ścieżkę
+// bazy — czyli Claude pisałby do INNEJ bazy niż aplikacja webowa, gdyby DB_PATH
+// w .env wskazywał gdzie indziej. Lepiej przerwać z komunikatem.
+sprawdzWersjeNode();
 
 // Wczytujemy .env z katalogu projektu, a nie z katalogu roboczego procesu.
 try {

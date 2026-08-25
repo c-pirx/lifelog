@@ -5,7 +5,7 @@
   "type": "module",
   "main": "dist/server.js",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.12.0"
   },
   "scripts": {
     "setup": "node tools/konfiguruj.mjs",
@@ -15,7 +15,6 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
     "test": "vitest run",
     "test:watch": "vitest",
-    "podlacz": "node tools/podlacz-claude-desktop.mjs",
     "demo": "node tools/dane-demo.mjs",
     "reset": "node tools/wyczysc.mjs",
     "ikony": "node tools/generuj-ikony.mjs",
@@ -30,7 +29,6 @@
     "nutrition",
     "workout"
   ],
-  "author": "",
   "license": "MIT",
   "dependencies": {
     "@hono/node-server": "^2.1.1",
@@ -42,7 +40,6 @@
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.3.0",
-    "mcp-remote": "^0.2.1",
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"

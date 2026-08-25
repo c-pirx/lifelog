@@ -5,9 +5,10 @@
  *
  * Uruchomienie: `npm run rozszerzenie`
  *
- * Manifest powstaje tutaj, a nie leży w repozytorium, bo zawiera adres serwera
- * razem z tokenem. Gotowa paczka też jest poza repozytorium — traktuj ją jak
- * hasło i nikomu jej nie wysyłaj.
+ * Manifest powstaje tutaj, a nie leży w repozytorium, bo zawiera lokalną
+ * ścieżkę do projektu i numer wersji z package.json — dane prawdziwe tylko na
+ * tej maszynie. Nie ma w nim tokenu: paczka jest mostem stdio i sięga do bazy
+ * bezpośrednio, bez przechodzenia przez serwer HTTP.
  */
 
 import { execFileSync } from "node:child_process";
@@ -22,11 +23,13 @@ if (!existsSync(join(KORZEN, "dist", "mcp", "stdio.js"))) {
   throw new Error("Brak dist/mcp/stdio.js — zbuduj projekt: npm run build");
 }
 
+const paczka = JSON.parse(readFileSync(join(KORZEN, "package.json"), "utf8"));
+
 const manifest = {
   manifest_version: "0.3",
   name: "asystent-diety-treningu",
   display_name: "Asystent diety i treningu",
-  version: JSON.parse(readFileSync(join(KORZEN, "package.json"), "utf8")).version,
+  version: paczka.version,
   description: "Dziennik posiłków i treningów — zapis i podsumowania z rozmowy.",
   long_description:
     "Zapisuje posiłki z makroskładnikami, prowadzi przez trening według stałego planu " +
@@ -54,7 +57,8 @@ const manifest = {
       default: [KORZEN],
     },
   },
-  compatibility: { runtimes: { node: ">=20.0.0" } },
+  // Próg z package.json, żeby nie rozjechał się z resztą projektu.
+  compatibility: { runtimes: { node: paczka.engines.node } },
 };
 
 rmSync(BUDOWA, { recursive: true, force: true });
