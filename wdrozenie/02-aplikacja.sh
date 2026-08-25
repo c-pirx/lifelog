@@ -37,7 +37,12 @@ sudo chmod 750 "$KATALOG_DANYCH"
 sudo chmod 750 "$KATALOG_KONFIGURACJI"
 
 echo "==> Konfiguracja i sekrety"
-if [ ! -f "$KATALOG_KONFIGURACJI/env" ]; then
+# Sprawdzenie przez sudo, a nie wprost: katalog ma prawa 750 root:root, a skrypt
+# biegnie na zwykłym koncie. Bez sudo `[ -f ]` nie umie wejść do katalogu
+# i zgłasza brak pliku również wtedy, gdy plik istnieje — przez co sekrety
+# wymieniały się przy KAŻDYM wdrożeniu, zrywając konektor MCP i hasło do
+# aplikacji, mimo że skrypt miał być idempotentny.
+if ! sudo test -f "$KATALOG_KONFIGURACJI/env"; then
   # Sekrety produkcyjne generujemy na miejscu i nigdy nie przenosimy
   # z maszyny deweloperskiej — tamte służą wyłącznie do pracy lokalnej.
   MCP_TOKEN=$(openssl rand -hex 32)
@@ -56,7 +61,10 @@ MCP_TOKEN=$MCP_TOKEN
 SESSION_SECRET=$SESSION_SECRET
 APP_PASSWORD=$APP_PASSWORD
 KONIEC
-  echo "    wygenerowano nowe sekrety"
+  echo "    UWAGA: wygenerowano NOWE sekrety."
+  echo "    Hasło do aplikacji i token MCP uległy zmianie — konektor Claude"
+  echo "    przestanie działać, dopóki nie podmienisz adresu. Odczytasz je:"
+  echo "      sudo grep -E 'APP_PASSWORD|MCP_TOKEN' $KATALOG_KONFIGURACJI/env"
 else
   echo "    plik env już istnieje — zostawiam bez zmian"
 fi
