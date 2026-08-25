@@ -14,6 +14,7 @@ import type { Baza } from "../db/index.js";
 import { czyBladDomeny } from "../domain/bledy.js";
 import {
   celeNaDzien,
+  czestePosilki,
   podsumowanieDnia,
   sumyDzienne,
   ustawCele,
@@ -159,6 +160,16 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
     );
     return c.json(posilek, 201);
   });
+
+  api.get("/posilki/czeste", (c) =>
+    c.json(
+      czestePosilki(db, {
+        dni: Number(c.req.query("dni") ?? 30),
+        limit: Number(c.req.query("limit") ?? 8),
+        strefa: ustawienia.strefa,
+      }),
+    ),
+  );
 
   api.get("/cele", (c) =>
     c.json(celeNaDzien(db, c.req.query("data") ?? dzisiaj(ustawienia.strefa))),

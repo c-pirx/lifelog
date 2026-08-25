@@ -24,11 +24,31 @@ function godzina(iso) {
 const dopasujSciezke = (wpis, sciezka) => wpis.sciezka === sciezka;
 
 /**
+ * Data lokalna, do której należy wpis z kolejki.
+ *
+ * Gdy wpis niesie własny czas (posiłek dopisany do wczoraj), bierzemy datę
+ * wprost z niego. Bez tego wpis wylądowałby wizualnie w dniu wysyłki.
+ */
+function dataWpisu(wpis) {
+  const podany = wpis.dane?.czas ?? wpis.czas_lokalny ?? "";
+  const jawnaData = /^(\d{4}-\d{2}-\d{2})/.exec(podany);
+  if (jawnaData && !podany.endsWith("Z")) return jawnaData[1];
+
+  const data = new Date(podany);
+  if (Number.isNaN(data.getTime())) return jawnaData?.[1] ?? "";
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}-${String(data.getDate()).padStart(2, "0")}`;
+}
+
+/**
  * Podsumowanie dnia z doliczonymi posiłkami z kolejki i bez tych, których
  * usunięcie czeka na wysłanie.
  */
 export function nalozNaDzien(dzien, kolejka = []) {
-  const dodane = kolejka.filter((w) => dopasujSciezke(w, "/posilki"));
+  // Tylko wpisy z oglądanego dnia — przy cofnięciu się na wczoraj dzisiejsza
+  // kolejka nie ma tam czego szukać.
+  const dodane = kolejka
+    .filter((w) => dopasujSciezke(w, "/posilki"))
+    .filter((w) => dataWpisu(w) === dzien.data);
   const usuwane = new Set(
     kolejka
       .filter((w) => dopasujSciezke(w, "/wpis"))

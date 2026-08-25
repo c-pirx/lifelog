@@ -8,7 +8,14 @@
 
 import type { Baza } from "../db/index.js";
 import * as repo from "../db/repo.js";
-import { dataLokalna, dzisiaj, godzinaLokalna, terazUtc, STREFA_DOMYSLNA } from "../lib/time.js";
+import {
+  dataLokalna,
+  dzisiaj,
+  godzinaLokalna,
+  przesunDate,
+  terazUtc,
+  STREFA_DOMYSLNA,
+} from "../lib/time.js";
 import {
   MAKRO_ZERO,
   dodajMakro,
@@ -176,6 +183,39 @@ export function sumyDzienne(db: Baza, od: string, doDaty: string): SumaDnia[] {
     wegle_g: w.wegle_g,
     tluszcz_g: w.tluszcz_g,
     cel_kcal: repo.celeNaDzien(db, w.data_lokalna)?.kcal ?? null,
+  }));
+}
+
+export type CzestyPosilek = Makro & {
+  opis: string;
+  /** Ile razy zapisany w badanym okresie. */
+  ile: number;
+};
+
+/**
+ * Powtarzalne posiłki do podpowiedzi w aplikacji.
+ *
+ * Stuknięcie w podpowiedź ma wypełnić formularz, a nie zapisać wpis od razu —
+ * ta sama kanapka bywa raz większa, raz mniejsza, a cicha zgoda na stare makro
+ * fałszowałaby bilans. Stąd zwracamy wartości do potwierdzenia, nie gotowy zapis.
+ */
+export function czestePosilki(
+  db: Baza,
+  opcje: Opcje & { dni?: number; limit?: number; do?: string } = {},
+): CzestyPosilek[] {
+  const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
+  const dni = opcje.dni ?? 30;
+  // Data odniesienia jako parametr — inaczej testy zaczęłyby padać po upływie
+  // okna, bez żadnej zmiany w kodzie. Ta sama pułapka co przy trendWagi.
+  const od = przesunDate(opcje.do ?? dzisiaj(strefa), -(dni - 1));
+
+  return repo.czestePosilki(db, od, opcje.limit ?? 8).map((w) => ({
+    opis: w.opis,
+    ile: w.ile,
+    kcal: w.kcal,
+    bialko_g: w.bialko_g,
+    wegle_g: w.wegle_g,
+    tluszcz_g: w.tluszcz_g,
   }));
 }
 

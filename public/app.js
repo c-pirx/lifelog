@@ -22,6 +22,18 @@ let stan = {};
 /** Id serii otwartej do poprawki. Przeżywa odswiez(), bo widok jest bezstanowy. */
 let edytowanaSeria = null;
 
+/** Id posiłku otwartego do poprawki. */
+let edytowanyPosilek = null;
+
+/** Oglądany dzień; null znaczy „dzisiaj" i tak zostaje po zmianie doby. */
+let wybranaData = null;
+
+/** Dzisiejsza data według serwera — granica, poza którą nie ma po co iść. */
+let dzisiajData = null;
+
+/** Ostatnio usunięty posiłek — materiał na „Cofnij" w komunikacie. */
+let ostatnioUsuniety = null;
+
 // === Warstwa komunikacji ================================================
 
 /** Błąd niosący kod odpowiedzi — pozwala odróżnić złe hasło od awarii sieci. */
@@ -74,16 +86,36 @@ async function api(sciezka, opcje = {}) {
 
 let uchwytKomunikatu;
 
-function komunikat(tekst, czyBlad = false) {
+/**
+ * Komunikat na dole ekranu. `cofnij` dokłada przycisk odwracający akcję —
+ * przy usuwaniu jednym stuknięciem to jedyna droga powrotu.
+ */
+function komunikat(tekst, czyBlad = false, cofnij) {
   document.querySelector(".komunikat")?.remove();
   clearTimeout(uchwytKomunikatu);
 
   const element = document.createElement("div");
   element.className = czyBlad ? "komunikat blad" : "komunikat";
-  element.textContent = tekst;
+  element.append(tekst);
+
+  if (cofnij) {
+    const przycisk = document.createElement("button");
+    przycisk.type = "button";
+    przycisk.className = "cofnij";
+    przycisk.textContent = "Cofnij";
+    przycisk.addEventListener("click", () => {
+      element.remove();
+      clearTimeout(uchwytKomunikatu);
+      cofnij();
+    });
+    element.append(przycisk);
+  }
+
   document.body.append(element);
 
-  uchwytKomunikatu = setTimeout(() => element.remove(), czyBlad ? 5000 : 2500);
+  // Na cofnięcie dajemy więcej czasu — zwykłe potwierdzenie nie wymaga reakcji.
+  const ileTrzymac = czyBlad ? 5000 : cofnij ? 7000 : 2500;
+  uchwytKomunikatu = setTimeout(() => element.remove(), ileTrzymac);
 }
 
 /**
@@ -285,10 +317,47 @@ const esc = (tekst) =>
 
 const zaokr = (liczba) => Math.round(Number(liczba) || 0);
 
+/**
+ * Przesunięcie daty YYYY-MM-DD o podaną liczbę dni.
+ * Liczone w południe UTC, żeby zmiana czasu nie zjadła ani nie dodała doby.
+ */
+const przesunDate = (data, oDni) => {
+  const chwila = new Date(`${data}T12:00:00Z`);
+  chwila.setUTCDate(chwila.getUTCDate() + oDni);
+  return chwila.toISOString().slice(0, 10);
+};
+
 const liczbaZPola = (formularz, nazwa) => {
   const wartosc = formularz.elements[nazwa]?.value?.replace(",", ".").trim();
   return wartosc ? Number(wartosc) : undefined;
 };
+
+const makroZFormularza = (formularz) => ({
+  opis: formularz.elements.opis.value,
+  kcal: liczbaZPola(formularz, "kcal") ?? 0,
+  bialko_g: liczbaZPola(formularz, "bialko_g"),
+  wegle_g: liczbaZPola(formularz, "wegle_g"),
+  tluszcz_g: liczbaZPola(formularz, "tluszcz_g"),
+});
+
+/**
+ * Moment spożycia dla zapisywanego posiłku.
+ *
+ * Pusty przy oglądaniu dzisiaj znaczy „teraz" i zostaje serwerowi. Przy
+ * cofnięciu się na inny dzień musimy podać datę wprost, inaczej wpis wylądowałby
+ * pod dzisiejszą — format „YYYY-MM-DD HH:MM" rozumie parsujCzas na serwerze.
+ */
+function czasPosilku(formularz) {
+  const godzina = formularz.elements.godzina?.value?.trim();
+  const dzien = stan.dzien?.data;
+
+  if (!godzina) return wybranaData ? `${dzien} 12:00` : undefined;
+
+  const dopasowanie = /^(\d{1,2})[:.]?(\d{2})$/.exec(godzina);
+  if (!dopasowanie) return wybranaData ? `${dzien} 12:00` : undefined;
+
+  return `${dzien} ${dopasowanie[1].padStart(2, "0")}:${dopasowanie[2]}`;
+}
 
 /** Wynik serii z formularza. Pola nieobecne dla danego typu wychodzą jako
     undefined i nie trafiają do żądania. */
@@ -374,40 +443,100 @@ function polaSerii(typ, wartosci) {
 
 // === Ekran: Dziś ========================================================
 
-function ekranDzis(dzien) {
+/** Pola posiłku — wspólne dla dopisywania i poprawiania. */
+function polaPosilku(p = {}, idPrzedrostek = "") {
+  const id = (nazwa) => `${idPrzedrostek}${nazwa}`;
+
+  return `
+    <div class="szeroko">
+      <label for="${id("opis")}">Co zjadłeś</label>
+      <input id="${id("opis")}" name="opis" required autocomplete="off" value="${esc(p.opis ?? "")}" />
+    </div>
+    <div>
+      <label for="${id("kcal")}">Kalorie</label>
+      <input id="${id("kcal")}" name="kcal" inputmode="decimal" required value="${p.kcal ?? ""}" />
+    </div>
+    <div>
+      <label for="${id("godzina")}">Godzina</label>
+      <input id="${id("godzina")}" name="godzina" inputmode="numeric" placeholder="teraz" value="${esc(p.godzina ?? "")}" />
+    </div>
+    <div>
+      <label for="${id("bialko")}">Białko (g)</label>
+      <input id="${id("bialko")}" name="bialko_g" inputmode="decimal" value="${p.bialko_g ?? ""}" />
+    </div>
+    <div>
+      <label for="${id("wegle")}">Węgle (g)</label>
+      <input id="${id("wegle")}" name="wegle_g" inputmode="decimal" value="${p.wegle_g ?? ""}" />
+    </div>
+    <div>
+      <label for="${id("tluszcz")}">Tłuszcz (g)</label>
+      <input id="${id("tluszcz")}" name="tluszcz_g" inputmode="decimal" value="${p.tluszcz_g ?? ""}" />
+    </div>`;
+}
+
+function wpisPosilku(p) {
+  if (p.id === edytowanyPosilek) {
+    return `
+      <form id="edycja-posilku-${p.id}" data-posilek="${p.id}" class="wpis-edycja">
+        <div class="pola">${polaPosilku(p, `e${p.id}-`)}</div>
+        <div class="przyciski">
+          <button class="przycisk glowny" type="submit">Popraw</button>
+          <button class="przycisk" type="button" data-anuluj-posilku>Anuluj</button>
+        </div>
+      </form>`;
+  }
+
+  return `
+    <div class="wpis ${p.oczekuje ? "oczekuje" : ""}">
+      <div class="tresc">
+        <div class="naglowek">
+          <span class="godzina">${esc(p.godzina)}</span>
+          <span class="opis">${esc(p.opis)}</span>
+          ${p.pewnosc === "szacowane" ? '<span class="znacznik">szacunek</span>' : ""}
+          ${p.oczekuje ? '<span class="znacznik">⏳ czeka</span>' : ""}
+        </div>
+        <div class="szczegoly">
+          ${zaokr(p.kcal)} kcal · B ${zaokr(p.bialko_g)} · W ${zaokr(p.wegle_g)} · T ${zaokr(p.tluszcz_g)}
+        </div>
+      </div>
+      ${
+        // Wpis bez id z bazy nie ma czego poprawiać ani usuwać — obie akcje
+        // wrócą, gdy kolejka go wyśle.
+        p.oczekuje
+          ? ""
+          : `<button class="przycisk cichy" data-edytuj-posilek="${p.id}" aria-label="Popraw">✎</button>
+             <button class="przycisk cichy" data-usun-posilek="${p.id}" aria-label="Usuń">✕</button>`
+      }
+    </div>`;
+}
+
+function ekranDzis(dzien, czeste = []) {
   const cele = dzien.cele;
 
   const posilki = dzien.posilki.length
-    ? dzien.posilki
-        .map(
-          (p) => `
-          <div class="wpis ${p.oczekuje ? "oczekuje" : ""}">
-            <div class="tresc">
-              <div class="naglowek">
-                <span class="godzina">${esc(p.godzina)}</span>
-                <span class="opis">${esc(p.opis)}</span>
-                ${p.pewnosc === "szacowane" ? '<span class="znacznik">szacunek</span>' : ""}
-                ${p.oczekuje ? '<span class="znacznik">⏳ czeka</span>' : ""}
-              </div>
-              <div class="szczegoly">
-                ${zaokr(p.kcal)} kcal · B ${zaokr(p.bialko_g)} · W ${zaokr(p.wegle_g)} · T ${zaokr(p.tluszcz_g)}
-              </div>
-            </div>
-            ${
-              // Wpis bez id z bazy nie ma czego usuwać — kasowanie wróci,
-              // gdy kolejka go wyśle.
-              p.oczekuje
-                ? ""
-                : `<button class="przycisk cichy" data-usun-posilek="${p.id}" aria-label="Usuń">✕</button>`
-            }
-          </div>`,
-        )
-        .join("")
+    ? dzien.posilki.map(wpisPosilku).join("")
     : '<div class="pusto">Nic jeszcze nie zapisano.</div>';
+
+  // Podpowiedzi wypełniają formularz, a nie zapisują od razu: ta sama kanapka
+  // bywa raz większa, raz mniejsza, a cicha zgoda fałszowałaby bilans.
+  const podpowiedzi = czeste.length
+    ? `<div class="podpowiedzi">${czeste
+        .map(
+          (p) =>
+            `<button type="button" class="podpowiedz" data-czesty="${esc(JSON.stringify(p))}">
+               ${esc(p.opis)} <span class="ile">${zaokr(p.kcal)}</span>
+             </button>`,
+        )
+        .join("")}</div>`
+    : "";
 
   return `
     <section class="karta">
-      <h2>Bilans dnia</h2>
+      <div class="paskodat">
+        <button class="przycisk cichy" data-dzien="-1" aria-label="Poprzedni dzień">‹</button>
+        <span class="etykieta-daty">${esc(dzien.data)}${wybranaData ? "" : " · dziś"}</span>
+        <button class="przycisk cichy" data-dzien="1" aria-label="Następny dzień" ${wybranaData ? "" : "disabled"}>›</button>
+      </div>
       ${pasekMakro("Kalorie", dzien.spozyte.kcal, cele?.kcal, "kcal")}
       ${pasekMakro("Białko", dzien.spozyte.bialko_g, cele?.bialko_g, "g")}
       ${pasekMakro("Węglowodany", dzien.spozyte.wegle_g, cele?.wegle_g, "g")}
@@ -419,28 +548,8 @@ function ekranDzis(dzien) {
       <h2>Posiłki</h2>
       ${posilki}
       <form id="formularz-posilku" hidden>
-        <div class="pola">
-          <div class="szeroko">
-            <label for="opis">Co zjadłeś</label>
-            <input id="opis" name="opis" required autocomplete="off" />
-          </div>
-          <div>
-            <label for="kcal">Kalorie</label>
-            <input id="kcal" name="kcal" inputmode="decimal" required />
-          </div>
-          <div>
-            <label for="bialko">Białko (g)</label>
-            <input id="bialko" name="bialko_g" inputmode="decimal" />
-          </div>
-          <div>
-            <label for="wegle">Węgle (g)</label>
-            <input id="wegle" name="wegle_g" inputmode="decimal" />
-          </div>
-          <div>
-            <label for="tluszcz">Tłuszcz (g)</label>
-            <input id="tluszcz" name="tluszcz_g" inputmode="decimal" />
-          </div>
-        </div>
+        ${podpowiedzi}
+        <div class="pola">${polaPosilku()}</div>
         <div class="przyciski">
           <button class="przycisk glowny" type="submit">Zapisz</button>
           <button class="przycisk" type="button" data-anuluj="formularz-posilku">Anuluj</button>
@@ -625,12 +734,85 @@ function ekranTrening(trening, plan, dzisiajKod) {
 
 // === Ekran: Postępy =====================================================
 
+// Rysujemy wprost w SVG, bez biblioteki: dwa wykresy nie są wart 100 kB
+// zależności doładowywanej na telefonie przez komórkową transmisję.
+const SZER = 320;
+const WYS = 120;
+
+/**
+ * Wykres wagi: surowe pomiary jako punkty, średnia krocząca jako linia.
+ *
+ * Linia rysowana jest ze średniej 7-dniowej liczonej po stronie serwera —
+ * waga dzienna waha się o kilogram i wykres surowych pomiarów mówi więcej
+ * o nawodnieniu niż o postępie.
+ */
+function wykresWagi(trend) {
+  if (trend.length < 2) return '<div class="pusto">Za mało pomiarów na wykres.</div>';
+
+  const wartosci = trend.flatMap((p) => [p.kg, p.srednia_7d]);
+  const min = Math.min(...wartosci);
+  const maks = Math.max(...wartosci);
+  const rozpietosc = maks - min || 1;
+
+  const x = (i) => (i / (trend.length - 1)) * SZER;
+  const y = (v) => WYS - ((v - min) / rozpietosc) * WYS;
+
+  const linia = trend.map((p, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)} ${y(p.srednia_7d).toFixed(1)}`).join(" ");
+  const punkty = trend
+    .map((p, i) => `<circle cx="${x(i).toFixed(1)}" cy="${y(p.kg).toFixed(1)}" r="2.5" class="punkt" />`)
+    .join("");
+
+  return `
+    <svg class="wykres" viewBox="-4 -8 ${SZER + 8} ${WYS + 16}" role="img"
+         aria-label="Wykres wagi, od ${esc(trend[0].data)} do ${esc(trend.at(-1).data)}">
+      <path d="${linia}" class="linia" />
+      ${punkty}
+    </svg>
+    <div class="podpis">
+      <span>${esc(trend[0].data)}</span>
+      <span>${min.toFixed(1)}–${maks.toFixed(1)} kg</span>
+      <span>${esc(trend.at(-1).data)}</span>
+    </div>`;
+}
+
+/** Kalorie dzienne jako słupki, z celem zaznaczonym linią. */
+function wykresKalorii(dni) {
+  if (!dni.length) return '<div class="pusto">Brak danych.</div>';
+
+  const maks = Math.max(...dni.map((d) => Math.max(d.kcal, d.cel_kcal ?? 0)), 1);
+  const szerokosc = SZER / dni.length;
+
+  const slupki = dni
+    .map((d, i) => {
+      const wysokosc = (d.kcal / maks) * WYS;
+      const przekroczony = d.cel_kcal && d.kcal > d.cel_kcal;
+      return `<rect x="${(i * szerokosc + szerokosc * 0.15).toFixed(1)}" y="${(WYS - wysokosc).toFixed(1)}"
+                width="${(szerokosc * 0.7).toFixed(1)}" height="${wysokosc.toFixed(1)}"
+                class="slupek ${przekroczony ? "ponad" : ""}"><title>${esc(d.data)}: ${zaokr(d.kcal)} kcal</title></rect>`;
+    })
+    .join("");
+
+  // Cel bierzemy z ostatniego dnia — zmiana celu w środku okresu i tak
+  // przesunęłaby linię, a jedna wartość czyta się jednoznacznie.
+  const cel = dni.at(-1)?.cel_kcal;
+  const liniaCelu = cel
+    ? `<line x1="0" x2="${SZER}" y1="${(WYS - (cel / maks) * WYS).toFixed(1)}" y2="${(WYS - (cel / maks) * WYS).toFixed(1)}" class="cel-linia" />`
+    : "";
+
+  return `
+    <svg class="wykres" viewBox="0 -8 ${SZER} ${WYS + 16}" role="img"
+         aria-label="Wykres kalorii dziennych, ${dni.length} dni">
+      ${slupki}${liniaCelu}
+    </svg>
+    <div class="podpis">
+      <span>${esc(dni[0].data)}</span>
+      <span>${cel ? `cel ${zaokr(cel)} kcal` : "bez celu"}</span>
+      <span>${esc(dni.at(-1).data)}</span>
+    </div>`;
+}
+
 function ekranPostepy(postepy, waga) {
   const ostatnia = waga.ostatnia;
-  const trend = waga.trend.slice(-14).reverse();
-
-  const dni = postepy.dni.slice(-14).reverse();
-  const maks = Math.max(...dni.map((d) => Math.max(d.kcal, d.cel_kcal ?? 0)), 1);
 
   return `
     <section class="karta">
@@ -647,45 +829,16 @@ function ekranPostepy(postepy, waga) {
         </div>
       </form>
       ${
-        trend.length
-          ? `<div style="margin-top:14px">${trend
-              .map(
-                (p) => `
-              <div class="wpis">
-                <div class="tresc">
-                  <div class="naglowek">
-                    <span class="godzina">${esc(p.data)}</span>
-                    <span class="opis">${p.kg} kg</span>
-                  </div>
-                  <div class="szczegoly">średnia 7 dni: ${p.srednia_7d} kg</div>
-                </div>
-              </div>`,
-              )
-              .join("")}</div>`
-          : '<div class="pusto">Brak pomiarów.</div>'
+        ostatnia
+          ? `<div class="teraz">${ostatnia.kg} kg <span class="cel">ostatni pomiar ${esc(ostatnia.data_lokalna)}</span></div>`
+          : ""
       }
+      ${wykresWagi(waga.trend)}
     </section>
 
     <section class="karta">
-      <h2>Kalorie — ostatnie dni</h2>
-      ${
-        dni.length
-          ? dni
-              .map(
-                (d) => `
-          <div class="makro">
-            <div class="etykieta">
-              <span>${esc(d.data)}</span>
-              <span><b>${zaokr(d.kcal)}</b> <span class="cel">/ ${d.cel_kcal ? zaokr(d.cel_kcal) : "—"} kcal</span></span>
-            </div>
-            <div class="pasek ${d.cel_kcal && d.kcal > d.cel_kcal ? "przekroczony" : ""}">
-              <span style="width:${Math.min(100, (d.kcal / maks) * 100)}%"></span>
-            </div>
-          </div>`,
-              )
-              .join("")
-          : '<div class="pusto">Brak danych.</div>'
-      }
+      <h2>Kalorie — 30 dni</h2>
+      ${wykresKalorii(postepy.dni)}
     </section>`;
 }
 
@@ -698,9 +851,20 @@ async function odswiez() {
   const kolejka = await pokazStanSieci();
 
   if (ekran === "dzis") {
-    stan.dzien = nalozNaDzien(await api("/dzien"), kolejka);
+    const zapytanie = wybranaData ? `?data=${wybranaData}` : "";
+    const [dzien, czeste] = await Promise.all([
+      api(`/dzien${zapytanie}`),
+      // Podpowiedzi są dodatkiem — ich brak (np. bez sieci) nie może zablokować
+      // całego ekranu.
+      api("/posilki/czeste?dni=30&limit=6").catch(() => []),
+    ]);
+
+    if (!wybranaData) dzisiajData = dzien.data;
+
+    stan.dzien = nalozNaDzien(dzien, kolejka);
+    stan.czeste = czeste;
     dataEkranu.textContent = stan.dzien.data;
-    widok.innerHTML = ekranDzis(stan.dzien);
+    widok.innerHTML = ekranDzis(stan.dzien, czeste);
     return;
   }
 
@@ -807,16 +971,75 @@ widok.addEventListener("click", (zdarzenie) => {
     return;
   }
 
+  const zmianaDnia = cel.closest("[data-dzien]");
+  if (zmianaDnia) {
+    const nowa = przesunDate(stan.dzien?.data ?? dzisiajData, Number(zmianaDnia.dataset.dzien));
+    // Powrót na dzisiaj kasuje wybór, żeby ekran znów podążał za zmianą doby.
+    wybranaData = dzisiajData && nowa >= dzisiajData ? null : nowa;
+    edytowanyPosilek = null;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  const czesty = cel.closest("[data-czesty]");
+  if (czesty) {
+    const dane = JSON.parse(czesty.dataset.czesty);
+    const formularz = document.getElementById("formularz-posilku");
+    formularz.elements.opis.value = dane.opis;
+    formularz.elements.kcal.value = zaokr(dane.kcal);
+    formularz.elements.bialko_g.value = zaokr(dane.bialko_g);
+    formularz.elements.wegle_g.value = zaokr(dane.wegle_g);
+    formularz.elements.tluszcz_g.value = zaokr(dane.tluszcz_g);
+    formularz.elements.kcal.focus();
+    return;
+  }
+
+  const edytujPosilek = cel.closest("[data-edytuj-posilek]");
+  if (edytujPosilek) {
+    const id = Number(edytujPosilek.dataset.edytujPosilek);
+    edytowanyPosilek = edytowanyPosilek === id ? null : id;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  if (cel.closest("[data-anuluj-posilku]")) {
+    edytowanyPosilek = null;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
   const usun = cel.closest("[data-usun-posilek]");
   if (usun) {
-    akcja(
-      () =>
-        api("/wpis", {
-          method: "POST",
-          dane: { typ: "posilek", id: Number(usun.dataset.usunPosilek), akcja: "usun" },
-        }),
-      "Usunięto",
-    );
+    const id = Number(usun.dataset.usunPosilek);
+    // Zapamiętujemy treść przed skasowaniem — inaczej „Cofnij" nie miałoby
+    // czego przywrócić. Wpis wraca z nowym id; miękkie usuwanie wymagałoby
+    // migracji i nie jest tego warte.
+    ostatnioUsuniety = stan.dzien?.posilki.find((p) => p.id === id) ?? null;
+    edytowanyPosilek = null;
+
+    akcja(async () => {
+      await api("/wpis", { method: "POST", dane: { typ: "posilek", id, akcja: "usun" } });
+      const wrocDo = ostatnioUsuniety;
+      if (wrocDo) {
+        komunikat(`Usunięto „${wrocDo.opis}”`, false, () =>
+          akcja(
+            () =>
+              api("/posilki", {
+                method: "POST",
+                dane: {
+                  opis: wrocDo.opis,
+                  kcal: wrocDo.kcal,
+                  bialko_g: wrocDo.bialko_g,
+                  wegle_g: wrocDo.wegle_g,
+                  tluszcz_g: wrocDo.tluszcz_g,
+                  czas: `${wrocDo.data_lokalna} ${wrocDo.godzina}`,
+                },
+              }),
+            "Przywrócono",
+          ),
+        );
+      }
+    });
     return;
   }
 
@@ -847,15 +1070,24 @@ widok.addEventListener("submit", (zdarzenie) => {
       () =>
         api("/posilki", {
           method: "POST",
-          dane: {
-            opis: formularz.elements.opis.value,
-            kcal: liczbaZPola(formularz, "kcal") ?? 0,
-            bialko_g: liczbaZPola(formularz, "bialko_g"),
-            wegle_g: liczbaZPola(formularz, "wegle_g"),
-            tluszcz_g: liczbaZPola(formularz, "tluszcz_g"),
-          },
+          dane: { ...makroZFormularza(formularz), czas: czasPosilku(formularz) },
         }),
       "Zapisano posiłek",
+      formularz,
+    );
+    return;
+  }
+
+  if (formularz.id.startsWith("edycja-posilku-")) {
+    const id = Number(formularz.dataset.posilek);
+    edytowanyPosilek = null;
+    akcja(
+      () =>
+        api("/wpis", {
+          method: "POST",
+          dane: { typ: "posilek", id, akcja: "popraw", dane: makroZFormularza(formularz) },
+        }),
+      "Poprawiono posiłek",
       formularz,
     );
     return;

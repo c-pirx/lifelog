@@ -13,7 +13,8 @@ import { describe, expect, it } from "vitest";
 import { decyzjaKolejki } from "../public/kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "../public/nakladka.js";
 
-const CZAS = "2026-08-25T16:05:00.000Z";
+/** Południe UTC: ta sama data lokalna w każdej strefie, w której test może biec. */
+const CZAS = "2026-08-25T12:05:00.000Z";
 
 function dzienZSerwera() {
   return {
@@ -79,6 +80,30 @@ describe("nakładka na podsumowanie dnia", () => {
 
     expect(wynik.posilki).toHaveLength(0);
     expect(wynik.spozyte.kcal).toBe(0);
+  });
+
+  it("pomija wpisy z innego dnia niż oglądany", () => {
+    // Cofnięcie się na wczoraj nie może pokazywać dzisiejszej kolejki.
+    const wynik = nalozNaDzien(dzienZSerwera(), [
+      { id: 7, sciezka: "/posilki", czas_lokalny: "2026-08-26T12:00:00.000Z", dane: { opis: "jutro", kcal: 900 } },
+    ]);
+
+    expect(wynik.posilki).toHaveLength(1);
+    expect(wynik.spozyte.kcal).toBe(500);
+  });
+
+  it("wpis z własną godziną trafia do dnia, który niesie, a nie do dnia wysyłki", () => {
+    const wynik = nalozNaDzien(dzienZSerwera(), [
+      {
+        id: 8,
+        sciezka: "/posilki",
+        czas_lokalny: "2026-08-26T09:00:00.000Z",
+        dane: { opis: "kolacja z wczoraj", kcal: 400, czas: "2026-08-25 21:30" },
+      },
+    ]);
+
+    expect(wynik.posilki).toHaveLength(2);
+    expect(wynik.posilki[1]).toMatchObject({ opis: "kolacja z wczoraj", godzina: "21:30" });
   });
 
   it("nie rusza celów — to należy do domeny, nie do nakładki", () => {

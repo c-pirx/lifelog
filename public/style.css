@@ -442,6 +442,131 @@ nav button[aria-current="page"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* === Pasek dat ========================================================= */
+
+.paskodat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.paskodat .etykieta-daty {
+  font-size: 0.95rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.paskodat button {
+  font-size: 1.4rem;
+  line-height: 1;
+  min-width: 48px;
+}
+
+.paskodat button[disabled] {
+  opacity: 0.3;
+}
+
+/* === Podpowiedzi posiłków ============================================= */
+
+.podpowiedzi {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.podpowiedz {
+  appearance: none;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--obramowanie);
+  border-radius: 999px;
+  background: var(--powierzchnia-2);
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.podpowiedz .ile {
+  color: var(--tekst-cichy);
+  font-variant-numeric: tabular-nums;
+}
+
+.podpowiedz:active {
+  transform: scale(0.96);
+}
+
+/* Formularz poprawki wchodzi na miejsce wpisu — stąd obramowanie zamiast tła,
+   żeby było widać, którą pozycję listy się właśnie edytuje. */
+.wpis-edycja {
+  border: 1px solid var(--akcent);
+  border-radius: var(--promien);
+  padding: 12px;
+  margin: 10px 0;
+}
+
+/* === Wykresy =========================================================== */
+
+.wykres {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 14px;
+  overflow: visible;
+}
+
+.wykres .linia {
+  fill: none;
+  stroke: var(--akcent);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.wykres .punkt {
+  fill: var(--tekst-cichy);
+}
+
+.wykres .slupek {
+  fill: var(--akcent-ciemny);
+}
+
+.wykres .slupek.ponad {
+  fill: color-mix(in srgb, var(--ostrzezenie) 45%, transparent);
+}
+
+.wykres .cel-linia {
+  stroke: var(--tekst-cichy);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.podpis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: var(--tekst-cichy);
+  font-variant-numeric: tabular-nums;
+}
+
+.teraz {
+  margin-top: 14px;
+  font-size: 1.4rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.teraz .cel {
+  font-size: 0.78rem;
+  font-weight: 400;
+  color: var(--tekst-cichy);
+}
+
 /* === Formularze i przyciski =========================================== */
 
 button,
@@ -559,6 +684,18 @@ label {
 .komunikat.blad {
   border-color: var(--blad);
   color: var(--blad);
+}
+
+.komunikat .cofnij {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--akcent);
+  font: inherit;
+  font-weight: 650;
+  margin-left: 14px;
+  padding: 4px 2px;
+  cursor: pointer;
 }
 
 /* Komunikat i timer zajmują to samo miejsce nad nawigacją, a pojawiają się
