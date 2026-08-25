@@ -134,10 +134,15 @@ pojawiają się w **nowej** sesji — serwery MCP wczytują się przy jej starci
 Po każdej zmianie w kodzie serwera trzeba przebudować (`npm run build`),
 bo Claude uruchamia skompilowaną wersję z `dist/`.
 
-### Telefon i claude.ai — dopiero po wdrożeniu
+### Telefon i claude.ai — przez konektor
 
 Tam Claude łączy się z chmury Anthropic, więc potrzebny jest publiczny adres
-HTTPS i wejście HTTP. To Etap 4.
+HTTPS. Serwer produkcyjny działa pod `asystent.twojadomena.pl`.
+
+W claude.ai: **Customize → Connectors → + → Add custom connector**, adres
+`https://asystent.twojadomena.pl/mcp/<MCP_TOKEN>` (token z pliku
+`/etc/asystent/env` na serwerze). Dodaje się raz z przeglądarki; potem
+narzędzia są dostępne także w aplikacji mobilnej.
 
 ### Claude Desktop (czat) — jako rozszerzenie
 
@@ -182,13 +187,6 @@ Podłączenie — kolejność ma znaczenie:
 Skrypt wskazuje `node.exe` i plik mostu wprost, zamiast `npx`: Claude Desktop
 uruchamia komendę bez powłoki, więc `npx` na Windowsie bywa nieznajdowany —
 to najczęstsza przyczyna „konektor się nie pojawia".
-
-### Telefon — dopiero po wdrożeniu
-
-Aplikacja mobilna Claude korzysta z konektorów dodanych na claude.ai, a te
-wymagają publicznego HTTPS. To Etap 4. Na próbę można wystawić lokalny serwer
-tymczasowym tunelem (`cloudflared tunnel --url http://localhost:3000`) i dodać
-otrzymany adres jako konektor — ale adres znika po zamknięciu tunelu.
 
 ### Sprawdzenie narzędzi bez Claude'a
 
