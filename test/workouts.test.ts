@@ -80,6 +80,19 @@ describe("plan treningowy", () => {
     expect(planTreningowy(db)).toHaveLength(1);
   });
 
+  it("zapamiętuje ciężar docelowy ćwiczenia", () => {
+    const dzien = dodajDzienPlanu(db, {
+      kod: "C",
+      nazwa: "Klatka",
+      dzien_tygodnia: null,
+      cwiczenia: [
+        { nazwa: "wyciskanie", typ: "silowe", serie_cel: 4, powt_cel: "8", ciezar_cel_kg: 60 },
+      ],
+    });
+
+    expect(dzien.cwiczenia[0]?.ciezar_cel_kg).toBe(60);
+  });
+
   it("usuwa dzień planu", () => {
     planA();
     expect(usunDzienPlanu(db, "A")).toBe(true);

@@ -60,6 +60,7 @@ export type NoweCwiczenieWPlanie = {
   powt_cel?: string;
   czas_cel_s?: number;
   dystans_cel_m?: number;
+  ciezar_cel_kg?: number;
 };
 
 export type NowyDzienPlanu = {
@@ -110,6 +111,7 @@ export function dodajDzienPlanu(db: Baza, dane: NowyDzienPlanu): DzienPlanu {
         powt_cel: c.powt_cel ?? null,
         czas_cel_s: c.czas_cel_s ?? null,
         dystans_cel_m: c.dystans_cel_m ?? null,
+        ciezar_cel_kg: c.ciezar_cel_kg ?? null,
       });
     });
 

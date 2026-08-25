@@ -73,6 +73,7 @@ export type WierszCwiczeniaWDniu = {
   powt_cel: string | null;
   czas_cel_s: number | null;
   dystans_cel_m: number | null;
+  ciezar_cel_kg: number | null;
 };
 
 export type WierszSesji = {
@@ -378,7 +379,7 @@ export function cwiczeniaWDniu(db: Baza, dzienId: number): WierszCwiczeniaWDniu[
   return db
     .prepare<[number], WierszCwiczeniaWDniu>(
       `SELECT cwd.id, cwd.dzien_id, cwd.cwiczenie_id, c.nazwa, c.typ, cwd.kolejnosc,
-              cwd.serie_cel, cwd.powt_cel, cwd.czas_cel_s, cwd.dystans_cel_m
+              cwd.serie_cel, cwd.powt_cel, cwd.czas_cel_s, cwd.dystans_cel_m, cwd.ciezar_cel_kg
        FROM cwiczenia_w_dniu cwd
        JOIN cwiczenia c ON c.id = cwd.cwiczenie_id
        WHERE cwd.dzien_id = ?
@@ -397,13 +398,16 @@ export function wstawCwiczenieWDniu(
     powt_cel: string | null;
     czas_cel_s: number | null;
     dystans_cel_m: number | null;
+    ciezar_cel_kg: number | null;
   },
 ): number {
   const wynik = db
     .prepare(
       `INSERT INTO cwiczenia_w_dniu
-         (dzien_id, cwiczenie_id, kolejnosc, serie_cel, powt_cel, czas_cel_s, dystans_cel_m)
-       VALUES (@dzien_id, @cwiczenie_id, @kolejnosc, @serie_cel, @powt_cel, @czas_cel_s, @dystans_cel_m)`,
+         (dzien_id, cwiczenie_id, kolejnosc, serie_cel, powt_cel, czas_cel_s, dystans_cel_m,
+          ciezar_cel_kg)
+       VALUES (@dzien_id, @cwiczenie_id, @kolejnosc, @serie_cel, @powt_cel, @czas_cel_s,
+               @dystans_cel_m, @ciezar_cel_kg)`,
     )
     .run(dane);
   return Number(wynik.lastInsertRowid);

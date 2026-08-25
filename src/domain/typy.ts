@@ -120,6 +120,8 @@ export type CwiczenieWDniu = {
   powt_cel: string | null;
   czas_cel_s: number | null;
   dystans_cel_m: number | null;
+  /** Plan nie musi go znać — puste pole spada na wynik z poprzedniego treningu. */
+  ciezar_cel_kg: number | null;
 };
 
 export type DzienPlanu = {
