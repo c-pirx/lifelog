@@ -8,6 +8,7 @@ import { serve } from "@hono/node-server";
 import { utworzApp } from "./app.js";
 import { wczytajKonfiguracje, wczytajPlikEnv } from "./config.js";
 import { otworzBaze } from "./db/index.js";
+import { uruchomHarmonogram } from "./harmonogram.js";
 
 wczytajPlikEnv();
 
@@ -23,6 +24,10 @@ const app = utworzApp(db, {
   // Na produkcji HTTPS zapewnia reverse proxy; lokalnie pracujemy po http.
   ciasteczkoTylkoHttps: process.env["NODE_ENV"] === "production",
 });
+
+// Wołane tylko tutaj, nigdy z utworzApp() — inaczej każdy test stawiający
+// aplikację zostawiałby po sobie działający timer.
+uruchomHarmonogram(db, konfiguracja.strefa);
 
 serve({ fetch: app.fetch, port: konfiguracja.port, hostname: konfiguracja.host }, (info) => {
   console.log(`Asystent słucha na ${konfiguracja.host}:${info.port}`);

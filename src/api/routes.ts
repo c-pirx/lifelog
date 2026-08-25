@@ -22,6 +22,7 @@ import {
 } from "../domain/diet.js";
 import { zmienWpis } from "../domain/edits.js";
 import { ostatniaWaga, trendWagi, zapiszWage } from "../domain/metrics.js";
+import { raporty, tydzienWToku, zapewnijRaporty } from "../domain/raporty.js";
 import { PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
@@ -258,7 +259,26 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
     return c.json({
       dni: sumyDzienne(db, przesunDate(koniec, -(dni - 1)), koniec),
       waga: trendWagi(db, dni, { strefa: ustawienia.strefa }),
+      // Tydzień w toku dokładamy tutaj zamiast robić osobną trasę: ekran
+      // Postępy i tak ją woła, a drugie żądanie to drugie czekanie na telefonie.
+      tydzien: tydzienWToku(db, { strefa: ustawienia.strefa }),
     });
+  });
+
+  // === Raporty tygodniowe ===============================================
+
+  /**
+   * Całe archiwum w jednej odpowiedzi — raportów są dziesiątki, nie tysiące,
+   * a komplet w jednym żądaniu oznacza, że po zbuforowaniu archiwum działa
+   * bez zasięgu w całości, nie tylko ostatni otwarty tydzień.
+   */
+  api.get("/raporty", (c) => {
+    // Odczyt dogenerowuje zaległości — dzięki temu raport istnieje dokładnie
+    // wtedy, kiedy ktoś po niego sięga, nawet po przestoju serwera.
+    zapewnijRaporty(db, { strefa: ustawienia.strefa });
+
+    const ile = Math.min(Number(c.req.query("ile") ?? 12), 52);
+    return c.json(raporty(db, ile));
   });
 
   api.post("/wpis", async (c) => {

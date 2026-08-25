@@ -5,6 +5,7 @@
  * dlatego zdania są krótkie, liczby zaokrąglone, a jednostki zawsze widoczne.
  */
 
+import type { RaportTygodniowy } from "../domain/raporty.js";
 import type { HistoriaCwiczenia } from "../domain/workouts.js";
 import type {
   DzienPlanu,
@@ -170,6 +171,74 @@ export function historiaWTekscie(h: HistoriaCwiczenia): string {
   linie.push(
     ...h.sesje.map((s) => `${s.data}: ${s.serie.map(seriaWTekscie).join(" | ")}`),
   );
+
+  return linie.join("\n");
+}
+
+const zeZnakiem = (n: number): string => (n > 0 ? `+${liczba(n)}` : liczba(n));
+
+/**
+ * Raport tygodnia dla czatu.
+ *
+ * Kolejność jest celowa: najpierw to, na co użytkownik ma wpływ codziennie
+ * (dieta), potem wynik (waga), potem trening, a na końcu porównanie — dopiero
+ * ono nadaje liczbom kierunek.
+ */
+export function raportWTekscie(r: RaportTygodniowy): string {
+  const linie = [`Raport tygodnia ${r.tydzien_od} – ${r.tydzien_do}`, ""];
+
+  if (r.dieta.dni_z_zapisem === 0) {
+    linie.push("Dieta: brak zapisanych posiłków.");
+  } else {
+    linie.push(
+      `Dieta: średnio ${makroWTekscie(r.dieta.srednie)} (z ${r.dieta.dni_z_zapisem} dni z zapisem)`,
+    );
+    if (r.dieta.cel_dzienny) {
+      linie.push(
+        `Cel dzienny: ${makroWTekscie(r.dieta.cel_dzienny)} — trafiony w ${r.dieta.dni_w_celu} z ${r.dieta.dni_z_zapisem} dni`,
+      );
+    }
+    if (r.dieta.ile_szacowanych > 0) {
+      linie.push(`Wpisów opartych na szacunku: ${r.dieta.ile_szacowanych}.`);
+    }
+  }
+
+  if (r.waga.start !== null && r.waga.koniec !== null) {
+    linie.push(
+      "",
+      `Waga (średnia krocząca): ${liczba(r.waga.start)} → ${liczba(r.waga.koniec)} kg` +
+        (r.waga.zmiana_kg !== null ? ` (${zeZnakiem(r.waga.zmiana_kg)} kg)` : ""),
+    );
+  }
+
+  linie.push("");
+  if (r.trening.serie === 0) {
+    linie.push("Trening: brak zapisanych serii.");
+  } else {
+    linie.push(
+      `Trening: ${r.trening.sesje} z ${r.trening.sesje_w_planie} zaplanowanych sesji · ` +
+        `${r.trening.serie} serii · objętość ${liczba(r.trening.objetosc_kg)} kg`,
+    );
+    linie.push(
+      ...r.trening.cwiczenia
+        .slice(0, 5)
+        .map((c) => `  ${c.nazwa}: ${c.serie} serii, ${liczba(c.objetosc_kg)} kg`),
+    );
+  }
+
+  if (r.zmiana) {
+    linie.push(
+      "",
+      `Wobec poprzedniego tygodnia: ${zeZnakiem(r.zmiana.kcal_dziennie)} kcal dziennie, ` +
+        `${zeZnakiem(r.zmiana.dni_w_celu)} dni w celu, ${zeZnakiem(r.zmiana.serie)} serii, ` +
+        `${zeZnakiem(r.zmiana.objetosc_kg)} kg objętości` +
+        (r.zmiana.waga_kg !== null ? `, ${zeZnakiem(r.zmiana.waga_kg)} kg wagi` : ""),
+    );
+  }
+
+  if (r.komentarz) {
+    linie.push("", `Zapisany komentarz: ${r.komentarz}`);
+  }
 
   return linie.join("\n");
 }

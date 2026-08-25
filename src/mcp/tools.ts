@@ -10,10 +10,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { Baza } from "../db/index.js";
-import { czyBladDomeny } from "../domain/bledy.js";
+import { BladDomeny, czyBladDomeny } from "../domain/bledy.js";
 import { podsumowanieDnia, ustawCele, zapiszPosilek } from "../domain/diet.js";
 import { zmienWpis } from "../domain/edits.js";
 import { trendWagi, zapiszWage } from "../domain/metrics.js";
+import { dopiszKomentarz, raport, zapewnijRaporty } from "../domain/raporty.js";
 import { PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
@@ -31,6 +32,7 @@ import {
   planWTekscie,
   podsumowanieWTekscie,
   posilekWTekscie,
+  raportWTekscie,
   seriaWTekscie,
   stanTreninguWTekscie,
 } from "./formatowanie.js";
@@ -149,15 +151,68 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
   server.registerTool(
     "podsumowanie_dnia",
     {
-      title: "Podsumowanie dnia",
+      title: "Podsumowanie dnia lub tygodnia",
       description:
-        "Zwraca bilans wybranego dnia: zjedzone makro, cele, ile zostało oraz listę posiłków " +
-        "z ich identyfikatorami (przydatne do poprawek). Bez argumentu pokazuje dzisiaj.",
+        "Bez argumentów: bilans dzisiejszego dnia — zjedzone makro, cele, ile zostało oraz lista " +
+        "posiłków z identyfikatorami (przydatne do poprawek).\n" +
+        'Z okres="tydzien": raport zamkniętego tygodnia (niedziela–sobota) z dietą, wagą, treningiem ' +
+        "i porównaniem do tygodnia wcześniej. Raporty powstają same w niedzielę o 9:00; bez podanej " +
+        "daty zwracany jest najnowszy.\n" +
+        "Parametr „komentarz” zapisuje Twoją interpretację przy raporcie — użytkownik zobaczy ją " +
+        "w aplikacji obok liczb. W zadaniu cyklicznym rób to w dwóch krokach: najpierw odczytaj " +
+        "raport bez „komentarz”, napisz użytkownikowi podsumowanie, a dopiero potem zapisz je " +
+        "drugim wywołaniem z „komentarz”.",
       inputSchema: {
-        data: z.string().optional().describe("Data w formacie YYYY-MM-DD. Pomiń, aby zobaczyć dzisiaj."),
+        okres: z
+          .enum(["dzien", "tydzien"])
+          .optional()
+          .describe("Pomiń albo podaj „dzien”, żeby zobaczyć dobę; „tydzien” daje raport tygodniowy."),
+        data: z
+          .string()
+          .optional()
+          .describe(
+            "YYYY-MM-DD. Przy tygodniu wystarczy dowolny jego dzień — zostanie dopasowany do raportu.",
+          ),
+        komentarz: z
+          .string()
+          .optional()
+          .describe('Komentarz do raportu tygodnia. Wymaga okres="tydzien".'),
       },
     },
-    async (args) => zBezpiecznikiem(() => podsumowanieWTekscie(podsumowanieDnia(db, args.data, { strefa }))),
+    async (args) =>
+      zBezpiecznikiem(() => {
+        if (args.okres !== "tydzien") {
+          if (args.komentarz) {
+            throw new BladDomeny(
+              'Komentarz da się dopisać tylko do raportu tygodnia — dodaj okres="tydzien".',
+              "komentarz_bez_tygodnia",
+            );
+          }
+          return podsumowanieWTekscie(podsumowanieDnia(db, args.data, { strefa }));
+        }
+
+        // Odczyt dogenerowuje zaległości — raport jest gotowy w chwili, gdy
+        // ktoś po niego sięga, nawet jeśli serwer stał przez weekend.
+        zapewnijRaporty(db, { strefa });
+
+        if (args.komentarz) {
+          const wskazany = args.data ?? raport(db)?.tydzien_od;
+          if (!wskazany) {
+            throw new BladDomeny(
+              "Nie ma jeszcze żadnego raportu tygodniowego, więc nie ma czego komentować.",
+              "brak_raportu",
+            );
+          }
+          const zapisany = dopiszKomentarz(db, wskazany, args.komentarz, { strefa });
+          return `Komentarz zapisany przy raporcie ${zapisany.tydzien_od} – ${zapisany.tydzien_do}.`;
+        }
+
+        const znaleziony = raport(db, args.data);
+        return znaleziony
+          ? raportWTekscie(znaleziony)
+          : "Nie ma jeszcze raportu za ten tydzień. Pierwszy powstaje w niedzielę o 9:00, " +
+              "po zamknięciu pełnego tygodnia niedziela–sobota.";
+      }),
   );
 
   server.registerTool(

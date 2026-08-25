@@ -267,3 +267,26 @@ describe("wspólny stan czatu i aplikacji", () => {
     }
   });
 });
+
+describe("tydzień i raporty", () => {
+  it("postępy niosą podgląd bieżącego tygodnia", async () => {
+    const postepy = await pobierz<{
+      tydzien: { tydzien_od: string; tydzien_do: string; dni_zamkniete: number };
+    }>("/api/postepy?dni=30");
+
+    expect(postepy.tydzien.tydzien_od <= postepy.tydzien.tydzien_do).toBe(true);
+    expect(postepy.tydzien.dni_zamkniete).toBeGreaterThanOrEqual(0);
+    expect(postepy.tydzien.dni_zamkniete).toBeLessThanOrEqual(6);
+  });
+
+  it("archiwum raportów odpowiada listą", async () => {
+    // Świeża baza może nie mieć jeszcze zamkniętego tygodnia — sprawdzamy
+    // kształt odpowiedzi, bo liczba raportów zależy od dnia uruchomienia.
+    expect(Array.isArray(await pobierz("/api/raporty"))).toBe(true);
+  });
+
+  it("archiwum wymaga zalogowania", async () => {
+    const odpowiedz = await fetch(`${adres}/api/raporty`);
+    expect(odpowiedz.status).toBe(401);
+  });
+});

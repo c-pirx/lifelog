@@ -271,3 +271,30 @@ describe("waga", () => {
     expect(wynik).toMatch(/Średnia 7-dniowa/);
   });
 });
+
+describe("raport tygodniowy przez MCP", () => {
+  it("bez raportu w bazie tłumaczy, kiedy powstanie pierwszy", async () => {
+    // Świeża baza nie ma zamkniętego tygodnia z danymi — odpowiedź jest ta sama
+    // niezależnie od dnia uruchomienia testu.
+    const wynik = await wywolaj("podsumowanie_dnia", { okres: "tydzien" });
+
+    expect(wynik).toMatch(/niedziel/i);
+    expect(wynik).toMatch(/9:00/);
+  });
+
+  it("odmawia zapisania komentarza bez wskazania tygodnia", async () => {
+    const wynik = await wywolaj("podsumowanie_dnia", { komentarz: "Dobry tydzień." });
+
+    expect(wynik).toMatch(/okres="tydzien"/);
+  });
+
+  it("nadal mieści się w budżecie narzędzi mimo nowych możliwości", async () => {
+    // Raport tygodniowy wszedł parametrami istniejącego narzędzia, nie kolejną
+    // pozycją — właśnie po to, żeby ten warunek dalej był prawdziwy.
+    const { tools } = await klient.listTools();
+    const podsumowanie = tools.find((t) => t.name === "podsumowanie_dnia");
+
+    expect(tools).toHaveLength(11);
+    expect(Object.keys(podsumowanie?.inputSchema.properties ?? {})).toContain("okres");
+  });
+});
