@@ -1,0 +1,60 @@
+[Unit]
+Description=Asystent diety i treningu
+Documentation=https://github.com/
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=asystent
+Group=asystent
+WorkingDirectory=/opt/asystent
+
+# Sekrety i ścieżki trzymamy poza katalogiem z kodem, żeby wgranie nowej
+# wersji aplikacji nigdy ich nie nadpisało.
+EnvironmentFile=/etc/asystent/env
+ExecStart=/usr/bin/node /opt/asystent/dist/server.js
+
+Restart=always
+RestartSec=3
+# Nie zapętlaj restartów w nieskończoność, jeśli aplikacja jest trwale zepsuta.
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=asystent
+
+# --- Ograniczenia uprawnień ---------------------------------------------
+# Proces obsługuje ruch z internetu, więc dostaje tylko to, czego naprawdę
+# potrzebuje: własny katalog danych do zapisu i nic poza tym.
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/asystent
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+CapabilityBoundingSet=
+
+# MemoryDenyWriteExecute musi zostać wyłączone — silnik JavaScriptu
+# kompiluje kod w locie i bez prawa do zapisywalno-wykonywalnej pamięci
+# Node w ogóle się nie uruchomi.
+MemoryDenyWriteExecute=no
+
+[Install]
+WantedBy=multi-user.target

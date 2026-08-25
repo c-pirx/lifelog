@@ -7,6 +7,8 @@
 
 export type Konfiguracja = {
   port: number;
+  /** Interfejs nasłuchu. Za reverse proxy ustawiamy 127.0.0.1. */
+  host: string;
   sciezkaBazy: string;
   mcpToken: string;
   hasloAplikacji: string;
@@ -37,6 +39,9 @@ export function wczytajKonfiguracje(): Konfiguracja {
 
   const konfiguracja: Konfiguracja = {
     port: Number(process.env["PORT"] ?? 3000),
+    // Domyślnie wszystkie interfejsy, żeby praca lokalna była wygodna.
+    // Na produkcji ustawiamy 127.0.0.1 — do świata wystawia dopiero nginx.
+    host: process.env["HOST"] ?? "::",
     sciezkaBazy: process.env["DB_PATH"] ?? "./dane/asystent.db",
     mcpToken: wymagana("MCP_TOKEN", braki),
     hasloAplikacji: wymagana("APP_PASSWORD", braki),

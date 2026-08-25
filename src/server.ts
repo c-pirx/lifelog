@@ -24,7 +24,6 @@ const app = utworzApp(db, {
   ciasteczkoTylkoHttps: process.env["NODE_ENV"] === "production",
 });
 
-serve({ fetch: app.fetch, port: konfiguracja.port }, (info) => {
-  console.log(`Asystent słucha na http://localhost:${info.port}`);
-  console.log(`Adres konektora MCP: http://localhost:${info.port}/mcp/<MCP_TOKEN>`);
+serve({ fetch: app.fetch, port: konfiguracja.port, hostname: konfiguracja.host }, (info) => {
+  console.log(`Asystent słucha na ${konfiguracja.host}:${info.port}`);
 });
