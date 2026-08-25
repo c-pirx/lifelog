@@ -5,12 +5,14 @@ import {
   dodajDzienPlanu,
   historiaCwiczenia,
   planTreningowy,
+  propozycjaSerii,
   rozpocznijTrening,
   stanTreningu,
   usunDzienPlanu,
   zakonczTrening,
   zapiszSerie,
 } from "../src/domain/workouts.js";
+import type { Seria } from "../src/domain/typy.js";
 
 let db: Baza;
 
@@ -400,6 +402,153 @@ describe("kończenie treningu", () => {
 
   it("odmawia zakończenia, gdy nic nie jest otwarte", () => {
     expect(() => zakonczTrening(db, {})).toThrow(/sesj/i);
+  });
+});
+
+describe("rekordy i propozycja w stanie treningu", () => {
+  it("podaje propozycję kolejnej serii przy każdym ćwiczeniu", () => {
+    planA();
+    przeszlyTrening(100);
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+
+    const przysiad = stanTreningu(db).wg_planu.find((c) => c.nazwa === "przysiad");
+
+    expect(przysiad?.propozycja).toMatchObject({ powtorzenia: 5, ciezar_kg: 100 });
+  });
+
+  it("oznacza serię, która pobiła dotychczasowy rekord", () => {
+    planA();
+    przeszlyTrening(100);
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 105 });
+
+    const przysiad = stanTreningu(db).wg_planu.find((c) => c.nazwa === "przysiad");
+
+    expect(przysiad?.rekordy).toEqual([1]);
+  });
+
+  it("rekord nie liczy się z bieżącej sesji, więc obie mocniejsze serie są oznaczone", () => {
+    planA();
+    przeszlyTrening(100);
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 105 });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 105 });
+
+    const przysiad = stanTreningu(db).wg_planu.find((c) => c.nazwa === "przysiad");
+
+    expect(przysiad?.rekordy).toEqual([1, 2]);
+  });
+
+  it("nie oznacza rekordu przy pierwszym w życiu podejściu do ćwiczenia", () => {
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100 });
+
+    const przysiad = stanTreningu(db).wg_planu.find((c) => c.nazwa === "przysiad");
+
+    expect(przysiad?.rekordy).toEqual([]);
+  });
+});
+
+describe("propozycja serii", () => {
+  /** Zapisana seria zbudowana wprost — `propozycjaSerii` nie sięga do bazy. */
+  const seria = (wynik: Partial<Seria>): Seria => ({
+    id: 1,
+    sesja_id: 1,
+    cwiczenie_id: 1,
+    nazwa: "wyciskanie",
+    typ: "silowe",
+    nr_serii: 1,
+    powtorzenia: null,
+    ciezar_kg: null,
+    czas_s: null,
+    dystans_m: null,
+    rpe: null,
+    ts: "2026-08-25T10:00:00.000Z",
+    ...wynik,
+  });
+
+  const cel = (pola: Partial<Parameters<typeof propozycjaSerii>[1] & object>) => ({
+    powt_cel: null,
+    czas_cel_s: null,
+    dystans_cel_m: null,
+    ciezar_cel_kg: null,
+    ...pola,
+  });
+
+  it("bierze liczby z celu planu, gdy nie ma żadnej historii", () => {
+    const wynik = propozycjaSerii("silowe", cel({ powt_cel: "8", ciezar_cel_kg: 60 }), [], []);
+
+    expect(wynik).toMatchObject({ powtorzenia: 8, ciezar_kg: 60, zrodlo: "plan" });
+  });
+
+  it("ostatnia seria tej sesji bije cel z planu", () => {
+    const wynik = propozycjaSerii(
+      "silowe",
+      cel({ powt_cel: "8", ciezar_cel_kg: 60 }),
+      [seria({ powtorzenia: 8, ciezar_kg: 62.5 })],
+      [],
+    );
+
+    expect(wynik).toMatchObject({ powtorzenia: 8, ciezar_kg: 62.5, zrodlo: "ostatnia_seria" });
+  });
+
+  it("uzupełnia ciężar z poprzedniego treningu, gdy plan go nie podaje", () => {
+    const wynik = propozycjaSerii(
+      "silowe",
+      cel({ powt_cel: "8" }),
+      [],
+      [seria({ powtorzenia: 8, ciezar_kg: 60 })],
+    );
+
+    expect(wynik).toMatchObject({ powtorzenia: 8, ciezar_kg: 60 });
+  });
+
+  it("zgłasza brak propozycji, gdy nie ma ani planu, ani historii", () => {
+    expect(propozycjaSerii("silowe", null, [], []).zrodlo).toBe("brak");
+  });
+
+  it("zgłasza brak, gdy plan podaje sam ciężar bez powtórzeń", () => {
+    const wynik = propozycjaSerii("silowe", cel({ ciezar_cel_kg: 60 }), [], []);
+
+    expect(wynik.zrodlo).toBe("brak");
+  });
+
+  it("zakres w powt_cel nie daje liczby i schodzi do poprzedniego treningu", () => {
+    const wynik = propozycjaSerii(
+      "silowe",
+      cel({ powt_cel: "8-12" }),
+      [],
+      [seria({ powtorzenia: 10, ciezar_kg: 60 })],
+    );
+
+    expect(wynik).toMatchObject({ powtorzenia: 10, zrodlo: "poprzedni_trening" });
+  });
+
+  it("ćwiczenie bez obciążenia proponuje same powtórzenia", () => {
+    const wynik = propozycjaSerii("silowe", cel({ powt_cel: "10" }), [], []);
+
+    expect(wynik).toMatchObject({ powtorzenia: 10, ciezar_kg: null, zrodlo: "plan" });
+  });
+
+  it("cardio bierze czas i dystans, nie powtórzenia", () => {
+    const wynik = propozycjaSerii(
+      "cardio",
+      cel({ czas_cel_s: 1200, dystans_cel_m: 5000, powt_cel: "8" }),
+      [],
+      [],
+    );
+
+    expect(wynik).toMatchObject({ czas_s: 1200, dystans_m: 5000, powtorzenia: null });
+  });
+
+  it("ćwiczenie na czas bierze sam czas", () => {
+    const wynik = propozycjaSerii("na_czas", cel({ czas_cel_s: 60, ciezar_cel_kg: 20 }), [], []);
+
+    expect(wynik).toMatchObject({ czas_s: 60, ciezar_kg: null, zrodlo: "plan" });
   });
 });
 

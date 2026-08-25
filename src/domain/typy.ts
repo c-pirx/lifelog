@@ -177,6 +177,21 @@ export type Sesja = {
   notatki: string | null;
 };
 
+/** Skąd wzięły się liczby na przycisku „odhacz serię". */
+export type ZrodloPropozycji = "ostatnia_seria" | "plan" | "poprzedni_trening" | "brak";
+
+/**
+ * Liczby proponowane do zapisania jednym stuknięciem. `zrodlo` równe „brak"
+ * znaczy, że nie ma czego zapisać i aplikacja musi otworzyć formularz.
+ */
+export type Propozycja = {
+  powtorzenia: number | null;
+  ciezar_kg: number | null;
+  czas_s: number | null;
+  dystans_m: number | null;
+  zrodlo: ZrodloPropozycji;
+};
+
 /** Postęp pojedynczego ćwiczenia w trwającej sesji. */
 export type PostepCwiczenia = {
   cwiczenie_id: number;
@@ -190,6 +205,10 @@ export type PostepCwiczenia = {
   poprzednio: Seria[];
   /** Serie słabsze od najlepszej serii z poprzedniego razu. */
   slabsze_niz_poprzednio: number[];
+  /** Serie lepsze od wszystkiego, co zapisano przed tą sesją. */
+  rekordy: number[];
+  /** Co zapisze przycisk „odhacz serię". */
+  propozycja: Propozycja;
   ukonczone: boolean;
 };
 

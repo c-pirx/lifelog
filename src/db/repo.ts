@@ -553,6 +553,29 @@ export function serieZPoprzedniegoRazu(
     .all(poprzedniaSesja.sesja_id, cwiczenieId);
 }
 
+/**
+ * Wszystkie serie ćwiczenia z zakończonych sesji poza wskazaną.
+ *
+ * Rekord liczy się właśnie z nich, a nie z bieżącej sesji: inaczej pierwsza
+ * dzisiejsza seria sama ustanawiałaby rekord, a każda następna już tylko
+ * go wyrównywała — oznaczenie traciłoby sens w dniu, w którym ma działać.
+ */
+export function serieCwiczeniaPrzedSesja(
+  db: Baza,
+  cwiczenieId: number,
+  pomijajacSesje: number | null,
+): WierszSerii[] {
+  return db
+    .prepare<[number, number], WierszSerii>(
+      `SELECT ${KOLUMNY_SERII} FROM serie se
+       JOIN cwiczenia c ON c.id = se.cwiczenie_id
+       JOIN sesje s ON s.id = se.sesja_id
+       WHERE se.cwiczenie_id = ? AND s.status = 'zakonczona' AND se.sesja_id != ?
+       ORDER BY se.ts, se.id`,
+    )
+    .all(cwiczenieId, pomijajacSesje ?? -1);
+}
+
 /** Serie ćwiczenia z ostatnich `limitSesji` sesji, od najnowszej. */
 export function historiaCwiczenia(
   db: Baza,

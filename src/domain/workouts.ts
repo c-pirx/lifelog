@@ -15,10 +15,12 @@ import type {
   DzienPlanu,
   NowaSeria,
   PostepCwiczenia,
+  Propozycja,
   Seria,
   Sesja,
   StanTreningu,
   TypCwiczenia,
+  ZrodloPropozycji,
 } from "./typy.js";
 
 export type Opcje = { strefa?: string; ts?: string };
@@ -292,64 +294,196 @@ export function zapiszSerie(db: Baza, dane: NowaSeria, opcje: Opcje = {}): Seria
   return seria;
 }
 
+// === PROPOZYCJA SERII ===================================================
+
+export type CelCwiczenia = Pick<
+  CwiczenieWDniu,
+  "powt_cel" | "czas_cel_s" | "dystans_cel_m" | "ciezar_cel_kg"
+>;
+
+type PoleWyniku = keyof Omit<Propozycja, "zrodlo">;
+
+/** Które pola w ogóle mają sens dla danego typu — te same, których pilnuje `sprawdzPolaSerii`. */
+const POLA_TYPU: Record<TypCwiczenia, PoleWyniku[]> = {
+  silowe: ["powtorzenia", "ciezar_kg"],
+  cardio: ["czas_s", "dystans_m"],
+  na_czas: ["czas_s"],
+};
+
+/**
+ * „8" daje 8. „8-12" i „do upadku" nie dają nic — rozstrzyganie, czy chodziło
+ * o dolną czy górną granicę, byłoby narzucaniem progresji, której system
+ * świadomie nie narzuca.
+ */
+function powtorzeniaZCelu(powtCel: string | null): number | null {
+  if (powtCel === null) return null;
+  const liczba = Number(powtCel.trim());
+  return Number.isInteger(liczba) && liczba > 0 ? liczba : null;
+}
+
+/**
+ * Czy z propozycji da się w ogóle zapisać serię — te same pola, których wymaga
+ * `sprawdzPolaSerii`. Bez nich przycisk „odhacz" nie ma czego zapisać
+ * i aplikacja musi otworzyć formularz.
+ */
+function propozycjaKompletna(typ: TypCwiczenia, w: Omit<Propozycja, "zrodlo">): boolean {
+  if (typ === "silowe") return w.powtorzenia != null;
+  if (typ === "cardio") return w.czas_s != null || w.dystans_m != null;
+  return w.czas_s != null;
+}
+
+const wynikSerii = (s: Seria): Omit<Propozycja, "zrodlo"> => ({
+  powtorzenia: s.powtorzenia,
+  ciezar_kg: s.ciezar_kg,
+  czas_s: s.czas_s,
+  dystans_m: s.dystans_m,
+});
+
+/**
+ * Liczby, które aplikacja wpisze na przycisk „odhacz serię".
+ *
+ * Kolejność źródeł jest tu całą regułą: ostatnia seria tej sesji bije cel
+ * z planu, bo podbicie ciężaru w trzeciej serii jest faktem, a plan tylko
+ * zamiarem sprzed tygodnia. Pola brane są pojedynczo, więc plan podający same
+ * powtórzenia dostaje ciężar z poprzedniego treningu.
+ *
+ * Czysta funkcja bez dostępu do bazy — cała reguła daje się sprawdzić tablicą
+ * przypadków, a ten sam wynik dostaje aplikacja, czat i zapis zbiorczy.
+ */
+export function propozycjaSerii(
+  typ: TypCwiczenia,
+  cel: CelCwiczenia | null,
+  serieTejSesji: Seria[],
+  poprzednio: Seria[],
+): Propozycja {
+  const zrodla: { nazwa: Exclude<ZrodloPropozycji, "brak">; pola: Omit<Propozycja, "zrodlo"> }[] =
+    [];
+
+  const ostatnia = serieTejSesji.at(-1);
+  if (ostatnia) zrodla.push({ nazwa: "ostatnia_seria", pola: wynikSerii(ostatnia) });
+
+  if (cel) {
+    zrodla.push({
+      nazwa: "plan",
+      pola: {
+        powtorzenia: powtorzeniaZCelu(cel.powt_cel),
+        ciezar_kg: cel.ciezar_cel_kg,
+        czas_s: cel.czas_cel_s,
+        dystans_m: cel.dystans_cel_m,
+      },
+    });
+  }
+
+  const poprzednia = poprzednio.at(-1);
+  if (poprzednia) zrodla.push({ nazwa: "poprzedni_trening", pola: wynikSerii(poprzednia) });
+
+  const wybrane: Omit<Propozycja, "zrodlo"> = {
+    powtorzenia: null,
+    ciezar_kg: null,
+    czas_s: null,
+    dystans_m: null,
+  };
+
+  // Źródła stoją już w kolejności pierwszeństwa, więc najmniejszy indeks wśród
+  // tych, które cokolwiek wniosły, jest źródłem do pokazania na przycisku.
+  let najlepsze = zrodla.length;
+
+  for (const pole of POLA_TYPU[typ]) {
+    const indeks = zrodla.findIndex((z) => z.pola[pole] != null);
+    if (indeks === -1) continue;
+
+    wybrane[pole] = zrodla[indeks]?.pola[pole] ?? null;
+    najlepsze = Math.min(najlepsze, indeks);
+  }
+
+  // Niekompletna propozycja zachowuje zebrane liczby — formularz może się nimi
+  // wypełnić — ale melduje „brak", żeby aplikacja nie pokazała przycisku.
+  const zrodlo =
+    najlepsze < zrodla.length && propozycjaKompletna(typ, wybrane)
+      ? (zrodla[najlepsze]?.nazwa ?? "brak")
+      : "brak";
+
+  return { ...wybrane, zrodlo };
+}
+
 // === STAN TRENINGU ======================================================
 
 /**
- * Czy seria wypadła słabiej niż najlepsza seria z poprzedniego razu.
- * Świadomie prosta reguła — system pokazuje fakty, decyzję o progresji
- * podejmuje użytkownik.
+ * Porównanie serii z najlepszą z podanych: ujemne — słabsza, zero — tyle samo,
+ * dodatnie — lepsza. Świadomie prosta reguła; system pokazuje fakty, decyzję
+ * o progresji podejmuje użytkownik.
+ *
+ * Jedna miarka dla obu odczytów: „słabsza niż poprzednio" i „rekord" muszą
+ * mierzyć tak samo, bo inaczej ta sama seria umiałaby być jednocześnie słabsza
+ * i rekordowa.
  */
-function czySlabsza(seria: Seria, poprzednie: Seria[], typ: TypCwiczenia): boolean {
-  if (poprzednie.length === 0) return false;
-
+function porownajZNajlepsza(seria: Seria, inne: Seria[], typ: TypCwiczenia): number {
   const maks = (wartosci: (number | null)[]): number =>
     wartosci.reduce<number>((n, w) => Math.max(n, w ?? 0), 0);
 
   if (typ === "silowe") {
-    const najwiekszyCiezar = maks(poprzednie.map((s) => s.ciezar_kg));
+    const najwiekszyCiezar = maks(inne.map((s) => s.ciezar_kg));
     const ciezar = seria.ciezar_kg ?? 0;
 
-    if (ciezar < najwiekszyCiezar) return true;
-    if (ciezar > najwiekszyCiezar) return false;
+    if (ciezar !== najwiekszyCiezar) return ciezar - najwiekszyCiezar;
 
     // Ten sam ciężar — rozstrzyga liczba powtórzeń.
     const najwiecejPowtorzen = maks(
-      poprzednie.filter((s) => (s.ciezar_kg ?? 0) === najwiekszyCiezar).map((s) => s.powtorzenia),
+      inne.filter((s) => (s.ciezar_kg ?? 0) === najwiekszyCiezar).map((s) => s.powtorzenia),
     );
-    return (seria.powtorzenia ?? 0) < najwiecejPowtorzen;
+    return (seria.powtorzenia ?? 0) - najwiecejPowtorzen;
   }
 
   if (typ === "cardio") {
-    const najdalej = maks(poprzednie.map((s) => s.dystans_m));
-    if (najdalej > 0) return (seria.dystans_m ?? 0) < najdalej;
+    const najdalej = maks(inne.map((s) => s.dystans_m));
+    if (najdalej > 0) return (seria.dystans_m ?? 0) - najdalej;
   }
 
-  return (seria.czas_s ?? 0) < maks(poprzednie.map((s) => s.czas_s));
+  return (seria.czas_s ?? 0) - maks(inne.map((s) => s.czas_s));
 }
+
+/** Czy seria wypadła słabiej niż najlepsza seria z poprzedniego razu. */
+const czySlabsza = (seria: Seria, poprzednie: Seria[], typ: TypCwiczenia): boolean =>
+  poprzednie.length > 0 && porownajZNajlepsza(seria, poprzednie, typ) < 0;
+
+/**
+ * Czy seria pobiła wszystko, co zapisano przed tą sesją. Przy pierwszym w życiu
+ * podejściu do ćwiczenia rekordu nie ma — nie ma czego bić.
+ */
+const czyRekord = (seria: Seria, wczesniejsze: Seria[], typ: TypCwiczenia): boolean =>
+  wczesniejsze.length > 0 && porownajZNajlepsza(seria, wczesniejsze, typ) > 0;
+
+/** Ćwiczenie spoza planu dnia nie ma celu — stąd `null` zamiast pustego obiektu. */
+type CelWPostepie = (CelCwiczenia & { serie_cel: number | null }) | null;
 
 function zbudujPostep(
   db: Baza,
   cwiczenie: { id: number; nazwa: string; typ: TypCwiczenia },
-  cel: { serie_cel: number | null; powt_cel: string | null },
+  cel: CelWPostepie,
   serieSesji: Seria[],
   sesjaId: number,
 ): PostepCwiczenia {
   const serie = serieSesji.filter((s) => s.cwiczenie_id === cwiczenie.id);
   const poprzednio = repo.serieZPoprzedniegoRazu(db, cwiczenie.id, sesjaId);
+  const wczesniejsze = repo.serieCwiczeniaPrzedSesja(db, cwiczenie.id, sesjaId);
 
   return {
     cwiczenie_id: cwiczenie.id,
     nazwa: cwiczenie.nazwa,
     typ: cwiczenie.typ,
-    serie_cel: cel.serie_cel,
-    powt_cel: cel.powt_cel,
+    serie_cel: cel?.serie_cel ?? null,
+    powt_cel: cel?.powt_cel ?? null,
     serie_zrobione: serie.length,
     serie,
     poprzednio,
     slabsze_niz_poprzednio: serie
       .filter((s) => czySlabsza(s, poprzednio, cwiczenie.typ))
       .map((s) => s.nr_serii),
-    ukonczone: cel.serie_cel ? serie.length >= cel.serie_cel : serie.length > 0,
+    rekordy: serie
+      .filter((s) => czyRekord(s, wczesniejsze, cwiczenie.typ))
+      .map((s) => s.nr_serii),
+    propozycja: propozycjaSerii(cwiczenie.typ, cel, serie, poprzednio),
+    ukonczone: cel?.serie_cel ? serie.length >= cel.serie_cel : serie.length > 0,
   };
 }
 
@@ -374,7 +508,7 @@ export function stanTreningu(db: Baza): StanTreningu {
     zbudujPostep(
       db,
       { id: c.cwiczenie_id, nazwa: c.nazwa, typ: c.typ },
-      { serie_cel: c.serie_cel, powt_cel: c.powt_cel },
+      c,
       serie,
       sesja.id,
     ),
@@ -392,7 +526,7 @@ export function stanTreningu(db: Baza): StanTreningu {
     zbudujPostep(
       db,
       { id: s.cwiczenie_id, nazwa: s.nazwa, typ: s.typ },
-      { serie_cel: null, powt_cel: null },
+      null,
       serie,
       sesja.id,
     ),
