@@ -27,6 +27,7 @@ import { PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
+  odhaczCwiczenie,
   planTreningowy,
   rozpocznijTrening,
   stanTreningu,
@@ -95,8 +96,16 @@ const schematDniaPlanu = z.object({
       powt_cel: z.string().optional(),
       czas_cel_s: z.number().int().positive().optional(),
       dystans_cel_m: z.number().positive().optional(),
+      ciezar_cel_kg: z.number().nonnegative().optional(),
     }),
   ),
+});
+
+const schematOdhaczenia = z.object({
+  cwiczenie: z.string().min(1),
+  /** Górna granica to higiena wejścia — realne ćwiczenie nie ma pięćdziesięciu serii. */
+  ile: z.number().int().positive().max(50).optional(),
+  czas: z.string().optional(),
 });
 
 export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
@@ -221,6 +230,17 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
       strefa: ustawienia.strefa,
     });
     return c.json(stanTreningu(db), 201);
+  });
+
+  // Ciało nie niesie liczb wyniku: ile serii i z jakim obciążeniem — liczy
+  // domena. Gdyby liczyła aplikacja, czat i telefon umiałyby zapisać za ten
+  // sam trening co innego.
+  api.post("/trening/cwiczenie/odhacz", async (c) => {
+    const { czas: kiedy, ...dane } = schematOdhaczenia.parse(await c.req.json());
+    return c.json(
+      odhaczCwiczenie(db, dane, { ts: czas(kiedy), strefa: ustawienia.strefa }),
+      201,
+    );
   });
 
   api.post("/trening/koniec", async (c) => {

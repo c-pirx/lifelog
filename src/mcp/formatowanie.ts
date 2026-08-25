@@ -143,6 +143,7 @@ export function planWTekscie(dni: DzienPlanu[]): string {
                   c.powt_cel ? `po ${c.powt_cel}` : null,
                   c.czas_cel_s ? `${c.czas_cel_s} s` : null,
                   c.dystans_cel_m ? `${liczba(c.dystans_cel_m / 1000)} km` : null,
+                  c.ciezar_cel_kg ? `@ ${liczba(c.ciezar_cel_kg)} kg` : null,
                 ]
                   .filter(Boolean)
                   .join(" ");

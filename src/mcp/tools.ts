@@ -15,10 +15,12 @@ import { podsumowanieDnia, ustawCele, zapiszPosilek } from "../domain/diet.js";
 import { zmienWpis } from "../domain/edits.js";
 import { trendWagi, zapiszWage } from "../domain/metrics.js";
 import { dopiszKomentarz, raport, zapewnijRaporty } from "../domain/raporty.js";
+import type { PostepCwiczenia } from "../domain/typy.js";
 import { PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
+  odhaczCwiczenie,
   planTreningowy,
   rozpocznijTrening,
   stanTreningu,
@@ -273,6 +275,14 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
               powt_cel: z.string().optional().describe("Np. „5” albo zakres „8-12”"),
               czas_cel_s: z.number().int().positive().optional(),
               dystans_cel_m: z.number().positive().optional(),
+              ciezar_cel_kg: z
+                .number()
+                .nonnegative()
+                .optional()
+                .describe(
+                  "Ciężar roboczy. Dzięki niemu aplikacja odhacza serię jednym stuknięciem; " +
+                    "pominięty spada na wynik z poprzedniego treningu.",
+                ),
             }),
           )
           .optional(),
@@ -333,6 +343,15 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       }),
   );
 
+  /** „(2/4)" wg celu z planu albo „(2. seria)", gdy planu nie ma. */
+  const licznikSerii = (postep?: PostepCwiczenia): string =>
+    postep?.serie_cel
+      ? ` (${postep.serie_zrobione}/${postep.serie_cel})`
+      : ` (${postep?.serie_zrobione ?? 1}. seria)`;
+
+  const zostalo = (nazwy: string[]): string =>
+    nazwy.length > 0 ? `Zostało: ${nazwy.join(", ")}` : "Plan wykonany.";
+
   server.registerTool(
     "zapisz_serie",
     {
@@ -343,9 +362,19 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "Wypełniaj pola zgodnie z typem ćwiczenia: siłowe — powtorzenia (i ciezar_kg); " +
         "cardio — czas_s lub dystans_m; na czas — czas_s. " +
         "Nieznane ćwiczenie zostanie utworzone — domyślnie jako siłowe, więc przy cardio " +
-        "lub ćwiczeniu izometrycznym podaj typ. Ćwiczenie już znane zachowuje swój typ.",
+        "lub ćwiczeniu izometrycznym podaj typ. Ćwiczenie już znane zachowuje swój typ.\n\n" +
+        "ile_serii odhacza całe ćwiczenie naraz — „zrobiłem wszystkie serie z założonym " +
+        "obciążeniem”. Wynik bierze się wtedy z planu albo z poprzedniego treningu, " +
+        "a pozostałe pola wyniku są pomijane.",
       inputSchema: {
         cwiczenie: z.string().describe("Nazwa ćwiczenia, wielkość liter bez znaczenia"),
+        ile_serii: z
+          .number()
+          .int()
+          .positive()
+          .max(50)
+          .optional()
+          .describe("Odhacza tyle serii naraz, zamiast zapisywać jedną z podanym wynikiem."),
         typ: z
           .enum(TYPY_CWICZEN as unknown as [string, ...string[]])
           .optional()
@@ -361,6 +390,25 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
     },
     async (args) =>
       zBezpiecznikiem(() => {
+        if (args.ile_serii != null) {
+          const stan = odhaczCwiczenie(
+            db,
+            { cwiczenie: args.cwiczenie, ile: args.ile_serii },
+            { strefa, ts: czas(args.czas) },
+          );
+          const szukana = args.cwiczenie.trim().toLowerCase();
+          const postep = [...stan.wg_planu, ...stan.poza_planem].find(
+            (c) => c.nazwa.toLowerCase() === szukana,
+          );
+          const ostatnia = postep?.serie.at(-1);
+
+          return (
+            `${postep?.nazwa ?? args.cwiczenie}: odhaczone ${args.ile_serii} ×` +
+            `${ostatnia ? ` ${seriaWTekscie(ostatnia)}` : ""}${licznikSerii(postep)}\n` +
+            zostalo(stan.pozostalo)
+          );
+        }
+
         const seria = zapiszSerie(
           db,
           { ...args, typ: args.typ as never, ts: czas(args.czas) },
@@ -371,16 +419,15 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
           (c) => c.cwiczenie_id === seria.cwiczenie_id,
         );
 
-        const licznik = postep?.serie_cel
-          ? ` (${postep.serie_zrobione}/${postep.serie_cel})`
-          : ` (${postep?.serie_zrobione ?? 1}. seria)`;
-
         const ostrzezenie = postep?.slabsze_niz_poprzednio.includes(seria.nr_serii)
           ? "  ⚠ słabiej niż poprzednio"
           : "";
+        const rekord = postep?.rekordy.includes(seria.nr_serii) ? "  ★ rekord" : "";
 
-        return `${seria.nazwa}: ${seriaWTekscie(seria)}${licznik}${ostrzezenie}\n` +
-          (stan.pozostalo.length > 0 ? `Zostało: ${stan.pozostalo.join(", ")}` : "Plan wykonany.");
+        return (
+          `${seria.nazwa}: ${seriaWTekscie(seria)}${licznikSerii(postep)}${ostrzezenie}${rekord}\n` +
+          zostalo(stan.pozostalo)
+        );
       }),
   );
 

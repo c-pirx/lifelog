@@ -168,6 +168,20 @@ describe("trening przez API", () => {
 
     expect(po.wg_planu[0]?.serie_zrobione).toBe(1);
     expect(po.pozostalo).toEqual(["przysiad"]);
+    // Aplikacja rysuje przycisk „odhacz" z tych liczb, więc muszą dojechać.
+    expect(po.wg_planu[0]?.propozycja).toMatchObject({ powtorzenia: 5, ciezar_kg: 100 });
+  });
+
+  it("odhacza całe ćwiczenie jednym żądaniem", async () => {
+    const odpowiedz = await wyslij("/api/trening/cwiczenie/odhacz", { cwiczenie: "przysiad" });
+    expect(odpowiedz.status).toBe(201);
+
+    const przysiad = ((await odpowiedz.json()) as StanTreningu).wg_planu.find(
+      (c) => c.nazwa === "przysiad",
+    );
+
+    expect(przysiad?.serie_zrobione).toBe(3);
+    expect(przysiad?.ukonczone).toBe(true);
   });
 
   it("odmawia drugiej sesji, gdy jedna jest otwarta", async () => {

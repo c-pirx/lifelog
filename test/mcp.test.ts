@@ -198,6 +198,27 @@ describe("przepływ treningowy", () => {
     expect(koniec).toMatch(/Niedokończone/);
   });
 
+  it("zapamiętuje ciężar docelowy i odhacza całe ćwiczenie jednym wywołaniem", async () => {
+    const plan = await wywolaj("zarzadzaj_planem", {
+      akcja: "zapisz_dzien",
+      kod: "D",
+      nazwa: "Klatka",
+      cwiczenia: [
+        { nazwa: "wyciskanie hantlami", typ: "silowe", serie_cel: 4, powt_cel: "8", ciezar_cel_kg: 30 },
+      ],
+    });
+    expect(plan).toMatch(/30 kg/);
+
+    await wywolaj("rozpocznij_trening", { kod: "D", czas: "2026-09-14 18:00" });
+    const wynik = await wywolaj("zapisz_serie", {
+      cwiczenie: "wyciskanie hantlami",
+      ile_serii: 4,
+    });
+
+    expect(wynik).toMatch(/\(4\/4\)/);
+    await wywolaj("zakoncz_trening", {});
+  });
+
   it("nie pozwala zapisać serii bez otwartej sesji", async () => {
     const wynik = await klient.callTool({
       name: "zapisz_serie",
