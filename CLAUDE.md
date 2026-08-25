@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 203 testy
+npm test             # 227 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -111,10 +111,17 @@ proces potomny wstawał martwy, a vitest raportował mylące „Connection close
 widoku, więc odliczanie umieszczone w środku ginęłoby przy każdej zapisanej
 serii — czyli dokładnie wtedy, kiedy jest potrzebne.
 
-**Blokada podwójnego zapisu siedzi na formularzu, nie na przycisku.**
+**Blokada podwójnego zapisu obejmuje formularze i przyciski osobno.**
 Formularz wysyła się też klawiszem „Gotowe" z klawiatury telefonu, a ta droga
-omija wyłączony przycisk. Przy słabym zasięgu żądanie odrzuca się po kilku
-sekundach i bez blokady wpis zapisywał się dwa razy.
+omija wyłączony przycisk — stąd znacznik `dataset.zapisuje` na formularzu,
+nie sama blokada przycisku. Przycisk odhaczania serii to trzecia droga do
+zapisu i ma własne opakowanie (`akcjaPrzycisku`). Przy słabym zasięgu żądanie
+odrzuca się po kilku sekundach i bez blokady wpis zapisywał się dwa razy.
+
+**Rekord liczy się z sesji wcześniejszych niż bieżąca.** Inaczej pierwsza
+dzisiejsza seria sama ustanawiałaby rekord, a każda następna już tylko
+wyrównywała — oznaczenie traciłoby sens dokładnie w dniu, w którym ma działać.
+Stąd `repo.serieCwiczeniaPrzedSesja`, a nie zwykła historia ćwiczenia.
 
 **Certyfikat pobierany przez `--webroot`, nie wtyczką `--nginx`**, żeby
 certbot nie przepisywał naszej konfiguracji. Ustawienia TLS są wpisane wprost.
@@ -170,6 +177,38 @@ gotowe z serwera. Testy leżą obok, w `test/offline.test.ts`.
 Każdy zapis z aplikacji niesie `czas` powstania wpisu. Bez tego seria wpisana
 o 18:05 i wysłana o 19:30 wylądowałaby w historii pod złą godziną.
 
+## Odhaczanie serii
+
+Zakładka Treningi ma trzy poziomy: wybór dnia → lista ćwiczeń → pojedyncze
+ćwiczenie z historią. Na liście każda karta ma przycisk, który **mówi wprost,
+co zapisze** („Odhacz serię 3 — 8 × 60 kg"), bo jedno stuknięcie zapisuje bez
+potwierdzenia. Formularz pełnego wyniku zostaje pod „inny wynik".
+
+Skąd biorą się te liczby, rozstrzyga jedna czysta funkcja — `propozycjaSerii`
+w `src/domain/workouts.ts`. Kolejność źródeł, ta sama dla wszystkich pól:
+
+1. **ostatnia seria tej sesji** — podbicie ciężaru w trzeciej serii jest faktem,
+   plan tylko zamiarem sprzed tygodnia
+2. **cel z planu** — `ciezar_cel_kg` oraz `powt_cel`, o ile czyta się jako
+   pojedyncza liczba; zakres „8-12" nie daje liczby i spada niżej, bo
+   zgadywanie granicy byłoby narzucaniem progresji
+3. **poprzedni trening**
+4. **brak** — przycisku nie ma, otwiera się formularz
+
+Pola brane są pojedynczo, więc plan podający same powtórzenia dostaje ciężar
+z poprzedniego treningu. Zwracane `zrodlo` dojeżdża aż do napisu na przycisku
+(„wg planu", „jak ostatnio").
+
+**Ile serii dopisze „odhacz całe ćwiczenie", liczy serwer.** Trasa
+`POST /trening/cwiczenie/odhacz` nie przyjmuje liczb wyniku, a `odhaczCwiczenie`
+idzie przez `zapiszSerie`, żeby numeracja i wykrywanie słabszej serii zostały
+w jednym miejscu. Gdyby liczyła aplikacja, czat i telefon umiałyby zapisać za
+ten sam trening co innego. Nakładka offline pokazuje wtedy **jeden znacznik**
+„⏳ całe ćwiczenie", a nie zgadnięte serie.
+
+W czacie to samo robi parametr `ile_serii` narzędzia `zapisz_serie` — nowe
+możliwości idą przez parametry, nie przez kolejne pozycje w limicie 12.
+
 ## Tydzień: raport i tempo
 
 Tydzień biegnie **od niedzieli do soboty**, raport za niego powstaje w kolejną
@@ -211,5 +250,11 @@ API) → eksport CSV.
 
 Zrobione: wykresy (SVG wprost w `app.js`, bez biblioteki), tani wariant
 szablonów — podpowiedzi z najczęstszych posiłków (`czestePosilki`), które
-wypełniają formularz, ale go nie wysyłają — oraz tygodniowy raport z podglądem
-tempa na ekranie Postępy.
+wypełniają formularz, ale go nie wysyłają — tygodniowy raport z podglądem
+tempa na ekranie Postępy oraz odhaczanie serii wraz z widokiem pojedynczego
+ćwiczenia.
+
+Odłożone świadomie przy odhaczaniu: podsumowanie po zakończeniu treningu,
+lista ostatnich sesji z poprawianiem serii wstecz, edycja planu w aplikacji,
+podpowiedzi nazw przy ćwiczeniu spoza planu (dziś literówka rozdziela historię
+ćwiczenia — `repo.wszystkieCwiczenia` czeka nietknięte), supersety.

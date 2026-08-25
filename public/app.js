@@ -49,6 +49,9 @@ const propozycje = new Map();
 /** Po odhaczeniu przewijamy do pierwszego niedokończonego ćwiczenia. */
 let przewinDoNastepnego = false;
 
+/** Nazwa ćwiczenia otwartego na pełnym ekranie; null znaczy „lista". */
+let otwarteCwiczenie = null;
+
 // === Warstwa komunikacji ================================================
 
 /** Błąd niosący kod odpowiedzi — pozwala odróżnić złe hasło od awarii sieci. */
@@ -740,7 +743,9 @@ function kartaCwiczenia(cwiczenie) {
     return `
       <div class="cwiczenie zrobione zwiniete">
         <div class="tytul">
-          <span class="nazwa">✓ ${esc(cwiczenie.nazwa)}</span>
+          <button type="button" class="nazwa" data-cwiczenie-widok="${esc(cwiczenie.nazwa)}">
+            ✓ ${esc(cwiczenie.nazwa)}
+          </button>
           <span class="licznik">
             ${cwiczenie.serie_zrobione}${cwiczenie.serie_cel ? `/${cwiczenie.serie_cel}` : ""}${ostatnia ? ` · ${esc(seriaWTekscie(ostatnia))}` : ""}
           </span>
@@ -755,7 +760,9 @@ function kartaCwiczenia(cwiczenie) {
   return `
     <div class="cwiczenie">
       <div class="tytul">
-        <span class="nazwa">${esc(cwiczenie.nazwa)}</span>
+        <button type="button" class="nazwa" data-cwiczenie-widok="${esc(cwiczenie.nazwa)}">
+          ${esc(cwiczenie.nazwa)}
+        </button>
         ${kropkiSerii(cwiczenie)}
       </div>
       ${celWTekscie(cwiczenie) ? `<div class="cel-cwiczenia">${celWTekscie(cwiczenie)}</div>` : ""}
@@ -797,15 +804,101 @@ function kartaCwiczenia(cwiczenie) {
     </div>`;
 }
 
+/**
+ * Miara postępu ćwiczenia: to, co w danym typie w ogóle rośnie. Przy masie
+ * własnej ciężaru nie ma, więc rosną powtórzenia.
+ */
+function miaraSesji(typ, serie) {
+  const maks = (pole) => Math.max(0, ...serie.map((s) => s[pole] ?? 0));
+
+  if (typ === "cardio") {
+    const dystans = maks("dystans_m");
+    return dystans > 0
+      ? { wartosc: dystans, opis: `${(dystans / 1000).toFixed(2)} km` }
+      : { wartosc: maks("czas_s"), opis: `${maks("czas_s")} s` };
+  }
+
+  if (typ === "na_czas") return { wartosc: maks("czas_s"), opis: `${maks("czas_s")} s` };
+
+  const ciezar = maks("ciezar_kg");
+  return ciezar > 0
+    ? { wartosc: ciezar, opis: `${ciezar} kg` }
+    : { wartosc: maks("powtorzenia"), opis: `${maks("powtorzenia")} powt.` };
+}
+
+/** Najlepszy wynik w kolejnych sesjach, jako słupki. Ten sam wzorzec co wykres kalorii. */
+function wykresCwiczenia(historia) {
+  const punkty = [...historia.sesje]
+    .reverse()
+    .map((s) => ({ data: s.data, ...miaraSesji(historia.typ, s.serie) }));
+
+  if (punkty.length < 2) return "";
+
+  const maks = Math.max(...punkty.map((p) => p.wartosc), 1);
+  const szerokosc = SZER / punkty.length;
+
+  const slupki = punkty
+    .map((p, i) => {
+      const wysokosc = (p.wartosc / maks) * WYS;
+      return `<rect x="${(i * szerokosc + szerokosc * 0.15).toFixed(1)}" y="${(WYS - wysokosc).toFixed(1)}"
+                width="${(szerokosc * 0.7).toFixed(1)}" height="${wysokosc.toFixed(1)}"
+                class="slupek"><title>${esc(p.data)}: ${esc(p.opis)}</title></rect>`;
+    })
+    .join("");
+
+  return `
+    <svg class="wykres" viewBox="0 -8 ${SZER} ${WYS + 16}" role="img"
+         aria-label="Najlepszy wynik w ${punkty.length} ostatnich sesjach">${slupki}</svg>
+    <div class="podpis">
+      <span>${esc(punkty[0].data)}</span>
+      <span>najlepsze: ${esc(punkty.at(-1).opis)}</span>
+      <span>${esc(punkty.at(-1).data)}</span>
+    </div>`;
+}
+
+/**
+ * Trzeci poziom: jedno ćwiczenie na pełnym ekranie.
+ *
+ * Na siłowni pierwsze pytanie brzmi „ile brałem ostatnio i jak to szło" —
+ * na liście mieści się tylko jedna poprzednia sesja.
+ */
+function ekranCwiczenie(cwiczenie, historia) {
+  const rekord = historia?.rekord_ciezar
+    ? `${historia.rekord_ciezar} kg`
+    : historia?.rekord_powtorzenia
+      ? `${historia.rekord_powtorzenia} powt.`
+      : null;
+
+  return `
+    <div class="przyciski">
+      <button class="przycisk pelny" data-zamknij-cwiczenie>← Wróć do treningu</button>
+    </div>
+
+    <section class="karta">
+      ${kartaCwiczenia({ ...cwiczenie, ukonczone: false })}
+    </section>
+
+    <section class="karta">
+      <h2>Historia</h2>
+      ${rekord ? `<div class="teraz">${esc(rekord)} <span class="cel">rekord</span></div>` : ""}
+      ${
+        historia?.sesje?.length
+          ? `${wykresCwiczenia(historia)}
+             <div class="historia">${historia.sesje
+               .map(
+                 (s) => `<div class="wpis-historii">
+                   <span class="data">${esc(s.data)}</span>
+                   <span class="wyniki">${esc(s.serie.map(seriaWTekscie).join(" · "))}</span>
+                 </div>`,
+               )
+               .join("")}</div>`
+          : '<div class="pusto">To pierwszy raz — historia pojawi się przy kolejnym treningu.</div>'
+      }
+    </section>`;
+}
+
 function ekranTrening(trening, plan, dzisiajKod) {
   if (!trening.sesja) return kartaBezSesji(plan, dzisiajKod);
-
-  const wszystkie = [...trening.wg_planu, ...trening.poza_planem];
-
-  propozycje.clear();
-  for (const c of wszystkie) {
-    if (c.propozycja) propozycje.set(c.nazwa, c.propozycja);
-  }
 
   return `
     <section class="karta">
@@ -819,7 +912,7 @@ function ekranTrening(trening, plan, dzisiajKod) {
     </section>
 
     <section class="karta">
-      ${wszystkie.map(kartaCwiczenia).join("")}
+      ${[...trening.wg_planu, ...trening.poza_planem].map(kartaCwiczenia).join("")}
     </section>
 
     <section class="karta">
@@ -1006,8 +1099,29 @@ async function odswiez() {
     const numerDnia = ((new Date(`${zdrowie.dzisiaj}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
     const dzisiajKod = plan.find((d) => d.dzien_tygodnia === numerDnia)?.kod;
 
+    const stanTreningu = nalozNaTrening(trening, kolejka, plan);
+    const wszystkie = [...stanTreningu.wg_planu, ...stanTreningu.poza_planem];
+
+    propozycje.clear();
+    for (const c of wszystkie) {
+      if (c.propozycja) propozycje.set(c.nazwa, c.propozycja);
+    }
+
     dataEkranu.textContent = zdrowie.dzisiaj;
-    widok.innerHTML = ekranTrening(nalozNaTrening(trening, kolejka, plan), plan, dzisiajKod);
+
+    const otwarte = otwarteCwiczenie && wszystkie.find((c) => c.nazwa === otwarteCwiczenie);
+    if (otwarte) {
+      // Historia bywa niedostępna bez zasięgu — widok ma się wtedy otworzyć
+      // i tak, z samym ćwiczeniem. Service worker poda ostatnią zapamiętaną.
+      const historia = await api(`/historia/${encodeURIComponent(otwarte.nazwa)}?sesje=5`).catch(
+        () => null,
+      );
+      widok.innerHTML = ekranCwiczenie(otwarte, historia);
+      return;
+    }
+
+    otwarteCwiczenie = null;
+    widok.innerHTML = ekranTrening(stanTreningu, plan, dzisiajKod);
 
     // Tylko po odhaczeniu: przewijanie przy każdym odświeżeniu wyrywałoby ekran
     // spod palca również wtedy, gdy użytkownik tylko czyta.
@@ -1036,6 +1150,9 @@ async function odswiez() {
 
 function przejdzDo(nowyEkran) {
   ekran = nowyEkran;
+  // Wyjście z zakładki zamyka też widok pojedynczego ćwiczenia — inaczej powrót
+  // na Trening otwierałby ćwiczenie sprzed kwadransa zamiast listy.
+  otwarteCwiczenie = null;
 
   // Raporty żyją w bocznym menu, nie w dolnym pasku — wtedy żaden przycisk
   // paska nie jest bieżący i wszystkie muszą stracić zaznaczenie.
@@ -1134,13 +1251,28 @@ widok.addEventListener("click", (zdarzenie) => {
     return;
   }
 
+  const widokCwiczenia = cel.closest("[data-cwiczenie-widok]");
+  if (widokCwiczenia) {
+    otwarteCwiczenie = widokCwiczenia.dataset.cwiczenieWidok;
+    edytowanaSeria = null;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  if (cel.closest("[data-zamknij-cwiczenie]")) {
+    otwarteCwiczenie = null;
+    edytowanaSeria = null;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
   const odhaczSerie = cel.closest("[data-odhacz-serie]");
   if (odhaczSerie) {
     const nazwa = odhaczSerie.dataset.odhaczSerie;
     const wynik = propozycje.get(nazwa);
     if (!wynik) return komunikat("Nie wiadomo, co zapisać — użyj „inny wynik”", true);
 
-    przewinDoNastepnego = true;
+    przewinDoNastepnego = !otwarteCwiczenie;
     akcjaPrzycisku(odhaczSerie, async () => {
       await api("/trening/seria", {
         method: "POST",
@@ -1168,7 +1300,7 @@ widok.addEventListener("click", (zdarzenie) => {
       : null;
     if (odhaczCale.dataset.bezCelu && !(ile > 0)) return;
 
-    przewinDoNastepnego = true;
+    przewinDoNastepnego = !otwarteCwiczenie;
     akcjaPrzycisku(
       odhaczCale,
       // Bez timera przerwy — całe ćwiczenie jest już za tobą, nie w połowie.

@@ -515,6 +515,55 @@ nav button[aria-current="page"] {
   color: var(--akcent);
 }
 
+/* Nazwa ćwiczenia otwiera jego pełny widok, więc musi być przyciskiem —
+   ale ma wyglądać jak nagłówek, nie jak kolejny klawisz na ekranie. */
+.cwiczenie .nazwa {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cwiczenie .nazwa:active {
+  color: var(--akcent);
+}
+
+.historia {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.wpis-historii {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  border-top: 1px solid var(--obramowanie);
+  padding-top: 10px;
+}
+
+.wpis-historii:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.wpis-historii .data {
+  color: var(--tekst-cichy);
+  white-space: nowrap;
+}
+
+.wpis-historii .wyniki {
+  text-align: right;
+}
+
 /* === Pasek dat ========================================================= */
 
 .paskodat {
