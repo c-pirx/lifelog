@@ -4,6 +4,7 @@ import {
   dataLokalna,
   dzienTygodnia,
   godzinaLokalna,
+  parsujCzas,
   przesunDate,
   zakresDat,
 } from "../src/lib/time.js";
@@ -63,6 +64,45 @@ describe("dzień tygodnia", () => {
     const chwila = "2026-08-30T22:30:00.000Z";
     expect(dzienTygodnia(chwila, "UTC")).toBe(7);
     expect(dzienTygodnia(chwila, WARSZAWA)).toBe(1);
+  });
+});
+
+describe("parsowanie czasu podanego przez użytkownika", () => {
+  it("bierze pełny ISO ze strefą wprost", () => {
+    expect(parsujCzas("2026-08-25T07:00:00Z", WARSZAWA)).toBe("2026-08-25T07:00:00.000Z");
+  });
+
+  it("traktuje czas bez strefy jako ścienny w Polsce", () => {
+    // 09:00 w Polsce latem to 07:00 UTC.
+    expect(parsujCzas("2026-08-25 09:00", WARSZAWA)).toBe("2026-08-25T07:00:00.000Z");
+    expect(parsujCzas("2026-08-25T09:00", WARSZAWA)).toBe("2026-08-25T07:00:00.000Z");
+  });
+
+  it("uwzględnia czas zimowy", () => {
+    // 09:00 w Polsce zimą to 08:00 UTC.
+    expect(parsujCzas("2026-01-15 09:00", WARSZAWA)).toBe("2026-01-15T08:00:00.000Z");
+  });
+
+  it("trafia we właściwą chwilę w dobie zmiany czasu", () => {
+    // Po przejściu na czas letni 29.03.2026 offset to +2h.
+    expect(parsujCzas("2026-03-29 10:00", WARSZAWA)).toBe("2026-03-29T08:00:00.000Z");
+    // Przed przejściem, tej samej doby, offset to jeszcze +1h.
+    expect(parsujCzas("2026-03-29 01:00", WARSZAWA)).toBe("2026-03-29T00:00:00.000Z");
+  });
+
+  it("sama godzina oznacza dzisiaj", () => {
+    const wynik = parsujCzas("09:00", WARSZAWA);
+    expect(godzinaLokalna(wynik, WARSZAWA)).toBe("09:00");
+  });
+
+  it("zapisany czas wraca po konwersji w obie strony", () => {
+    const utc = parsujCzas("2026-08-24 22:30", WARSZAWA);
+    expect(godzinaLokalna(utc, WARSZAWA)).toBe("22:30");
+    expect(dataLokalna(utc, WARSZAWA)).toBe("2026-08-24");
+  });
+
+  it("odrzuca format, którego nie rozumie", () => {
+    expect(() => parsujCzas("wczoraj wieczorem", WARSZAWA)).toThrow(/format/i);
   });
 });
 
