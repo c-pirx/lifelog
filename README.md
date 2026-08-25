@@ -1,218 +1,176 @@
-# Asystent diety i treningu
+# Diet & training assistant
 
-Osobisty asystent do zapisywania posiłków i treningów. Dwa wejścia, jedna baza:
+*[Wersja polska →](README.pl.md)*
 
-- **Claude na telefonie** — dyktujesz zdanie („obiad: kurczak z ryżem, ok. 700 kcal"),
-  Claude wywołuje narzędzia serwera MCP i zapisuje.
-- **Aplikacja webowa (PWA)** — na siłowni, gdzie rozmowa jest za wolna: odhaczasz serie
-  jednym kliknięciem, z ciężarami z poprzedniego treningu pod ręką.
+A self-hosted food and workout journal for **one person**. Two ways in, one
+database:
 
-Oba wejścia wywołują ten sam kod z `src/domain/`, więc nie mogą pokazać różnych danych.
+- **Claude** — dictate a sentence on your phone (*"chicken and rice, about 700
+  kcal, 2 pm"*) and it gets logged. Works through a custom MCP connector.
+- **Web app (PWA)** — for the gym, where holding a conversation is too slow.
+  Tap to log a set, with last session's weights already filled in.
 
-## Wymagania
+Both entry points call the same domain code, so they can never show you
+different numbers.
 
-- Node.js 20 lub nowszy
-- Nic poza tym — baza to plik SQLite, bez osobnego serwera
+> **Note on language.** The code, comments, database schema and UI are in
+> Polish — this started as a personal project. Only the documentation is
+> translated. If you fork it, expect to read Polish identifiers.
 
-## Uruchomienie lokalne
+## Why it exists
+
+Chat assistants forget. Their memory is a lossy summary, not a ledger — fine
+for "I'm vegetarian", useless for "what did I eat on the 14th". This gives
+Claude an actual database to write to, and gives you an app for the moments
+when typing a sentence is slower than tapping a button.
+
+## What it does
+
+**Food** — logs meals with calories and macros, optionally broken down into
+components. Daily totals against your targets. Targets carry an effective
+date, so changing them doesn't rewrite history. Entries Claude had to guess at
+are flagged, so you can see how much of your data is soft.
+
+**Training** — you dictate your plan to Claude once and it stores it. During a
+session the system tracks what's done and what's left, shows what you lifted
+last time, and flags sets weaker than before. It does **not** prescribe
+progression — that call stays yours.
+
+**Body weight** — with a 7-day rolling average, because daily readings swing
+too much to read directly.
+
+## Requirements
+
+- Node.js 20+
+- Nothing else. The database is a single SQLite file — no database server.
+
+Running it as a Claude connector on your phone additionally needs a public
+HTTPS address, which in practice means a small VPS and a domain you control.
+
+## Quick start
 
 ```bash
+git clone <your-fork>
+cd <repo>
 npm install
-cp .env.example .env   # i uzupełnij sekrety
+npm run setup      # generates .env with fresh secrets, prints your app password
 npm run dev
 ```
 
-Sekrety wygenerujesz przez:
+Open http://localhost:3000 and log in with the password `npm run setup`
+printed. `npm run demo` fills the database with sample data if you want to see
+the screens populated.
 
-```bash
-node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
-```
+## Connecting Claude
 
-Sprawdzenie, czy działa:
+There are two MCP entry points into the same database:
 
-```bash
-curl http://localhost:3000/zdrowie
-```
-
-## Skrypty
-
-| Komenda | Działanie |
-|---|---|
-| `npm run dev` | serwer deweloperski z przeładowaniem |
-| `npm test` | testy jednostkowe i integracyjne |
-| `npm run typecheck` | kontrola typów bez budowania |
-| `npm run build` | kompilacja do `dist/` |
-| `npm start` | uruchomienie skompilowanej wersji |
-
-## Układ projektu
-
-```
-migrations/     schemat bazy; stosowany automatycznie przy starcie
-src/
-  server.ts     punkt wejścia — montuje /mcp, /api i pliki statyczne
-  config.ts     konfiguracja ze zmiennych środowiskowych
-  db/           połączenie i migracje; repo.ts to jedyne miejsce z SQL
-  domain/       logika: dieta, treningi, pomiary, poprawki wpisów
-  mcp/          narzędzia MCP — cienki adapter nad domain/
-  api/          REST dla aplikacji webowej — ten sam adapter
-  lib/time.ts   strefy czasowe i granice doby
-public/         aplikacja webowa (PWA)
-test/           testy
-```
-
-Dwie zasady, które warto znać przed zmianami:
-
-1. **Logika mieszka w `domain/`.** `mcp/` i `api/` tylko ją wołają. Nowa funkcja
-   dopisana tylko po jednej stronie to błąd — dane rozjadą się między czatem a apką.
-2. **Cały SQL siedzi w `db/repo.ts`.** To granica, dzięki której zmiana SQLite na
-   Postgres jest przepisaniem jednego pliku, a nie przebudową.
-
-## Czas
-
-Serwer może stać w dowolnej strefie; doba użytkownika liczona jest w `Europe/Warsaw`.
-Kolumny `data_lokalna` przechowują YYYY-MM-DD wyliczone przy zapisie, więc pytanie
-o dzień to porównanie tekstu, a nie arytmetyka stref w SQL. Konwersje wyłącznie
-przez `src/lib/time.ts` — nigdy przez `getDate()` i podobne.
-
-## Stan prac
-
-- [x] **Etap 0** — szkielet: baza, migracje, konfiguracja, serwer, testy
-- [x] **Etap 1** — rdzeń domenowy (dieta, treningi, pomiary, poprawki)
-- [x] **Etap 2** — serwer MCP (11 narzędzi)
-- [x] **Etap 3** — aplikacja webowa (PWA)
-- [x] **Etap 4** — wdrożenie (OVH VPS, `asystent.twojadomena.pl`) — patrz [wdrozenie/README.md](wdrozenie/README.md)
-
-## Aplikacja webowa
-
-Trzy ekrany, nawigacja przy kciuku na dole, ciemny motyw:
-
-- **Dziś** — paski makro wobec celów, lista posiłków z oznaczeniem szacunków, dodawanie i usuwanie
-- **Trening** — start dnia proponowanego z harmonogramu; w trakcie sesji lista ćwiczeń
-  z wynikami z poprzedniego razu, formularz serii wstępnie wypełniony ostatnim wynikiem
-- **Postępy** — waga ze średnią kroczącą i kalorie z ostatnich dni
-
-Instalacja na iPhonie: Safari → Udostępnij → „Do ekranu początkowego".
-
-Dane poglądowe do pracy nad wyglądem:
-
-```bash
-node tools/dane-demo.mjs http://localhost:3000
-```
-
-Ikony PWA generuje `node tools/generuj-ikony.mjs` (własny enkoder PNG, bez
-zależności graficznych — iOS wymaga PNG dla `apple-touch-icon`).
-
-## Podłączenie do Claude
-
-Serwer MCP działa pod `/mcp/<MCP_TOKEN>`. Token siedzi w ścieżce, bo konektor
-Claude przyjmuje wyłącznie adres URL — uwierzytelnianie nagłówkiem jest po
-stronie Anthropic wciąż w wersji beta.
-
-Projekt ma **dwa wejścia MCP** do tej samej bazy:
-
-| Wejście | Plik | Dla kogo |
+| Entry point | File | For |
 |---|---|---|
-| **stdio** (lokalny serwer) | `dist/mcp/stdio.js` | Claude Code, Claude Desktop |
-| **HTTP** | `/mcp/<token>` w serwerze | aplikacja webowa, docelowo telefon |
+| **stdio** | `dist/mcp/stdio.js` | Claude Code, Claude Desktop |
+| **HTTP** | `/mcp/<token>` | the web app, and phone access after deploying |
 
-**Domyślnie używaj stdio.** Claude uruchamia ten proces sam, kiedy go
-potrzebuje, i zamyka po zakończeniu — nic nie musi działać w tle. Serwer HTTP
-zostaje potrzebny tylko dla aplikacji webowej i dla dostępu z telefonu po
-wdrożeniu. Oba mogą pracować równocześnie: baza działa w trybie WAL, który
-dopuszcza czytanie w trakcie zapisu.
-
-### Podłączenie
+**Start with stdio.** Claude launches the process when it needs it and shuts
+it down afterwards — nothing has to run in the background:
 
 ```bash
 npm run build
-claude mcp add --scope user asystent-diety -- node <ścieżka>/dist/mcp/stdio.js
+claude mcp add --scope user asystent-diety -- node <path>/dist/mcp/stdio.js
 ```
 
-Sprawdzenie: `claude mcp list` powinno pokazać `✓ Connected`. Narzędzia
-pojawiają się w **nowej** sesji — serwery MCP wczytują się przy jej starcie.
+`claude mcp list` should report `✓ Connected`. Tools appear in a **new**
+session, since MCP servers load at session start.
 
-Po każdej zmianie w kodzie serwera trzeba przebudować (`npm run build`),
-bo Claude uruchamia skompilowaną wersję z `dist/`.
-
-### Telefon i claude.ai — przez konektor
-
-Tam Claude łączy się z chmury Anthropic, więc potrzebny jest publiczny adres
-HTTPS. Serwer produkcyjny działa pod `asystent.twojadomena.pl`.
-
-W claude.ai: **Customize → Connectors → + → Add custom connector**, adres
-`https://asystent.twojadomena.pl/mcp/<MCP_TOKEN>` (token z pliku
-`/etc/asystent/env` na serwerze). Dodaje się raz z przeglądarki; potem
-narzędzia są dostępne także w aplikacji mobilnej.
-
-### Claude Desktop (czat) — jako rozszerzenie
-
-Panel **Ustawienia → Connectors** przyjmuje wyłącznie adresy publiczne, bo
-konektory działają na poziomie konta i łączy się z nimi chmura Anthropic.
-Lokalny serwer dodaje się inaczej — jako rozszerzenie:
+For **Claude Desktop**, build an extension and install it through
+Settings → Extensions → Advanced settings → Install Extension:
 
 ```bash
 npm run build && npm run rozszerzenie
 ```
 
-Powstaje `asystent.mcpb`. Instalacja: **Ustawienia → Extensions → Advanced
-settings → Extension Developer → Install Extension…** i wskazanie pliku.
+For **claude.ai and the mobile app**, you need the HTTP entry point on a
+public HTTPS address — see [deployment](#deployment). Claude connects from
+Anthropic's cloud, not from your phone, so `localhost` will not work there.
 
-Paczka nie zawiera serwera — tylko go uruchamia z katalogu projektu, którego
-ścieżkę podaje się w polu konfiguracyjnym rozszerzenia. Powód: serwer używa
-natywnego modułu SQLite i potrzebuje dostępu do pliku bazy, więc pakowanie go
-w archiwum nic by nie dało.
+## Deployment
 
-Ta droga nie wymaga zamykania aplikacji i jest odporna na nadpisywanie pliku
-konfiguracyjnego (patrz niżej).
-
-### Claude Desktop — wariant przez plik konfiguracyjny
-
-Konektory na claude.ai wymagają publicznego adresu HTTPS, bo Claude łączy się
-z chmury Anthropic. **Claude Desktop to omija**: uruchamia most `mcp-remote`
-jako lokalny proces, który sięga do `localhost`.
-
-Podłączenie — kolejność ma znaczenie:
-
-1. **Zamknij Claude Desktop całkowicie** (także ikona w zasobniku).
-2. `npm run podlacz`
-3. Uruchom Claude Desktop.
-4. Serwer musi działać: `npm run dev`.
-
-> **Dlaczego akurat w tej kolejności.** Claude Desktop nadpisuje
-> `claude_desktop_config.json` z własnej pamięci w trakcie działania i przy
-> zamykaniu. Wpis dodany przy włączonej aplikacji zostaje skasowany —
-> sprawdzone dwukrotnie. Dlatego `npm run podlacz` odmawia pracy, gdy proces
-> `Claude.exe` żyje, i robi kopię pliku przed zapisem.
-
-Skrypt wskazuje `node.exe` i plik mostu wprost, zamiast `npx`: Claude Desktop
-uruchamia komendę bez powłoki, więc `npx` na Windowsie bywa nieznajdowany —
-to najczęstsza przyczyna „konektor się nie pojawia".
-
-### Sprawdzenie narzędzi bez Claude'a
+`wdrozenie/` holds scripts that take a fresh Ubuntu/Debian VPS to a running
+HTTPS service: firewall, SSH hardening, unattended security updates, the app
+as a locked-down systemd unit, nginx with a Let's Encrypt certificate, and
+daily database backups.
 
 ```bash
-npx @modelcontextprotocol/inspector
+ssh you@your-server 'bash /opt/asystent/wdrozenie/01-zabezpiecz.sh'
+bash wdrozenie/wyslij.sh your-server
+ssh you@your-server 'bash /opt/asystent/wdrozenie/02-aplikacja.sh'
+ssh you@your-server 'bash /opt/asystent/wdrozenie/03-https.sh your.domain'
+ssh you@your-server 'bash /opt/asystent/wdrozenie/04-kopie.sh'
 ```
 
-Serwer typu Streamable HTTP, adres `http://localhost:3000/mcp/<MCP_TOKEN>`.
-Ten sam przepływ pokrywa automatycznie `test/mcp.test.ts`.
+Full walkthrough, including how to restore a backup: [wdrozenie/README.md](wdrozenie/README.md).
 
-### Narzędzia
+## Security
 
-| Narzędzie | Do czego |
-|---|---|
-| `zapisz_posilek` | zapis posiłku z makro; zawiera zasadę, kiedy dopytać o porcję |
-| `podsumowanie_dnia` | bilans doby z identyfikatorami wpisów |
-| `ustaw_cele` | cele obowiązujące od wskazanego dnia |
-| `zarzadzaj_planem` | podgląd, zapis i usuwanie dni planu |
-| `rozpocznij_trening` | otwarcie sesji; dzień z harmonogramu lub wskazany |
-| `zapisz_serie` | dopisanie serii, z ostrzeżeniem o regresie |
-| `stan_treningu` | co zrobione, co zostało, wyniki z poprzedniego razu |
-| `zakoncz_trening` | zamknięcie sesji z podsumowaniem |
-| `historia_cwiczenia` | progresja i rekord |
-| `zapisz_wage` | pomiar ze średnią kroczącą |
-| `zmien_wpis` | poprawka lub usunięcie posiłku, serii albo wagi |
+This holds health data, so the defaults lean strict:
 
-Limit to 12 narzędzi — każde zajmuje kontekst w **każdej** rozmowie z Claude.
-Nowe możliwości dokładamy przez parametry istniejących narzędzi (wzorzec:
-`zmien_wpis`), a nie przez kolejne pozycje na liście. Pilnuje tego test.
+- The MCP endpoint requires a 256-bit token **and** only answers requests from
+  [Anthropic's published address ranges](https://platform.claude.com/docs/en/api/ip-addresses).
+  A leaked token is useless from anywhere else.
+- The token is part of the URL, so nginx is configured to mask it in access
+  logs. Without that, the secret would sit in plain text in log files and
+  their archives.
+- Rate limits on the connector and on login make password guessing pointless.
+- Password login over SSH is disabled; the app runs as a system account with
+  no shell and no write access outside its own data directory.
+
+**Understand the trade-off before you rely on this.** Putting a token in the
+URL is not the authentication method the MCP specification recommends — OAuth
+is. It is used here because claude.ai custom connectors accept only a URL, and
+running an OAuth authorization server for a single user is disproportionate.
+The address allowlist is what makes it defensible. If you are storing data for
+more than yourself, implement OAuth instead.
+
+## Architecture
+
+```
+migrations/     database schema, applied automatically at startup
+src/
+  server.ts     entry point — mounts /mcp, /api and static files
+  db/repo.ts    the only file containing SQL
+  domain/       all business logic
+  mcp/          MCP tools — a thin adapter over domain/
+  api/          REST for the web app — the same kind of adapter
+  lib/time.ts   time zones and day boundaries
+public/         the PWA
+wdrozenie/      server provisioning scripts
+```
+
+Two rules hold this together:
+
+1. **Logic lives in `domain/`.** `mcp/` and `api/` only call it. A feature
+   added on one side only is a bug — chat and app would drift apart.
+2. **All SQL lives in `db/repo.ts`.** That boundary is what would make
+   swapping SQLite for Postgres a single-file rewrite.
+
+A third, nearly as important: **all time conversion goes through
+`lib/time.ts`**. The user's day is measured in their local zone while the
+server runs in UTC. Rows store a precomputed `data_lokalna` (`YYYY-MM-DD`), so
+asking about a day is a string comparison rather than time-zone arithmetic in
+SQL.
+
+## Tests
+
+```bash
+npm test         # 134 tests
+npm run typecheck
+```
+
+Coverage focuses on the parts where a bug is expensive and silent: day
+boundaries across daylight-saving changes, targets changing mid-history,
+workout session state, and corrections applied from either entry point. The
+MCP and REST layers are covered by integration tests that start a real server
+and talk to it over HTTP.
+
+## License
+
+MIT — see [LICENSE](LICENSE).

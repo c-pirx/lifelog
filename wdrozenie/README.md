@@ -1,7 +1,7 @@
 # Wdrożenie
 
 Serwer produkcyjny: **OVH VPS-1**, Ubuntu 26.04 LTS, Warszawa.
-Adres: `asystent.twojadomena.pl` → `<IP-serwera>`
+Adres: `asystent.twojadomena.pl` → `<IP-twojego-serwera>`
 
 ## Dostęp
 

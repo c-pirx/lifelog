@@ -15,3 +15,6 @@ dane/
 # Paczka rozszerzenia zawiera token — nigdy do repozytorium
 asystent.mcpb
 dist-rozszerzenie/
+
+# Prywatne dane wdrożenia — poza repozytorium publicznym
+MOJE.md

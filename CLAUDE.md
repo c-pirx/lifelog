@@ -35,7 +35,12 @@ Przed każdym commitem: `npm run typecheck && npm test`.
 
 ## Serwer produkcyjny
 
-**https://asystent.twojadomena.pl** — OVH VPS, Ubuntu 26.04, Warszawa.
+Repozytorium jest **publiczne**, więc w plikach śledzonych nie ma adresów ani
+sekretów — wszędzie stoją placeholdery. Prawdziwe dane wdrożenia (domena, IP,
+hasło do aplikacji, adres konektora, procedura wymiany tokenu) leżą w
+**`MOJE.md`** w katalogu projektu, poza repozytorium.
+
+Ogólnie: OVH VPS, Ubuntu 26.04.
 
 ```bash
 ssh asystent          # wpis w ~/.ssh/config, logowanie kluczem

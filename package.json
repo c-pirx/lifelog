@@ -1,14 +1,14 @@
 {
   "name": "asystent-diety-treningu",
   "version": "0.1.0",
-  "description": "Osobisty asystent diety i treningu — serwer MCP dla Claude + aplikacja webowa",
-  "private": true,
+  "description": "Samodzielnie hostowany dziennik posiłków i treningów — konektor MCP dla Claude + aplikacja webowa PWA",
   "type": "module",
   "main": "dist/server.js",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
+    "setup": "node tools/konfiguruj.mjs",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
     "build": "tsc",
@@ -21,9 +21,17 @@
     "ikony": "node tools/generuj-ikony.mjs",
     "rozszerzenie": "node tools/zbuduj-rozszerzenie.mjs"
   },
-  "keywords": [],
+  "keywords": [
+    "mcp",
+    "claude",
+    "sqlite",
+    "pwa",
+    "self-hosted",
+    "nutrition",
+    "workout"
+  ],
   "author": "",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "dependencies": {
     "@hono/node-server": "^2.1.1",
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -38,5 +46,9 @@
     "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/c-pirx/asystent-diety-treningu"
   }
 }

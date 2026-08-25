@@ -41,7 +41,9 @@ export function wczytajKonfiguracje(): Konfiguracja {
     port: Number(process.env["PORT"] ?? 3000),
     // Domyślnie wszystkie interfejsy, żeby praca lokalna była wygodna.
     // Na produkcji ustawiamy 127.0.0.1 — do świata wystawia dopiero nginx.
-    host: process.env["HOST"] ?? "::",
+    // Celowo `||`, a nie `??`: w pliku .env pusta wartość ma znaczyć
+    // "domyślnie", a `??` przepuściłoby pusty ciąg jako prawidłowy adres.
+    host: process.env["HOST"] || "::",
     sciezkaBazy: process.env["DB_PATH"] ?? "./dane/asystent.db",
     mcpToken: wymagana("MCP_TOKEN", braki),
     hasloAplikacji: wymagana("APP_PASSWORD", braki),
