@@ -408,6 +408,14 @@ nav button[aria-current="page"] {
   outline: 2px solid var(--akcent);
 }
 
+/* Rekord bije oznaczenie słabszej serii — jedna seria nie może być obiema
+   naraz, ale kolejność reguł CSS jest tańsza niż warunek w szablonie. */
+.seria.rekord {
+  background: color-mix(in srgb, var(--akcent) 22%, transparent);
+  color: var(--akcent);
+  font-weight: 600;
+}
+
 .seria:active {
   transform: scale(0.96);
 }
@@ -440,6 +448,71 @@ nav button[aria-current="page"] {
   color: var(--tekst-cichy);
   margin-bottom: 10px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Kropki zamiast liczby „2/4": stan ćwiczenia daje się przeczytać kątem oka,
+   bez skupiania wzroku między seriami. */
+.cwiczenie .kropki {
+  font-size: 0.7rem;
+  letter-spacing: 3px;
+  color: var(--akcent);
+  white-space: nowrap;
+}
+
+.cel-cwiczenia {
+  font-size: 0.8rem;
+  color: var(--tekst-cichy);
+  margin-bottom: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Ukończone ćwiczenie zwija się do jednej linii — na ekranie ma zostać to,
+   co jeszcze przed tobą. */
+.cwiczenie.zwiniete {
+  padding: 10px 0;
+  opacity: 0.72;
+}
+
+.cwiczenie.zwiniete .tytul {
+  margin-bottom: 0;
+}
+
+/* Przycisk odhaczania mówi wprost, co zapisze; dopisek pod spodem mówi, skąd
+   te liczby, bo jedno stuknięcie zapisuje bez potwierdzenia. */
+.przycisk[data-odhacz-serie] {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.25;
+}
+
+.przycisk[data-odhacz-serie] small {
+  font-size: 0.72rem;
+  font-weight: 400;
+  opacity: 0.75;
+}
+
+.drobne {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.lacze {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 6px 0;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--tekst-cichy);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.lacze:active {
+  color: var(--akcent);
 }
 
 /* === Pasek dat ========================================================= */

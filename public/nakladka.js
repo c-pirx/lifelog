@@ -119,6 +119,10 @@ function postepZKolejki(nazwa, typ) {
     serie: [],
     poprzednio: [],
     slabsze_niz_poprzednio: [],
+    rekordy: [],
+    // Bez zasięgu nie wiemy, co proponować — ocenę zostawiamy serwerowi,
+    // a aplikacja pokazuje wtedy zwykły formularz.
+    propozycja: { powtorzenia: null, ciezar_kg: null, czas_s: null, dystans_m: null, zrodlo: "brak" },
     ukonczone: false,
   };
 }
@@ -136,8 +140,9 @@ export function nalozNaTrening(trening, kolejka = [], plan = []) {
 
   const start = kolejka.find((w) => dopasujSciezke(w, "/trening/start"));
   const serie = kolejka.filter((w) => dopasujSciezke(w, "/trening/seria"));
+  const odhaczone = kolejka.filter((w) => dopasujSciezke(w, "/trening/cwiczenie/odhacz"));
 
-  if (!start && serie.length === 0) return trening;
+  if (!start && serie.length === 0 && odhaczone.length === 0) return trening;
 
   const sesja = trening.sesja ?? (start ? sesjaZKolejki(start, plan) : null);
   if (!sesja) return trening;
@@ -173,11 +178,41 @@ export function nalozNaTrening(trening, kolejka = [], plan = []) {
     });
   }
 
-  const przelicz = (c) => ({
-    ...c,
-    serie_zrobione: c.serie.length,
-    ukonczone: c.serie_cel ? c.serie.length >= c.serie_cel : c.serie.length > 0,
-  });
+  // Ile serii dopisze odhaczenie całego ćwiczenia — wie serwer, bo to on zna
+  // cel z planu. Nakładka stawia więc jeden znacznik, zamiast zgadywać liczby.
+  for (const wpis of odhaczone) {
+    const nazwa = wpis.dane?.cwiczenie ?? "";
+    let cwiczenie = znajdz(nazwa);
+
+    if (!cwiczenie) {
+      cwiczenie = postepZKolejki(nazwa);
+      pozaPlanem.push(cwiczenie);
+    }
+
+    cwiczenie.serie.push({
+      id: `oczekuje-${wpis.id}`,
+      oczekuje: true,
+      cale_cwiczenie: true,
+      nr_serii: null,
+      powtorzenia: null,
+      ciezar_kg: null,
+      czas_s: null,
+      dystans_m: null,
+      rpe: null,
+      ts: wpis.dane?.czas ?? wpis.czas_lokalny,
+    });
+  }
+
+  // Znacznik całego ćwiczenia nie ma liczby serii, więc nie może podbić licznika
+  // ani zamknąć ćwiczenia — jedno i drugie rozstrzygnie się po wysłaniu.
+  const przelicz = (c) => {
+    const policzalne = c.serie.filter((s) => !s.cale_cwiczenie);
+    return {
+      ...c,
+      serie_zrobione: policzalne.length,
+      ukonczone: c.serie_cel ? policzalne.length >= c.serie_cel : policzalne.length > 0,
+    };
+  };
 
   const gotowePlan = wgPlanu.map(przelicz);
 

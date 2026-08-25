@@ -38,6 +38,17 @@ let ostatnioUsuniety = null;
 /** Rozwinięty raport w archiwum; null znaczy „najnowszy". */
 let wybranyRaport = null;
 
+/**
+ * Propozycje wyniku z ostatniego odczytu, po nazwie ćwiczenia.
+ *
+ * Przycisk odhaczania niesie samą nazwę — liczby wracają stąd, zamiast jechać
+ * przez atrybuty HTML. Liczy je serwer, my je tylko odsyłamy z powrotem.
+ */
+const propozycje = new Map();
+
+/** Po odhaczeniu przewijamy do pierwszego niedokończonego ćwiczenia. */
+let przewinDoNastepnego = false;
+
 // === Warstwa komunikacji ================================================
 
 /** Błąd niosący kod odpowiedzi — pozwala odróżnić złe hasło od awarii sieci. */
@@ -159,6 +170,29 @@ async function akcja(wykonaj, potwierdzenie, formularz) {
     if (przycisk?.isConnected) {
       przycisk.disabled = false;
       przycisk.textContent = etykieta;
+    }
+  }
+}
+
+/**
+ * To samo dla przycisku, co `akcja` robi dla formularza.
+ *
+ * Blokada podwójnego zapisu siedziała dotąd wyłącznie na formularzu. Przycisk
+ * odhaczania to trzecia droga do zapisu i przy słabym zasięgu dwa stuknięcia
+ * dopisałyby dwie serie.
+ */
+async function akcjaPrzycisku(przycisk, wykonaj, potwierdzenie) {
+  if (przycisk.dataset.zapisuje) return;
+
+  przycisk.dataset.zapisuje = "1";
+  przycisk.disabled = true;
+
+  try {
+    await akcja(wykonaj, potwierdzenie);
+  } finally {
+    if (przycisk.isConnected) {
+      delete przycisk.dataset.zapisuje;
+      przycisk.disabled = false;
     }
   }
 }
@@ -625,38 +659,108 @@ function formularzPoprawkiSerii(typ, seria) {
     </form>`;
 }
 
-function kartaCwiczenia(cwiczenie) {
-  const ostatnia = cwiczenie.serie.at(-1) ?? cwiczenie.poprzednio.at(-1);
-  const idFormularza = `seria-${cwiczenie.cwiczenie_id}`;
-  const wPoprawce = cwiczenie.serie.find((s) => s.id === edytowanaSeria);
+/** Kropki postępu: ● zrobiona, ○ została. Bez celu serii nie ma czego rysować. */
+function kropkiSerii(cwiczenie) {
+  if (!cwiczenie.serie_cel) return "";
+
+  const zrobione = Math.min(cwiczenie.serie_zrobione, 12);
+  const zostalo = Math.min(Math.max(0, cwiczenie.serie_cel - cwiczenie.serie_zrobione), 12);
+
+  return `<span class="kropki" aria-hidden="true">${"●".repeat(zrobione)}${"○".repeat(zostalo)}</span>`;
+}
+
+/**
+ * Skąd wzięły się liczby na przycisku. Jedno stuknięcie zapisuje serię bez
+ * potwierdzenia, więc użytkownik ma wiedzieć, czym ta seria będzie, zanim
+ * stuknie — sama liczba tego nie mówi.
+ */
+const OPIS_ZRODLA = {
+  plan: "wg planu",
+  ostatnia_seria: "jak przed chwilą",
+  poprzedni_trening: "jak ostatnio",
+};
+
+/** Cel z planu w jednej linii: „4 × 8". */
+function celWTekscie(cwiczenie) {
+  if (!cwiczenie.serie_cel && !cwiczenie.powt_cel) return "";
+  return [cwiczenie.serie_cel ? `${cwiczenie.serie_cel} ×` : null, esc(cwiczenie.powt_cel ?? "")]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function serieWKarcie(cwiczenie) {
+  if (!cwiczenie.serie.length) return "";
+  const rekordy = cwiczenie.rekordy ?? [];
+
+  return `<div class="serie">${cwiczenie.serie
+    .map((s) =>
+      // Seria czekająca w kolejce nie ma jeszcze id w bazie, więc nie ma czego
+      // poprawiać — zostaje etykietą do czasu wysłania.
+      s.oczekuje
+        ? `<span class="seria oczekuje">⏳ ${s.cale_cwiczenie ? "całe ćwiczenie" : esc(seriaWTekscie(s))}</span>`
+        : `<button type="button" data-edytuj-serie="${s.id}"
+             class="seria ${cwiczenie.slabsze_niz_poprzednio.includes(s.nr_serii) ? "slabsza" : ""} ${rekordy.includes(s.nr_serii) ? "rekord" : ""} ${s.id === edytowanaSeria ? "edytowana" : ""}">
+             ${rekordy.includes(s.nr_serii) ? "★ " : ""}${esc(seriaWTekscie(s))}
+           </button>`,
+    )
+    .join("")}</div>`;
+}
+
+/**
+ * Formularz pełnego wyniku — droga na wypadek odstępstwa od propozycji.
+ *
+ * Wypełniony propozycją, ale bez RPE: trudność jest oceną tej konkretnej serii,
+ * a podpowiedziana po cichu zapisałaby się jako prawdziwa.
+ */
+function formularzSerii(cwiczenie, idFormularza) {
+  const zapas = cwiczenie.serie.at(-1) ?? cwiczenie.poprzednio.at(-1);
+  const wartosci = wartosciSerii({ ...(cwiczenie.propozycja ?? zapas ?? {}), rpe: null });
 
   return `
-    <div class="cwiczenie ${cwiczenie.ukonczone ? "zrobione" : ""}">
-      <div class="tytul">
-        <span class="nazwa">${cwiczenie.ukonczone ? "✓ " : ""}${esc(cwiczenie.nazwa)}</span>
-        <span class="licznik">
-          ${cwiczenie.serie_zrobione}${cwiczenie.serie_cel ? `/${cwiczenie.serie_cel}` : ""}
-          ${cwiczenie.powt_cel ? ` × ${esc(cwiczenie.powt_cel)}` : ""}
-        </span>
+    <form id="${idFormularza}" data-cwiczenie="${esc(cwiczenie.nazwa)}" hidden>
+      <div class="pola">${polaSerii(cwiczenie.typ, wartosci)}</div>
+      <div class="przyciski">
+        <button class="przycisk glowny" type="submit">Zapisz serię</button>
+        <button class="przycisk" type="button" data-anuluj="${idFormularza}">Anuluj</button>
       </div>
+    </form>`;
+}
 
-      ${
-        cwiczenie.serie.length
-          ? `<div class="serie">${cwiczenie.serie
-              .map((s) =>
-                // Seria czekająca w kolejce nie ma jeszcze id w bazie, więc nie
-                // ma czego poprawiać — zostaje etykietą do czasu wysłania.
-                s.oczekuje
-                  ? `<span class="seria oczekuje">⏳ ${esc(seriaWTekscie(s))}</span>`
-                  : `<button type="button" data-edytuj-serie="${s.id}"
-                       class="seria ${cwiczenie.slabsze_niz_poprzednio.includes(s.nr_serii) ? "slabsza" : ""} ${s.id === edytowanaSeria ? "edytowana" : ""}">
-                       ${esc(seriaWTekscie(s))}
-                     </button>`,
-              )
-              .join("")}</div>`
-          : ""
-      }
+function kartaCwiczenia(cwiczenie) {
+  const idFormularza = `seria-${cwiczenie.cwiczenie_id}`;
+  const wPoprawce = cwiczenie.serie.find((s) => s.id === edytowanaSeria);
+  const propozycja = cwiczenie.propozycja ?? { zrodlo: "brak" };
+  const mozna = propozycja.zrodlo !== "brak";
+  const zostalo = cwiczenie.serie_cel ? cwiczenie.serie_cel - cwiczenie.serie_zrobione : null;
+  const ostatnia = cwiczenie.serie.at(-1);
 
+  // Zrobione ćwiczenie zwija się do jednej linii — na ekranie ma zostać to,
+  // co jeszcze przed tobą, a nie to, co już za tobą.
+  if (cwiczenie.ukonczone && !wPoprawce) {
+    return `
+      <div class="cwiczenie zrobione zwiniete">
+        <div class="tytul">
+          <span class="nazwa">✓ ${esc(cwiczenie.nazwa)}</span>
+          <span class="licznik">
+            ${cwiczenie.serie_zrobione}${cwiczenie.serie_cel ? `/${cwiczenie.serie_cel}` : ""}${ostatnia ? ` · ${esc(seriaWTekscie(ostatnia))}` : ""}
+          </span>
+        </div>
+        ${formularzSerii(cwiczenie, idFormularza)}
+        <div class="przyciski">
+          <button class="przycisk cichy pelny" data-pokaz="${idFormularza}">+ Jeszcze seria</button>
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="cwiczenie">
+      <div class="tytul">
+        <span class="nazwa">${esc(cwiczenie.nazwa)}</span>
+        ${kropkiSerii(cwiczenie)}
+      </div>
+      ${celWTekscie(cwiczenie) ? `<div class="cel-cwiczenia">${celWTekscie(cwiczenie)}</div>` : ""}
+
+      ${serieWKarcie(cwiczenie)}
       ${wPoprawce ? formularzPoprawkiSerii(cwiczenie.typ, wPoprawce) : ""}
 
       ${
@@ -665,19 +769,31 @@ function kartaCwiczenia(cwiczenie) {
           : ""
       }
 
-      <form id="${idFormularza}" data-cwiczenie="${esc(cwiczenie.nazwa)}" hidden>
-        <!-- Ciężar i powtórzenia z poprzedniej serii, ale RPE już nie:
-             trudność jest oceną tej konkretnej serii, a podpowiedziana
-             po cichu zapisałaby się jako prawdziwa. -->
-        <div class="pola">${polaSerii(cwiczenie.typ, wartosciSerii({ ...ostatnia, rpe: null }))}</div>
-        <div class="przyciski">
-          <button class="przycisk glowny" type="submit">Zapisz serię</button>
-          <button class="przycisk" type="button" data-anuluj="${idFormularza}">Anuluj</button>
-        </div>
-      </form>
+      ${formularzSerii(cwiczenie, idFormularza)}
+
       <div class="przyciski">
-        <button class="przycisk pelny" data-pokaz="${idFormularza}">+ Seria</button>
+        ${
+          mozna
+            ? `<button class="przycisk glowny pelny duzy" data-odhacz-serie="${esc(cwiczenie.nazwa)}">
+                 Odhacz serię ${cwiczenie.serie_zrobione + 1}${cwiczenie.serie_cel ? `/${cwiczenie.serie_cel}` : ""} — ${esc(seriaWTekscie(propozycja))}
+                 <small>${OPIS_ZRODLA[propozycja.zrodlo]}</small>
+               </button>`
+            : `<button class="przycisk pelny" data-pokaz="${idFormularza}">+ Seria</button>`
+        }
       </div>
+      ${
+        mozna
+          ? `<div class="drobne">
+               <button type="button" class="lacze" data-pokaz="${idFormularza}">inny wynik</button>
+               ${
+                 zostalo === null || zostalo >= 2
+                   ? `<button type="button" class="lacze" data-odhacz-cwiczenie="${esc(cwiczenie.nazwa)}"
+                        ${zostalo === null ? 'data-bez-celu="1"' : ""}>odhacz całe ćwiczenie</button>`
+                   : ""
+               }
+             </div>`
+          : ""
+      }
     </div>`;
 }
 
@@ -685,6 +801,11 @@ function ekranTrening(trening, plan, dzisiajKod) {
   if (!trening.sesja) return kartaBezSesji(plan, dzisiajKod);
 
   const wszystkie = [...trening.wg_planu, ...trening.poza_planem];
+
+  propozycje.clear();
+  for (const c of wszystkie) {
+    if (c.propozycja) propozycje.set(c.nazwa, c.propozycja);
+  }
 
   return `
     <section class="karta">
@@ -887,6 +1008,15 @@ async function odswiez() {
 
     dataEkranu.textContent = zdrowie.dzisiaj;
     widok.innerHTML = ekranTrening(nalozNaTrening(trening, kolejka, plan), plan, dzisiajKod);
+
+    // Tylko po odhaczeniu: przewijanie przy każdym odświeżeniu wyrywałoby ekran
+    // spod palca również wtedy, gdy użytkownik tylko czyta.
+    if (przewinDoNastepnego) {
+      przewinDoNastepnego = false;
+      widok
+        .querySelector(".cwiczenie:not(.zrobione)")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
     return;
   }
 
@@ -1001,6 +1131,54 @@ widok.addEventListener("click", (zdarzenie) => {
     const teraz = Number(String(pole.value).replace(",", ".")) || 0;
     const po = Math.max(0, teraz + Number(krok.dataset.krok));
     pole.value = Number.isInteger(po) ? String(po) : po.toFixed(1);
+    return;
+  }
+
+  const odhaczSerie = cel.closest("[data-odhacz-serie]");
+  if (odhaczSerie) {
+    const nazwa = odhaczSerie.dataset.odhaczSerie;
+    const wynik = propozycje.get(nazwa);
+    if (!wynik) return komunikat("Nie wiadomo, co zapisać — użyj „inny wynik”", true);
+
+    przewinDoNastepnego = true;
+    akcjaPrzycisku(odhaczSerie, async () => {
+      await api("/trening/seria", {
+        method: "POST",
+        dane: {
+          cwiczenie: nazwa,
+          powtorzenia: wynik.powtorzenia ?? undefined,
+          ciezar_kg: wynik.ciezar_kg ?? undefined,
+          czas_s: wynik.czas_s ?? undefined,
+          dystans_m: wynik.dystans_m ?? undefined,
+        },
+      });
+      startujPrzerwe();
+    });
+    return;
+  }
+
+  const odhaczCale = cel.closest("[data-odhacz-cwiczenie]");
+  if (odhaczCale) {
+    const nazwa = odhaczCale.dataset.odhaczCwiczenie;
+
+    // Ćwiczenie spoza planu nie ma celu serii, więc liczbę trzeba podać.
+    // Zwykły prompt zamiast własnego okna: to jedyne miejsce, które o coś pyta.
+    const ile = odhaczCale.dataset.bezCelu
+      ? Number(prompt(`Ile serii ćwiczenia „${nazwa}” zrobiłeś?`, "3"))
+      : null;
+    if (odhaczCale.dataset.bezCelu && !(ile > 0)) return;
+
+    przewinDoNastepnego = true;
+    akcjaPrzycisku(
+      odhaczCale,
+      // Bez timera przerwy — całe ćwiczenie jest już za tobą, nie w połowie.
+      () =>
+        api("/trening/cwiczenie/odhacz", {
+          method: "POST",
+          dane: { cwiczenie: nazwa, ...(ile ? { ile } : {}) },
+        }),
+      "Odhaczono ćwiczenie",
+    );
     return;
   }
 

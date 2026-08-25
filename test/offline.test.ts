@@ -213,6 +213,35 @@ describe("nakładka na stan treningu", () => {
 
     expect(wynik.sesja).toBeNull();
   });
+
+  it("odhaczenie całego ćwiczenia z kolejki pokazuje jeden znacznik, a nie zgadnięte serie", () => {
+    const wynik = nalozNaTrening(treningZSerwera(), [
+      {
+        id: 15,
+        sciezka: "/trening/cwiczenie/odhacz",
+        czas_lokalny: CZAS,
+        dane: { cwiczenie: "przysiad" },
+      },
+    ]);
+
+    const przysiad = wynik.wg_planu[0];
+    // Ile serii dopisze serwer — wie serwer. Nakładka renderuje, nie liczy.
+    expect(przysiad?.serie.filter((s) => s.oczekuje)).toHaveLength(1);
+    expect(przysiad?.serie.at(-1)?.cale_cwiczenie).toBe(true);
+  });
+
+  it("nie zgaduje liczby serii, więc licznik czeka na serwer", () => {
+    const wynik = nalozNaTrening(treningZSerwera(), [
+      {
+        id: 16,
+        sciezka: "/trening/cwiczenie/odhacz",
+        czas_lokalny: CZAS,
+        dane: { cwiczenie: "przysiad" },
+      },
+    ]);
+
+    expect(wynik.wg_planu[0]?.serie_zrobione).toBe(1);
+  });
 });
 
 describe("polityka błędów kolejki", () => {
