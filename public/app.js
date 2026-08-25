@@ -8,6 +8,7 @@
 
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "./nakladka.js";
+import { ekranRaporty, panelTygodnia } from "./raporty.js";
 
 const widok = document.getElementById("widok");
 const tytulEkranu = document.getElementById("tytul-ekranu");
@@ -33,6 +34,9 @@ let dzisiajData = null;
 
 /** Ostatnio usunięty posiłek — materiał na „Cofnij" w komunikacie. */
 let ostatnioUsuniety = null;
+
+/** Rozwinięty raport w archiwum; null znaczy „najnowszy". */
+let wybranyRaport = null;
 
 // === Warstwa komunikacji ================================================
 
@@ -815,6 +819,8 @@ function ekranPostepy(postepy, waga) {
   const ostatnia = waga.ostatnia;
 
   return `
+    ${panelTygodnia(postepy.tydzien)}
+
     <section class="karta">
       <h2>Waga</h2>
       <form id="formularz-wagi">
@@ -844,7 +850,7 @@ function ekranPostepy(postepy, waga) {
 
 // === Renderowanie i odświeżanie ========================================
 
-const TYTULY = { dzis: "Dziś", trening: "Trening", postepy: "Postępy" };
+const TYTULY = { dzis: "Dziś", trening: "Trening", postepy: "Postępy", raporty: "Raporty" };
 
 async function odswiez() {
   tytulEkranu.textContent = TYTULY[ekran];
@@ -884,6 +890,13 @@ async function odswiez() {
     return;
   }
 
+  if (ekran === "raporty") {
+    stan.raporty = await api("/raporty");
+    dataEkranu.textContent = stan.raporty.length ? `${stan.raporty.length} tyg.` : "";
+    widok.innerHTML = ekranRaporty(stan.raporty, wybranyRaport);
+    return;
+  }
+
   const [postepy, waga] = await Promise.all([api("/postepy?dni=30"), api("/waga?dni=30")]);
   dataEkranu.textContent = "30 dni";
   widok.innerHTML = ekranPostepy(postepy, waga);
@@ -891,21 +904,78 @@ async function odswiez() {
 
 // === Obsługa zdarzeń ====================================================
 
-document.querySelector("nav")?.addEventListener("click", (zdarzenie) => {
-  const przycisk = zdarzenie.target.closest("button[data-ekran]");
-  if (!przycisk) return;
+function przejdzDo(nowyEkran) {
+  ekran = nowyEkran;
 
-  ekran = przycisk.dataset.ekran;
-  document
-    .querySelectorAll("nav button")
-    .forEach((b) => b.removeAttribute("aria-current"));
-  przycisk.setAttribute("aria-current", "page");
+  // Raporty żyją w bocznym menu, nie w dolnym pasku — wtedy żaden przycisk
+  // paska nie jest bieżący i wszystkie muszą stracić zaznaczenie.
+  document.querySelectorAll("nav button").forEach((przycisk) => {
+    if (przycisk.dataset.ekran === nowyEkran) przycisk.setAttribute("aria-current", "page");
+    else przycisk.removeAttribute("aria-current");
+  });
 
   odswiez().catch((blad) => komunikat(blad.message, true));
+}
+
+document.querySelector("nav")?.addEventListener("click", (zdarzenie) => {
+  const przycisk = zdarzenie.target.closest("button[data-ekran]");
+  if (przycisk) przejdzDo(przycisk.dataset.ekran);
+});
+
+// === Boczne menu ========================================================
+
+const menu = document.getElementById("menu");
+const przyciskMenu = document.getElementById("przycisk-menu");
+
+function przelaczMenu(otwarte) {
+  menu.hidden = !otwarte;
+  przyciskMenu.setAttribute("aria-expanded", String(otwarte));
+}
+
+przyciskMenu?.addEventListener("click", () => przelaczMenu(menu.hidden));
+
+menu?.addEventListener("click", async (zdarzenie) => {
+  // Kliknięcie w przyciemnione tło zamyka szufladę — na telefonie to
+  // szybsze niż celowanie w mały krzyżyk.
+  if (zdarzenie.target === menu) return przelaczMenu(false);
+
+  const przycisk = zdarzenie.target.closest("button[data-ekran], button[data-akcja]");
+  if (!przycisk) return;
+
+  przelaczMenu(false);
+
+  if (przycisk.dataset.ekran) {
+    wybranyRaport = null;
+    przejdzDo(przycisk.dataset.ekran);
+    return;
+  }
+
+  if (przycisk.dataset.akcja === "wyloguj") {
+    // Nieudane wylogowanie i tak kończy się ekranem logowania: ciasteczko
+    // wygaśnie samo, a użytkownik nie ma co robić z komunikatem o błędzie.
+    await api("/wylogowanie", { method: "POST", kolejkuj: false, bezPrzekierowania: true }).catch(
+      () => {},
+    );
+    przejdzDo("dzis");
+    pokazLogowanie();
+  }
+});
+
+document.addEventListener("keydown", (zdarzenie) => {
+  if (zdarzenie.key === "Escape" && menu && !menu.hidden) przelaczMenu(false);
 });
 
 widok.addEventListener("click", (zdarzenie) => {
   const cel = zdarzenie.target;
+
+  // Rozwinięcie raportu przerysowuje listę z pamięci, bez ponownego żądania —
+  // archiwum przyszło w całości jednym zapytaniem.
+  const naglowekRaportu = cel.closest("[data-raport]");
+  if (naglowekRaportu) {
+    wybranyRaport = naglowekRaportu.dataset.raport;
+    widok.innerHTML = ekranRaporty(stan.raporty ?? [], wybranyRaport);
+    return;
+  }
 
   const pokaz = cel.closest("[data-pokaz]");
   if (pokaz) {

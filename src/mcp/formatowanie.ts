@@ -229,7 +229,7 @@ export function raportWTekscie(r: RaportTygodniowy): string {
   if (r.zmiana) {
     linie.push(
       "",
-      `Wobec poprzedniego tygodnia: ${zeZnakiem(r.zmiana.kcal_dziennie)} kcal dziennie, ` +
+      `Wobec poprzedniego tygodnia — ${r.zmiana.ocena}: ${zeZnakiem(r.zmiana.kcal_dziennie)} kcal dziennie, ` +
         `${zeZnakiem(r.zmiana.dni_w_celu)} dni w celu, ${zeZnakiem(r.zmiana.serie)} serii, ` +
         `${zeZnakiem(r.zmiana.objetosc_kg)} kg objętości` +
         (r.zmiana.waga_kg !== null ? `, ${zeZnakiem(r.zmiana.waga_kg)} kg wagi` : ""),

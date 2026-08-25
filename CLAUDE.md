@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 164 testy
+npm test             # 203 testy
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -163,14 +163,53 @@ z zamkniętą aplikacją. Trzy pliki, każdy z osobnym zadaniem:
   serii, nie wnioskują pory posiłku. To jedyny kawałek offline'u objęty
   testami (`test/offline.test.ts`) — reszta wymaga przeglądarki.
 
+Tą samą zasadą rządzi się `public/raporty.js` (panel tygodnia i archiwum):
+renderuje, ale nie ocenia — werdykty „na kursie" i „idzie lepiej" przychodzą
+gotowe z serwera. Testy leżą obok, w `test/offline.test.ts`.
+
 Każdy zapis z aplikacji niesie `czas` powstania wpisu. Bez tego seria wpisana
 o 18:05 i wysłana o 19:30 wylądowałaby w historii pod złą godziną.
+
+## Tydzień: raport i tempo
+
+Tydzień biegnie **od niedzieli do soboty**, raport za niego powstaje w kolejną
+niedzielę o 9:00. Cała logika w `src/domain/raporty.ts`, jedna funkcja licząca
+(`policzWycinek`) obsługuje oba zastosowania — archiwum i podgląd na żywo.
+
+**Raport jest migawką, nie widokiem.** Liczby zapisujemy raz, w kolumnie `dane`
+jako JSON, i nigdy nie przeliczamy. Bez tego poprawka posiłku sprzed miesiąca
+(`zmien_wpis` na to pozwala) po cichu zmieniłaby raport, który użytkownik już
+przeczytał i skomentował.
+
+**Generowanie siedzi w procesie aplikacji, nie w systemd.** `zapewnijRaporty`
+jest idempotentne (UNIQUE na `tydzien_od`) i dogenerowuje wszystkie zaległe
+tygodnie, więc wystarczy wołać je przy starcie, z tiku co godzinę
+(`src/harmonogram.ts`) i **przy każdym odczycie** z API i MCP. Osobna jednostka
+systemd oznaczałaby edycję `02-aplikacja.sh` — patrz pułapka wyżej.
+
+**Porównanie obejmuje ten sam wycinek tygodnia.** Trzy dni bieżącego tygodnia
+zestawione z siedmioma poprzedniego zawsze pokażą „gorzej", niezależnie od tego,
+jak dobry jest tydzień.
+
+**Prognoza i „dni w celu" liczą się z dni zamkniętych, bez dzisiaj.** Trening
+i waga odwrotnie — dzisiejsze serie to fakt dokonany i mają być widoczne zaraz
+po powrocie z siłowni. Ta asymetria jest celowa.
+
+**Ocena „lepiej / gorzej" bierze się z trafień w cel i liczby serii**, nigdy
+z kalorii ani wagi: przy redukcji zjedzenie mniej jest dobre, przy budowaniu
+masy złe, a system nie zna zamiaru użytkownika. Werdykt powstaje w domenie
+(`ocenZmiane`), żeby czat i aplikacja nie oceniły tego samego tygodnia inaczej.
+
+Komentarz do raportu dopisuje Claude przez `podsumowanie_dnia` z parametrem
+`komentarz` — serwer liczby ma, interpretacji nie. Zadanie cykliczne po stronie
+claude.ai opisane jest w [INSTRUKCJA.md](INSTRUKCJA.md).
 
 ## Po MVP (kolejność wg wartości)
 
 Szablony posiłków z własną tabelą → kody kreskowe (Open Food Facts, bez klucza
-API) → tygodniowy raport z zadania cyklicznego → eksport CSV.
+API) → eksport CSV.
 
-Zrobione: wykresy (SVG wprost w `app.js`, bez biblioteki) oraz tani wariant
+Zrobione: wykresy (SVG wprost w `app.js`, bez biblioteki), tani wariant
 szablonów — podpowiedzi z najczęstszych posiłków (`czestePosilki`), które
-wypełniają formularz, ale go nie wysyłają.
+wypełniają formularz, ale go nie wysyłają — oraz tygodniowy raport z podglądem
+tempa na ekranie Postępy.

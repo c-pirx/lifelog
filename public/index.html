@@ -41,6 +41,9 @@
 
     <div id="aplikacja" hidden>
       <header>
+        <button id="przycisk-menu" aria-label="Menu" aria-expanded="false" aria-controls="menu">
+          <span aria-hidden="true">☰</span>
+        </button>
         <h1 id="tytul-ekranu">Dziś</h1>
         <span class="data" id="data-ekranu"></span>
         <!-- Bez zasięgu zapisy nie znikają, tylko czekają w kolejce.
@@ -61,6 +64,20 @@
           <button data-przerwa="180">180</button>
         </div>
         <button id="timer-zamknij" aria-label="Zamknij timer">✕</button>
+      </div>
+
+      <!-- Szuflada na to, co nie mieści się w dolnym pasku. Pasek zostaje przy
+           trzech ekranach używanych codziennie, żeby kciuk trafiał bez patrzenia. -->
+      <div id="menu" hidden>
+        <aside>
+          <h2>Menu</h2>
+          <button data-ekran="raporty">
+            <span class="znak" aria-hidden="true">▤</span> Raporty
+          </button>
+          <button data-akcja="wyloguj">
+            <span class="znak" aria-hidden="true">⏻</span> Wyloguj
+          </button>
+        </aside>
       </div>
 
       <nav>

@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { decyzjaKolejki } from "../public/kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "../public/nakladka.js";
+import { ekranRaporty, panelTygodnia } from "../public/raporty.js";
 
 /** Południe UTC: ta sama data lokalna w każdej strefie, w której test może biec. */
 const CZAS = "2026-08-25T12:05:00.000Z";
@@ -230,5 +231,63 @@ describe("polityka błędów kolejki", () => {
     expect(decyzjaKolejki(0)).toBe("ponow");
     expect(decyzjaKolejki(500)).toBe("ponow");
     expect(decyzjaKolejki(502)).toBe("ponow");
+  });
+});
+
+describe("widok tygodnia", () => {
+  const tydzien = {
+    tydzien_od: "2026-08-23",
+    tydzien_do: "2026-08-29",
+    dni_zamkniete: 2,
+    dieta: { dni_z_zapisem: 3, srednie: { kcal: 2000 }, dni_w_celu: 2 },
+    trening: { sesje: 1, sesje_w_planie: 4, serie: 12, objetosc_kg: 3400 },
+    prognoza: {
+      na_koniec: { kcal: 14000 },
+      cel_tygodnia: { kcal: 14700 },
+      roznica: { kcal: -700 },
+      na_kursie: false,
+      dzis: { kcal: 500 },
+    },
+    zmiana: { kcal_dziennie: 500, dni_w_celu: 1, serie: 3, objetosc_kg: 200, waga_kg: null, ocena: "lepiej" },
+  };
+
+  it("pokazuje prognozę i werdykt przyniesiony z serwera", () => {
+    const html = panelTygodnia(tydzien);
+
+    expect(html).toContain("14000");
+    expect(html).toContain("14700");
+    expect(html).toContain("poza-kursem");
+  });
+
+  it("nie ocenia tygodnia samodzielnie — bierze ocenę z danych", () => {
+    // Gdyby widok wyciągał werdykt z liczb, czat i aplikacja mogłyby ocenić
+    // ten sam tydzień inaczej.
+    const html = panelTygodnia({ ...tydzien, zmiana: { ...tydzien.zmiana, ocena: "gorzej" } });
+
+    expect(html).toContain("zmiana gorzej");
+    expect(html).not.toContain("zmiana lepiej");
+  });
+
+  it("przed pierwszym zamkniętym dniem zapowiada prognozę zamiast jej zmyślać", () => {
+    const html = panelTygodnia({ ...tydzien, dni_zamkniete: 0, prognoza: null, zmiana: null });
+
+    expect(html).toMatch(/prognoza pojawi się/i);
+    expect(html).not.toContain("14000");
+  });
+
+  it("puste archiwum tłumaczy, kiedy pojawi się pierwszy raport", () => {
+    expect(ekranRaporty([])).toMatch(/niedzielę o 9:00/);
+  });
+
+  it("archiwum rozwija najnowszy raport, gdy nic nie wskazano", () => {
+    const raporty = [
+      { ...tydzien, tydzien_od: "2026-08-16", tydzien_do: "2026-08-22", waga: { start: null, koniec: null, zmiana_kg: null }, komentarz: "Nowszy" },
+      { ...tydzien, tydzien_od: "2026-08-09", tydzien_do: "2026-08-15", waga: { start: null, koniec: null, zmiana_kg: null }, komentarz: "Starszy" },
+    ];
+
+    const html = ekranRaporty(raporty);
+
+    expect(html).toContain("Nowszy");
+    expect(html).not.toContain("Starszy");
   });
 });

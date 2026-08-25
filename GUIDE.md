@@ -306,6 +306,37 @@ opinion, ask:
 The reply includes a 7-day rolling average — daily water swings hide the real
 trend, so that average is the meaningful number, not any single reading.
 
+## The week: report and pace
+
+A week runs **Sunday through Saturday**, and its report is generated on its own
+the following Sunday at 9:00. You never have to ask for it — the server builds
+it whether or not you are talking to Claude at the time.
+
+The app shows the week in two places:
+
+- **Progress → "Ten tydzień"** — pace as it happens: what the week will add up
+  to at the current rate, whether that lands inside your goal, and whether it is
+  going better than at the same point last week. The projection uses **closed**
+  days only, because today's intake is still growing.
+- **Menu (☰) → Raporty** — the archive of closed weeks with Claude's comment.
+
+In conversation:
+
+> show me this week's report
+
+### A Sunday-morning nudge
+
+To have the report reach your phone by itself, add a scheduled task (routine) in
+the Claude app: **Sunday, 9:00**, with a prompt along these lines:
+
+> Read my weekly report (podsumowanie_dnia with okres="tydzien"). Write me a
+> short, concrete summary of the week — what went well, what slipped, one thing
+> to fix. Then save that same text with a second call to the tool using the
+> "komentarz" parameter, so I have it in the app next to the numbers.
+
+A comment saved this way shows up under the numbers in the Raporty tab — six
+months later it is the comment, not the table, that tells you what was going on.
+
 ---
 
 # Part 5. When something breaks

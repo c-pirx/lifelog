@@ -292,6 +292,33 @@ describe("tydzień w toku", () => {
     expect(postep.zmiana).toBeNull();
   });
 
+  it("ocenia tydzień po trafieniach w cel i liczbie serii, nie po samych kaloriach", () => {
+    cele(2000);
+    // Poprzedni tydzień: dwa dni obok celu i bez treningu.
+    posilek(TYDZIEN_3, 1200);
+    posilek("2026-08-17", 1200);
+    // Bieżący: dwa dni w celu — mimo że kalorii jest WIĘCEJ, to jest poprawa.
+    posilek(TYDZIEN_4, 2000);
+    posilek("2026-08-24", 2000);
+
+    const zmiana = tydzienWToku(db, { teraz: WTOREK }).zmiana;
+
+    expect(zmiana?.kcal_dziennie).toBe(800);
+    expect(zmiana?.dni_w_celu).toBe(2);
+    expect(zmiana?.ocena).toBe("lepiej");
+  });
+
+  it("mniej trafień w cel i mniej serii to werdykt „gorzej”", () => {
+    cele(2000);
+    posilek(TYDZIEN_3, 2000);
+    posilek("2026-08-17", 2000);
+    trening(TYDZIEN_3, [{ cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 60 }]);
+    posilek(TYDZIEN_4, 1000);
+    posilek("2026-08-24", 1000);
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).zmiana?.ocena).toBe("gorzej");
+  });
+
   it("bez poprzedniego tygodnia w bazie zmiana jest pusta, a nie zerowa", () => {
     posilek(TYDZIEN_4, 2000);
     posilek("2026-08-24", 2000);
@@ -299,15 +326,24 @@ describe("tydzień w toku", () => {
     expect(tydzienWToku(db, { teraz: WTOREK }).zmiana).toBeNull();
   });
 
-  it("pokazuje bieżący stan tygodnia razem z dniem w toku", () => {
+  it("dietę liczy z dni zamkniętych, ale dzisiejsze serie już się liczą", () => {
+    // Dzień w toku nie może psuć średniej ani „dni w celu" — o dwunastej dzień
+    // z tysiącem kalorii wygląda jak nietrafiony cel, choć jeszcze trwa.
+    // Serie są odwrotnie: to fakt dokonany, widoczny zaraz po powrocie z siłowni.
     posilek(TYDZIEN_4, 2000);
     posilek("2026-08-25", 1000);
+    trening("2026-08-25", [
+      { cwiczenie: "przysiad", powtorzenia: 8, ciezar_kg: 80 },
+      { cwiczenie: "przysiad", powtorzenia: 8, ciezar_kg: 80 },
+    ]);
 
     const postep = tydzienWToku(db, { teraz: WTOREK });
 
     expect(postep.tydzien_od).toBe(TYDZIEN_4);
     expect(postep.tydzien_do).toBe("2026-08-29");
-    expect(postep.dieta.dni_z_zapisem).toBe(2);
+    expect(postep.dieta.dni_z_zapisem).toBe(1);
+    expect(postep.prognoza?.dzis.kcal).toBe(1000);
+    expect(postep.trening.serie).toBe(2);
   });
 });
 

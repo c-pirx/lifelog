@@ -299,6 +299,39 @@ chcesz opinii, zapytaj:
 Odpowiedź zawiera średnią kroczącą z 7 dni — dzienne wahania wody potrafią
 przykryć rzeczywisty trend, więc to ona jest miarodajna, nie pojedynczy odczyt.
 
+## Tydzień: raport i tempo
+
+Tydzień liczy się **od niedzieli do soboty**, a raport za niego powstaje sam
+w kolejną niedzielę o 9:00. Nie trzeba o niego prosić — serwer liczy go
+niezależnie od tego, czy akurat rozmawiasz z Claude czy trzymasz telefon
+w szafce.
+
+W aplikacji są dwa widoki tygodnia:
+
+- **Postępy → „Ten tydzień"** — tempo na bieżąco: przy jakiej sumie kalorii
+  tydzień się zamknie, czy to mieści się w celu i czy idzie lepiej niż o tej
+  samej porze tydzień temu. Prognoza liczy się wyłącznie z dni **zamkniętych**,
+  bo dzisiejsze spożycie dopiero rośnie.
+- **Menu (☰) → Raporty** — archiwum zamkniętych tygodni z komentarzem Claude.
+
+W rozmowie:
+
+> pokaż raport tygodnia
+
+### Powiadomienie w niedzielę rano
+
+Żeby raport sam przychodził na telefon, dodaj zadanie cykliczne w aplikacji
+Claude (Ustawienia → zadania cykliczne / *routines*): **niedziela, 9:00**,
+z poleceniem w rodzaju:
+
+> Odczytaj mój tygodniowy raport (podsumowanie_dnia z okres="tydzien"). Napisz
+> mi krótkie, konkretne podsumowanie tygodnia — co poszło dobrze, co osłabło,
+> jedna rzecz do poprawy. Potem zapisz to samo drugim wywołaniem tego narzędzia
+> z parametrem „komentarz", żebym miał ten komentarz w aplikacji przy liczbach.
+
+Komentarz zapisany tą drogą pojawia się w zakładce Raporty pod liczbami — po
+pół roku to on, a nie tabelka, przypomni, co się wtedy działo.
+
 ---
 
 # Część 5. Gdy coś nie działa

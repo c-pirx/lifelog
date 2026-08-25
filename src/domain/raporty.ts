@@ -92,6 +92,8 @@ export type Zmiana = {
   serie: number;
   objetosc_kg: number;
   waga_kg: number | null;
+  /** Skrótowy werdykt — patrz `ocenZmiane`. */
+  ocena: "lepiej" | "gorzej" | "podobnie";
 };
 
 export type RaportTygodniowy = {
@@ -260,18 +262,38 @@ export function policzWycinek(db: Baza, od: string, doDaty: string): WycinekTygo
   };
 }
 
+/**
+ * Werdykt „idzie lepiej czy gorzej" — świadomie oparty tylko na tym, co ma
+ * jednoznaczny kierunek.
+ *
+ * Trafienia w cel i liczba serii mówią wprost: więcej znaczy lepiej. Kalorie
+ * i waga nie — przy redukcji zjedzenie mniej jest dobre, przy budowaniu masy
+ * złe, a system nie zna zamiaru użytkownika. Dlatego wchodzą do raportu jako
+ * liczby ze znakiem, ale nie do oceny.
+ */
+function ocenZmiane(dniWCelu: number, serie: number): Zmiana["ocena"] {
+  const punkty = Math.sign(dniWCelu) + Math.sign(serie);
+  if (punkty > 0) return "lepiej";
+  if (punkty < 0) return "gorzej";
+  return "podobnie";
+}
+
 function policzZmiane(teraz: WycinekTygodnia, wczesniej: WycinekTygodnia): Zmiana {
   const waga =
     teraz.waga.koniec !== null && wczesniej.waga.koniec !== null
       ? zaokr(teraz.waga.koniec - wczesniej.waga.koniec, 2)
       : null;
 
+  const dniWCelu = teraz.dieta.dni_w_celu - wczesniej.dieta.dni_w_celu;
+  const serie = teraz.trening.serie - wczesniej.trening.serie;
+
   return {
     kcal_dziennie: zaokr(teraz.dieta.srednie.kcal - wczesniej.dieta.srednie.kcal),
-    dni_w_celu: teraz.dieta.dni_w_celu - wczesniej.dieta.dni_w_celu,
-    serie: teraz.trening.serie - wczesniej.trening.serie,
+    dni_w_celu: dniWCelu,
+    serie,
     objetosc_kg: zaokr(teraz.trening.objetosc_kg - wczesniej.trening.objetosc_kg, 2),
     waga_kg: waga,
+    ocena: ocenZmiane(dniWCelu, serie),
   };
 }
 
@@ -454,11 +476,30 @@ export function tydzienWToku(db: Baza, opcje: Opcje = {}): PostepTygodnia {
       ? policzWycinek(db, poprzedniOd, przesunDate(poprzedniOd, dniZamkniete - 1))
       : null;
 
+  /*
+   * Dieta liczy się z dni ZAMKNIĘTYCH, trening i waga z całego tygodnia.
+   *
+   * Różnica nie jest przypadkowa. Średnia kalorii i „dni w celu" wymagają
+   * pełnej doby: o dwunastej dzień z tysiącem kalorii wygląda jak nietrafiony
+   * cel, choć do wieczora zostanie trafiony. Serie i pomiar wagi to fakty
+   * dokonane — dzisiejszy trening ma się liczyć od razu, inaczej użytkownik
+   * po powrocie z siłowni widziałby zero.
+   */
+  const dietaDniZamknietych: StatDiety = zamkniete
+    ? zamkniete.dieta
+    : {
+        dni_z_zapisem: 0,
+        srednie: MAKRO_ZERO,
+        cel_dzienny: biezacy.dieta.cel_dzienny,
+        dni_w_celu: 0,
+        ile_szacowanych: 0,
+      };
+
   return {
     tydzien_od: tydzien.od,
     tydzien_do: tydzien.do,
     dni_zamkniete: dniZamkniete,
-    dieta: biezacy.dieta,
+    dieta: dietaDniZamknietych,
     waga: biezacy.waga,
     trening: biezacy.trening,
     prognoza: zamkniete ? policzPrognoze(db, zamkniete, tydzien, dzis) : null,
