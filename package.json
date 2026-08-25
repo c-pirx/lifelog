@@ -18,7 +18,8 @@
     "podlacz": "node tools/podlacz-claude-desktop.mjs",
     "demo": "node tools/dane-demo.mjs",
     "reset": "node tools/wyczysc.mjs",
-    "ikony": "node tools/generuj-ikony.mjs"
+    "ikony": "node tools/generuj-ikony.mjs",
+    "rozszerzenie": "node tools/zbuduj-rozszerzenie.mjs"
   },
   "keywords": [],
   "author": "",

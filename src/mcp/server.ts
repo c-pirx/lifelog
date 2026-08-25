@@ -56,7 +56,12 @@ export function utworzRouterMcp(db: Baza, token: string, strefa: string) {
     const server = new McpServer({ name: NAZWA_SERWERA, version: WERSJA });
     zarejestrujNarzedzia(server, db, strefa);
 
-    const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+    // Zwykły JSON zamiast strumienia SSE: żadne z narzędzi nie strumieniuje
+    // wyników, a prostsza odpowiedź ułatwia napisanie własnego mostu stdio.
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true,
+    });
 
     // Instancje żyją tylko na czas żądania — sprzątamy, gdy odpowiedź się zamknie.
     c.env.outgoing.on("close", () => {

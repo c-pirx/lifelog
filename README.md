@@ -133,7 +133,28 @@ pojawiają się w **nowej** sesji — serwery MCP wczytują się przy jej starci
 Jeśli widzisz `✗ Failed to connect`, prawie zawsze znaczy to, że serwer nie
 działa. Uruchom `npm run dev`.
 
-### Claude Desktop (czat) — przez most
+### Claude Desktop (czat) — jako rozszerzenie
+
+Panel **Ustawienia → Connectors** przyjmuje wyłącznie adresy publiczne, bo
+konektory działają na poziomie konta i łączy się z nimi chmura Anthropic.
+Lokalny serwer dodaje się inaczej — jako rozszerzenie:
+
+```bash
+npm run rozszerzenie
+```
+
+Powstaje `asystent.mcpb`. Instalacja: **Ustawienia → Extensions → Advanced
+settings → Extension Developer → Install Extension…** i wskazanie pliku.
+Adres serwera jest wpisany w paczce, ale można go zmienić w polu
+konfiguracyjnym rozszerzenia.
+
+Ta droga jest odporna na nadpisywanie pliku konfiguracyjnego (patrz niżej)
+i nie wymaga zamykania aplikacji.
+
+> **Paczka zawiera token dostępu do Twoich danych.** Jest w `.gitignore`
+> i nie powinna trafić do nikogo innego.
+
+### Claude Desktop — wariant przez plik konfiguracyjny
 
 Konektory na claude.ai wymagają publicznego adresu HTTPS, bo Claude łączy się
 z chmury Anthropic. **Claude Desktop to omija**: uruchamia most `mcp-remote`

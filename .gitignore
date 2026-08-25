@@ -11,3 +11,7 @@ dane/
 # Sekrety
 .env
 .env.local
+
+# Paczka rozszerzenia zawiera token — nigdy do repozytorium
+asystent.mcpb
+dist-rozszerzenie/
