@@ -80,7 +80,7 @@ przez `src/lib/time.ts` — nigdy przez `getDate()` i podobne.
 - [x] **Etap 1** — rdzeń domenowy (dieta, treningi, pomiary, poprawki)
 - [x] **Etap 2** — serwer MCP (11 narzędzi)
 - [x] **Etap 3** — aplikacja webowa (PWA)
-- [ ] **Etap 4** — wdrożenie (po wyborze hostingu)
+- [x] **Etap 4** — wdrożenie (OVH VPS, `asystent.twojadomena.pl`) — patrz [wdrozenie/README.md](wdrozenie/README.md)
 
 ## Aplikacja webowa
 
