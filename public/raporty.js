@@ -123,8 +123,11 @@ export function panelTygodnia(tydzien) {
       ${
         prognoza
           ? `${werdykt(prognoza, zamkniete)}${pasekPrognozy(prognoza)}`
-          : `<p class="werdykt">Tydzień dopiero się zaczął — prognoza pojawi się po pierwszym
-             zamkniętym dniu.</p>`
+          : `<p class="werdykt">${
+              zamkniete === 0
+                ? "Tydzień dopiero się zaczął — prognoza pojawi się po pierwszym zamkniętym dniu."
+                : "Z zamkniętych dni tego tygodnia nie ma zapisów, więc nie ma z czego liczyć tempa."
+            }</p>`
       }
 
       <ul class="liczby">

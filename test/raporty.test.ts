@@ -281,6 +281,15 @@ describe("tydzień w toku", () => {
     expect(tydzienWToku(db, { teraz: WTOREK }).zmiana?.kcal_dziennie).toBe(500);
   });
 
+  it("bez zapisów z dni zamkniętych nie zmyśla prognozy zerowej", () => {
+    cele(2000);
+    // Wpis tylko dzisiaj — z zamkniętych dni nie ma czego uśredniać, a prognoza
+    // „0 kcal, celu nie dowieziesz" byłaby fałszywym alarmem.
+    posilek("2026-08-25", 900);
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).prognoza).toBeNull();
+  });
+
   it("w niedzielę rano nie ma jeszcze czego prognozować ani z czym porównywać", () => {
     cele(2000);
     posilek(TYDZIEN_4, 800);

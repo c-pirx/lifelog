@@ -502,7 +502,12 @@ export function tydzienWToku(db: Baza, opcje: Opcje = {}): PostepTygodnia {
     dieta: dietaDniZamknietych,
     waga: biezacy.waga,
     trening: biezacy.trening,
-    prognoza: zamkniete ? policzPrognoze(db, zamkniete, tydzien, dzis) : null,
+    // Bez ani jednego zapisu z dni zamkniętych prognoza wyszłaby zerowa i
+    // ogłosiła, że celu nie dowieziesz — a to nie brak tempa, tylko brak danych.
+    prognoza:
+      zamkniete && zamkniete.dieta.dni_z_zapisem > 0
+        ? policzPrognoze(db, zamkniete, tydzien, dzis)
+        : null,
     zmiana:
       zamkniete && poprzedni && !czyPusty(poprzedni) ? policzZmiane(zamkniete, poprzedni) : null,
   };
