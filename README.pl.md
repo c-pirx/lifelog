@@ -12,6 +12,12 @@ Dwa wejścia, jedna baza:
 
 Oba wejścia wywołują ten sam kod domenowy, więc nie mogą pokazać różnych liczb.
 
+### 📖 [Instrukcja: konfiguracja i codzienne używanie →](INSTRUKCJA.md)
+
+Krok po kroku: co zainstalować, jak podłączyć do swojej subskrypcji Claude, co
+właściwie mówić, żeby zapisać posiłek albo trening, i co robić, gdy coś nie
+działa. Zacznij stamtąd, jeśli chcesz po prostu tego używać.
+
 ## Po co to powstało
 
 Asystenci czatowi zapominają. Ich pamięć to stratne streszczenie, nie rejestr —

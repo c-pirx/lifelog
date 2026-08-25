@@ -13,6 +13,12 @@ database:
 Both entry points call the same domain code, so they can never show you
 different numbers.
 
+### 📖 [Setup and everyday use →](GUIDE.md)
+
+Step-by-step: what to install, how to connect it to your Claude subscription,
+what to actually say to log a meal or a workout, and what to do when something
+breaks. Start there if you just want to use this.
+
 > **Note on language.** The code, comments, database schema and UI are in
 > Polish — this started as a personal project. Only the documentation is
 > translated. If you fork it, expect to read Polish identifiers.
