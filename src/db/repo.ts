@@ -1,0 +1,619 @@
+/**
+ * Jedyne miejsce w projekcie, w którym występuje SQL.
+ *
+ * Warstwa domenowa woła wyłącznie te funkcje. Dzięki temu przejście z SQLite
+ * na Postgres jest przepisaniem tego pliku, a nie przebudową aplikacji.
+ * Funkcje są celowo „głupie": żadnej logiki biznesowej, same odczyty i zapisy.
+ */
+
+import type { Baza } from "./index.js";
+import type { Pewnosc, Pora, StatusSesji, TypCwiczenia, ZrodloWpisu } from "../domain/typy.js";
+
+// === Surowe kształty wierszy =============================================
+
+export type WierszCele = {
+  id: number;
+  obowiazuje_od: string;
+  kcal: number;
+  bialko_g: number;
+  wegle_g: number;
+  tluszcz_g: number;
+  opis: string | null;
+};
+
+export type WierszPosilku = {
+  id: number;
+  ts: string;
+  data_lokalna: string;
+  pora: Pora;
+  opis: string;
+  kcal: number;
+  bialko_g: number;
+  wegle_g: number;
+  tluszcz_g: number;
+  zrodlo: ZrodloWpisu;
+  pewnosc: Pewnosc;
+  surowe_wejscie: string | null;
+};
+
+export type WierszPozycji = {
+  id: number;
+  posilek_id: number;
+  nazwa: string;
+  ilosc_g: number | null;
+  kcal: number | null;
+  bialko_g: number | null;
+  wegle_g: number | null;
+  tluszcz_g: number | null;
+};
+
+export type WierszCwiczenia = {
+  id: number;
+  nazwa: string;
+  typ: TypCwiczenia;
+  partia: string | null;
+};
+
+export type WierszDniaPlanu = {
+  id: number;
+  kod: string;
+  nazwa: string;
+  dzien_tygodnia: number | null;
+  aktywny: number;
+};
+
+export type WierszCwiczeniaWDniu = {
+  id: number;
+  dzien_id: number;
+  cwiczenie_id: number;
+  nazwa: string;
+  typ: TypCwiczenia;
+  kolejnosc: number;
+  serie_cel: number | null;
+  powt_cel: string | null;
+  czas_cel_s: number | null;
+  dystans_cel_m: number | null;
+};
+
+export type WierszSesji = {
+  id: number;
+  dzien_id: number | null;
+  dzien_kod: string | null;
+  dzien_nazwa: string | null;
+  start_ts: string;
+  data_lokalna: string;
+  koniec_ts: string | null;
+  status: StatusSesji;
+  notatki: string | null;
+};
+
+export type WierszSerii = {
+  id: number;
+  sesja_id: number;
+  cwiczenie_id: number;
+  nazwa: string;
+  typ: TypCwiczenia;
+  nr_serii: number;
+  powtorzenia: number | null;
+  ciezar_kg: number | null;
+  czas_s: number | null;
+  dystans_m: number | null;
+  rpe: number | null;
+  ts: string;
+};
+
+export type WierszWagi = {
+  id: number;
+  ts: string;
+  data_lokalna: string;
+  kg: number;
+  notatka: string | null;
+};
+
+// === CELE ===============================================================
+
+export function wstawCele(
+  db: Baza,
+  dane: Omit<WierszCele, "id"> & { utworzono: string },
+): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO cele (obowiazuje_od, kcal, bialko_g, wegle_g, tluszcz_g, opis, utworzono)
+       VALUES (@obowiazuje_od, @kcal, @bialko_g, @wegle_g, @tluszcz_g, @opis, @utworzono)`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+/** Cele obowiązujące danego dnia, czyli najnowsze wprowadzone nie później niż tego dnia. */
+export function celeNaDzien(db: Baza, data: string): WierszCele | undefined {
+  return db
+    .prepare<[string], WierszCele>(
+      `SELECT id, obowiazuje_od, kcal, bialko_g, wegle_g, tluszcz_g, opis
+       FROM cele
+       WHERE obowiazuje_od <= ?
+       ORDER BY obowiazuje_od DESC, id DESC
+       LIMIT 1`,
+    )
+    .get(data);
+}
+
+// === POSIŁKI ============================================================
+
+export function wstawPosilek(
+  db: Baza,
+  dane: Omit<WierszPosilku, "id"> & { utworzono: string },
+): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO posilki (ts, data_lokalna, pora, opis, kcal, bialko_g, wegle_g, tluszcz_g,
+                            zrodlo, pewnosc, surowe_wejscie, utworzono)
+       VALUES (@ts, @data_lokalna, @pora, @opis, @kcal, @bialko_g, @wegle_g, @tluszcz_g,
+               @zrodlo, @pewnosc, @surowe_wejscie, @utworzono)`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function wstawPozycje(
+  db: Baza,
+  posilekId: number,
+  pozycje: Omit<WierszPozycji, "id" | "posilek_id">[],
+): void {
+  if (pozycje.length === 0) return;
+
+  const zapytanie = db.prepare(
+    `INSERT INTO pozycje_posilku (posilek_id, nazwa, ilosc_g, kcal, bialko_g, wegle_g, tluszcz_g)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+  );
+
+  for (const p of pozycje) {
+    zapytanie.run(posilekId, p.nazwa, p.ilosc_g, p.kcal, p.bialko_g, p.wegle_g, p.tluszcz_g);
+  }
+}
+
+const KOLUMNY_POSILKU = `id, ts, data_lokalna, pora, opis, kcal, bialko_g, wegle_g, tluszcz_g,
+                         zrodlo, pewnosc, surowe_wejscie`;
+
+export function posilkiZDnia(db: Baza, data: string): WierszPosilku[] {
+  return db
+    .prepare<[string], WierszPosilku>(
+      `SELECT ${KOLUMNY_POSILKU} FROM posilki WHERE data_lokalna = ? ORDER BY ts, id`,
+    )
+    .all(data);
+}
+
+export function posilkiZZakresu(db: Baza, od: string, doDaty: string): WierszPosilku[] {
+  return db
+    .prepare<[string, string], WierszPosilku>(
+      `SELECT ${KOLUMNY_POSILKU} FROM posilki
+       WHERE data_lokalna BETWEEN ? AND ? ORDER BY ts, id`,
+    )
+    .all(od, doDaty);
+}
+
+export function posilekPoId(db: Baza, id: number): WierszPosilku | undefined {
+  return db
+    .prepare<[number], WierszPosilku>(`SELECT ${KOLUMNY_POSILKU} FROM posilki WHERE id = ?`)
+    .get(id);
+}
+
+export function pozycjeDlaPosilkow(db: Baza, ids: number[]): WierszPozycji[] {
+  if (ids.length === 0) return [];
+  const znaki = ids.map(() => "?").join(", ");
+  return db
+    .prepare<number[], WierszPozycji>(
+      `SELECT id, posilek_id, nazwa, ilosc_g, kcal, bialko_g, wegle_g, tluszcz_g
+       FROM pozycje_posilku WHERE posilek_id IN (${znaki}) ORDER BY id`,
+    )
+    .all(...ids);
+}
+
+/** Aktualizuje wskazane kolumny posiłku. Zwraca liczbę zmienionych wierszy. */
+export function aktualizujPosilek(
+  db: Baza,
+  id: number,
+  pola: Partial<Omit<WierszPosilku, "id">>,
+): number {
+  const klucze = Object.keys(pola);
+  if (klucze.length === 0) return 0;
+
+  const przypisania = klucze.map((k) => `${k} = @${k}`).join(", ");
+  return db
+    .prepare(`UPDATE posilki SET ${przypisania} WHERE id = @id`)
+    .run({ ...pola, id }).changes;
+}
+
+export function usunPosilek(db: Baza, id: number): number {
+  return db.prepare("DELETE FROM posilki WHERE id = ?").run(id).changes;
+}
+
+// === ĆWICZENIA ==========================================================
+
+export function cwiczeniePoNazwie(db: Baza, nazwa: string): WierszCwiczenia | undefined {
+  return db
+    .prepare<[string], WierszCwiczenia>(
+      "SELECT id, nazwa, typ, partia FROM cwiczenia WHERE nazwa = ? COLLATE NOCASE",
+    )
+    .get(nazwa);
+}
+
+export function cwiczeniePoId(db: Baza, id: number): WierszCwiczenia | undefined {
+  return db
+    .prepare<[number], WierszCwiczenia>("SELECT id, nazwa, typ, partia FROM cwiczenia WHERE id = ?")
+    .get(id);
+}
+
+export function wstawCwiczenie(
+  db: Baza,
+  nazwa: string,
+  typ: TypCwiczenia,
+  partia: string | null,
+): number {
+  const wynik = db
+    .prepare("INSERT INTO cwiczenia (nazwa, typ, partia) VALUES (?, ?, ?)")
+    .run(nazwa, typ, partia);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function wszystkieCwiczenia(db: Baza): WierszCwiczenia[] {
+  return db
+    .prepare<[], WierszCwiczenia>("SELECT id, nazwa, typ, partia FROM cwiczenia ORDER BY nazwa")
+    .all();
+}
+
+// === PLAN TRENINGOWY ====================================================
+
+const KOLUMNY_DNIA = "id, kod, nazwa, dzien_tygodnia, aktywny";
+
+export function dniPlanu(db: Baza): WierszDniaPlanu[] {
+  return db
+    .prepare<[], WierszDniaPlanu>(
+      `SELECT ${KOLUMNY_DNIA} FROM dni_planu ORDER BY dzien_tygodnia IS NULL, dzien_tygodnia, kod`,
+    )
+    .all();
+}
+
+export function dzienPlanuPoKodzie(db: Baza, kod: string): WierszDniaPlanu | undefined {
+  return db
+    .prepare<[string], WierszDniaPlanu>(
+      `SELECT ${KOLUMNY_DNIA} FROM dni_planu WHERE kod = ? COLLATE NOCASE`,
+    )
+    .get(kod);
+}
+
+export function dzienPlanuPoId(db: Baza, id: number): WierszDniaPlanu | undefined {
+  return db
+    .prepare<[number], WierszDniaPlanu>(`SELECT ${KOLUMNY_DNIA} FROM dni_planu WHERE id = ?`)
+    .get(id);
+}
+
+export function dzienPlanuNaDzienTygodnia(db: Baza, dzien: number): WierszDniaPlanu | undefined {
+  return db
+    .prepare<[number], WierszDniaPlanu>(
+      `SELECT ${KOLUMNY_DNIA} FROM dni_planu WHERE dzien_tygodnia = ? AND aktywny = 1`,
+    )
+    .get(dzien);
+}
+
+export function wstawDzienPlanu(
+  db: Baza,
+  kod: string,
+  nazwa: string,
+  dzienTygodnia: number | null,
+): number {
+  const wynik = db
+    .prepare("INSERT INTO dni_planu (kod, nazwa, dzien_tygodnia) VALUES (?, ?, ?)")
+    .run(kod, nazwa, dzienTygodnia);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function aktualizujDzienPlanu(
+  db: Baza,
+  id: number,
+  pola: Partial<{ kod: string; nazwa: string; dzien_tygodnia: number | null; aktywny: number }>,
+): number {
+  const klucze = Object.keys(pola);
+  if (klucze.length === 0) return 0;
+  const przypisania = klucze.map((k) => `${k} = @${k}`).join(", ");
+  return db.prepare(`UPDATE dni_planu SET ${przypisania} WHERE id = @id`).run({ ...pola, id }).changes;
+}
+
+export function usunDzienPlanu(db: Baza, id: number): number {
+  return db.prepare("DELETE FROM dni_planu WHERE id = ?").run(id).changes;
+}
+
+export function cwiczeniaWDniu(db: Baza, dzienId: number): WierszCwiczeniaWDniu[] {
+  return db
+    .prepare<[number], WierszCwiczeniaWDniu>(
+      `SELECT cwd.id, cwd.dzien_id, cwd.cwiczenie_id, c.nazwa, c.typ, cwd.kolejnosc,
+              cwd.serie_cel, cwd.powt_cel, cwd.czas_cel_s, cwd.dystans_cel_m
+       FROM cwiczenia_w_dniu cwd
+       JOIN cwiczenia c ON c.id = cwd.cwiczenie_id
+       WHERE cwd.dzien_id = ?
+       ORDER BY cwd.kolejnosc`,
+    )
+    .all(dzienId);
+}
+
+export function wstawCwiczenieWDniu(
+  db: Baza,
+  dane: {
+    dzien_id: number;
+    cwiczenie_id: number;
+    kolejnosc: number;
+    serie_cel: number | null;
+    powt_cel: string | null;
+    czas_cel_s: number | null;
+    dystans_cel_m: number | null;
+  },
+): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO cwiczenia_w_dniu
+         (dzien_id, cwiczenie_id, kolejnosc, serie_cel, powt_cel, czas_cel_s, dystans_cel_m)
+       VALUES (@dzien_id, @cwiczenie_id, @kolejnosc, @serie_cel, @powt_cel, @czas_cel_s, @dystans_cel_m)`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function usunCwiczeniaWDniu(db: Baza, dzienId: number): number {
+  return db.prepare("DELETE FROM cwiczenia_w_dniu WHERE dzien_id = ?").run(dzienId).changes;
+}
+
+// === SESJE ==============================================================
+
+const KOLUMNY_SESJI = `s.id, s.dzien_id, d.kod AS dzien_kod, d.nazwa AS dzien_nazwa,
+                       s.start_ts, s.data_lokalna, s.koniec_ts, s.status, s.notatki`;
+
+export function aktywnaSesja(db: Baza): WierszSesji | undefined {
+  return db
+    .prepare<[], WierszSesji>(
+      `SELECT ${KOLUMNY_SESJI} FROM sesje s LEFT JOIN dni_planu d ON d.id = s.dzien_id
+       WHERE s.status = 'aktywna'`,
+    )
+    .get();
+}
+
+export function sesjaPoId(db: Baza, id: number): WierszSesji | undefined {
+  return db
+    .prepare<[number], WierszSesji>(
+      `SELECT ${KOLUMNY_SESJI} FROM sesje s LEFT JOIN dni_planu d ON d.id = s.dzien_id
+       WHERE s.id = ?`,
+    )
+    .get(id);
+}
+
+export function wstawSesje(
+  db: Baza,
+  dane: { dzien_id: number | null; start_ts: string; data_lokalna: string },
+): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO sesje (dzien_id, start_ts, data_lokalna, status)
+       VALUES (@dzien_id, @start_ts, @data_lokalna, 'aktywna')`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function zamknijSesje(
+  db: Baza,
+  id: number,
+  status: StatusSesji,
+  koniecTs: string,
+  notatki: string | null,
+): number {
+  return db
+    .prepare("UPDATE sesje SET status = ?, koniec_ts = ?, notatki = ? WHERE id = ?")
+    .run(status, koniecTs, notatki, id).changes;
+}
+
+export function ostatnieSesje(db: Baza, limit: number): WierszSesji[] {
+  return db
+    .prepare<[number], WierszSesji>(
+      `SELECT ${KOLUMNY_SESJI} FROM sesje s LEFT JOIN dni_planu d ON d.id = s.dzien_id
+       WHERE s.status = 'zakonczona' ORDER BY s.start_ts DESC LIMIT ?`,
+    )
+    .all(limit);
+}
+
+// === SERIE ==============================================================
+
+const KOLUMNY_SERII = `se.id, se.sesja_id, se.cwiczenie_id, c.nazwa, c.typ, se.nr_serii,
+                       se.powtorzenia, se.ciezar_kg, se.czas_s, se.dystans_m, se.rpe, se.ts`;
+
+export function wstawSerie(
+  db: Baza,
+  dane: {
+    sesja_id: number;
+    cwiczenie_id: number;
+    nr_serii: number;
+    powtorzenia: number | null;
+    ciezar_kg: number | null;
+    czas_s: number | null;
+    dystans_m: number | null;
+    rpe: number | null;
+    ts: string;
+  },
+): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO serie (sesja_id, cwiczenie_id, nr_serii, powtorzenia, ciezar_kg,
+                          czas_s, dystans_m, rpe, ts)
+       VALUES (@sesja_id, @cwiczenie_id, @nr_serii, @powtorzenia, @ciezar_kg,
+               @czas_s, @dystans_m, @rpe, @ts)`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function serieSesji(db: Baza, sesjaId: number): WierszSerii[] {
+  return db
+    .prepare<[number], WierszSerii>(
+      `SELECT ${KOLUMNY_SERII} FROM serie se JOIN cwiczenia c ON c.id = se.cwiczenie_id
+       WHERE se.sesja_id = ? ORDER BY se.ts, se.id`,
+    )
+    .all(sesjaId);
+}
+
+export function ileSerii(db: Baza, sesjaId: number, cwiczenieId: number): number {
+  return (
+    db
+      .prepare<[number, number], { ile: number }>(
+        "SELECT COUNT(*) AS ile FROM serie WHERE sesja_id = ? AND cwiczenie_id = ?",
+      )
+      .get(sesjaId, cwiczenieId)?.ile ?? 0
+  );
+}
+
+/**
+ * Serie danego ćwiczenia z ostatniej zakończonej sesji, w której się pojawiło.
+ * Używane do pokazywania „co robiłeś poprzednio" przy każdym ćwiczeniu.
+ */
+export function serieZPoprzedniegoRazu(
+  db: Baza,
+  cwiczenieId: number,
+  pomijajacSesje: number | null,
+): WierszSerii[] {
+  const poprzedniaSesja = db
+    .prepare<[number, number], { sesja_id: number }>(
+      `SELECT se.sesja_id
+       FROM serie se
+       JOIN sesje s ON s.id = se.sesja_id
+       WHERE se.cwiczenie_id = ? AND s.status = 'zakonczona' AND se.sesja_id != ?
+       ORDER BY s.start_ts DESC
+       LIMIT 1`,
+    )
+    .get(cwiczenieId, pomijajacSesje ?? -1);
+
+  if (!poprzedniaSesja) return [];
+
+  return db
+    .prepare<[number, number], WierszSerii>(
+      `SELECT ${KOLUMNY_SERII} FROM serie se JOIN cwiczenia c ON c.id = se.cwiczenie_id
+       WHERE se.sesja_id = ? AND se.cwiczenie_id = ? ORDER BY se.nr_serii`,
+    )
+    .all(poprzedniaSesja.sesja_id, cwiczenieId);
+}
+
+/** Serie ćwiczenia z ostatnich `limitSesji` sesji, od najnowszej. */
+export function historiaCwiczenia(
+  db: Baza,
+  cwiczenieId: number,
+  limitSesji: number,
+): (WierszSerii & { data_lokalna: string })[] {
+  const sesje = db
+    .prepare<[number, number], { id: number }>(
+      `SELECT s.id
+       FROM sesje s
+       WHERE EXISTS (SELECT 1 FROM serie WHERE sesja_id = s.id AND cwiczenie_id = ?)
+       ORDER BY s.start_ts DESC
+       LIMIT ?`,
+    )
+    .all(cwiczenieId, limitSesji);
+
+  if (sesje.length === 0) return [];
+
+  const idSesji = sesje.map((s) => s.id);
+  const znaki = idSesji.map(() => "?").join(", ");
+
+  return db
+    .prepare<number[], WierszSerii & { data_lokalna: string }>(
+      `SELECT ${KOLUMNY_SERII}, s.data_lokalna
+       FROM serie se
+       JOIN cwiczenia c ON c.id = se.cwiczenie_id
+       JOIN sesje s ON s.id = se.sesja_id
+       WHERE se.cwiczenie_id = ? AND se.sesja_id IN (${znaki})
+       ORDER BY s.start_ts DESC, se.nr_serii`,
+    )
+    .all(cwiczenieId, ...idSesji);
+}
+
+export function seriaPoId(db: Baza, id: number): WierszSerii | undefined {
+  return db
+    .prepare<[number], WierszSerii>(
+      `SELECT ${KOLUMNY_SERII} FROM serie se JOIN cwiczenia c ON c.id = se.cwiczenie_id
+       WHERE se.id = ?`,
+    )
+    .get(id);
+}
+
+export function aktualizujSerie(
+  db: Baza,
+  id: number,
+  pola: Partial<{
+    powtorzenia: number | null;
+    ciezar_kg: number | null;
+    czas_s: number | null;
+    dystans_m: number | null;
+    rpe: number | null;
+  }>,
+): number {
+  const klucze = Object.keys(pola);
+  if (klucze.length === 0) return 0;
+  const przypisania = klucze.map((k) => `${k} = @${k}`).join(", ");
+  return db.prepare(`UPDATE serie SET ${przypisania} WHERE id = @id`).run({ ...pola, id }).changes;
+}
+
+export function usunSerie(db: Baza, id: number): number {
+  return db.prepare("DELETE FROM serie WHERE id = ?").run(id).changes;
+}
+
+// === WAGA ===============================================================
+
+/** Zapis wagi nadpisuje wcześniejszy pomiar z tego samego dnia. */
+export function zapiszWage(
+  db: Baza,
+  dane: { ts: string; data_lokalna: string; kg: number; notatka: string | null },
+): void {
+  db.prepare(
+    `INSERT INTO waga_ciala (ts, data_lokalna, kg, notatka)
+     VALUES (@ts, @data_lokalna, @kg, @notatka)
+     ON CONFLICT (data_lokalna) DO UPDATE
+       SET ts = excluded.ts, kg = excluded.kg, notatka = excluded.notatka`,
+  ).run(dane);
+}
+
+export function wagaZZakresu(db: Baza, od: string, doDaty: string): WierszWagi[] {
+  return db
+    .prepare<[string, string], WierszWagi>(
+      `SELECT id, ts, data_lokalna, kg, notatka FROM waga_ciala
+       WHERE data_lokalna BETWEEN ? AND ? ORDER BY data_lokalna`,
+    )
+    .all(od, doDaty);
+}
+
+export function ostatniaWaga(db: Baza): WierszWagi | undefined {
+  return db
+    .prepare<[], WierszWagi>(
+      `SELECT id, ts, data_lokalna, kg, notatka FROM waga_ciala
+       ORDER BY data_lokalna DESC LIMIT 1`,
+    )
+    .get();
+}
+
+export function wagaPoId(db: Baza, id: number): WierszWagi | undefined {
+  return db
+    .prepare<[number], WierszWagi>(
+      "SELECT id, ts, data_lokalna, kg, notatka FROM waga_ciala WHERE id = ?",
+    )
+    .get(id);
+}
+
+export function aktualizujWage(
+  db: Baza,
+  id: number,
+  pola: Partial<{ kg: number; notatka: string | null }>,
+): number {
+  const klucze = Object.keys(pola);
+  if (klucze.length === 0) return 0;
+  const przypisania = klucze.map((k) => `${k} = @${k}`).join(", ");
+  return db.prepare(`UPDATE waga_ciala SET ${przypisania} WHERE id = @id`).run({ ...pola, id })
+    .changes;
+}
+
+export function usunWage(db: Baza, id: number): number {
+  return db.prepare("DELETE FROM waga_ciala WHERE id = ?").run(id).changes;
+}
