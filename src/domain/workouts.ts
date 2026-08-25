@@ -542,6 +542,84 @@ export function stanTreningu(db: Baza): StanTreningu {
   };
 }
 
+// === ODHACZANIE CAŁEGO ĆWICZENIA ========================================
+
+export type DaneOdhaczenia = {
+  cwiczenie: string;
+  /** Wymagane tylko wtedy, gdy plan nie podaje celu serii. */
+  ile?: number;
+};
+
+/**
+ * Dopisuje brakujące serie ćwiczenia z liczbami stojącymi na przycisku.
+ *
+ * Odhaczenie całego ćwiczenia znaczy „zrobiłem wszystkie serie z założonym
+ * obciążeniem", więc każda dopisana seria dostaje tę samą propozycję. Liczy ją
+ * serwer, a nie aplikacja — gdyby liczyła aplikacja, czat i telefon umiałyby
+ * zapisać za ten sam trening co innego.
+ *
+ * Całość w transakcji: ćwiczenie dopisane w połowie byłoby gorsze niż błąd.
+ */
+export function odhaczCwiczenie(
+  db: Baza,
+  dane: DaneOdhaczenia,
+  opcje: Opcje = {},
+): StanTreningu {
+  const sesja = repo.aktywnaSesja(db);
+  if (!sesja) {
+    throw new BladDomeny("Nie ma otwartej sesji treningowej", "brak_sesji");
+  }
+
+  const cwiczenie = znajdzCwiczenie(db, dane.cwiczenie);
+  const stan = stanTreningu(db);
+  const postep = [...stan.wg_planu, ...stan.poza_planem].find(
+    (c) => c.cwiczenie_id === cwiczenie.id,
+  );
+
+  // Ćwiczenie spoza planu bez ani jednej serii nie pojawia się jeszcze w stanie
+  // treningu — propozycję trzeba wtedy złożyć samemu, z poprzedniego razu.
+  const propozycja =
+    postep?.propozycja ??
+    propozycjaSerii(cwiczenie.typ, null, [], repo.serieZPoprzedniegoRazu(db, cwiczenie.id, sesja.id));
+
+  const zPlanu = postep?.serie_cel != null ? postep.serie_cel - postep.serie_zrobione : null;
+  const ile = dane.ile ?? zPlanu;
+
+  if (ile === null) {
+    throw new BladDomeny(
+      `Ćwiczenie "${cwiczenie.nazwa}" nie ma w planie liczby serii — podaj, ile serii odhaczyć`,
+      "brak_celu_serii",
+    );
+  }
+
+  if (ile <= 0) return stan;
+
+  if (propozycja.zrodlo === "brak") {
+    throw new BladDomeny(
+      `Nie wiadomo, jakim wynikiem odhaczyć ćwiczenie "${cwiczenie.nazwa}" — zapisz pierwszą serię ręcznie`,
+      "brak_propozycji",
+    );
+  }
+
+  db.transaction(() => {
+    for (let i = 0; i < ile; i += 1) {
+      zapiszSerie(
+        db,
+        {
+          cwiczenie: cwiczenie.nazwa,
+          powtorzenia: propozycja.powtorzenia ?? undefined,
+          ciezar_kg: propozycja.ciezar_kg ?? undefined,
+          czas_s: propozycja.czas_s ?? undefined,
+          dystans_m: propozycja.dystans_m ?? undefined,
+        },
+        opcje,
+      );
+    }
+  })();
+
+  return stanTreningu(db);
+}
+
 // === HISTORIA ===========================================================
 
 export type HistoriaCwiczenia = {

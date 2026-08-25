@@ -4,6 +4,7 @@ import { otworzBaze, type Baza } from "../src/db/index.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
+  odhaczCwiczenie,
   planTreningowy,
   propozycjaSerii,
   rozpocznijTrening,
@@ -402,6 +403,72 @@ describe("kończenie treningu", () => {
 
   it("odmawia zakończenia, gdy nic nie jest otwarte", () => {
     expect(() => zakonczTrening(db, {})).toThrow(/sesj/i);
+  });
+});
+
+describe("odhaczanie całego ćwiczenia", () => {
+  const przysiad = () => stanTreningu(db).wg_planu.find((c) => c.nazwa === "przysiad");
+
+  it("dopisuje brakujące serie do celu z planu", () => {
+    planA();
+    przeszlyTrening(100);
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100 });
+
+    odhaczCwiczenie(db, { cwiczenie: "przysiad" });
+
+    expect(przysiad()?.serie_zrobione).toBe(5);
+    expect(przysiad()?.serie.map((s) => s.ciezar_kg)).toEqual([100, 100, 100, 100, 100]);
+  });
+
+  it("dopisuje serie bez obciążenia, gdy plan podaje same powtórzenia", () => {
+    dodajDzienPlanu(db, {
+      kod: "T",
+      nazwa: "Masa własna",
+      dzien_tygodnia: null,
+      cwiczenia: [{ nazwa: "pompki", typ: "silowe", serie_cel: 3, powt_cel: "10" }],
+    });
+    rozpocznijTrening(db, { kod: "T", ts: "2026-08-24T09:00:00.000Z" });
+
+    odhaczCwiczenie(db, { cwiczenie: "pompki" });
+
+    const pompki = stanTreningu(db).wg_planu[0];
+    expect(pompki?.serie.map((s) => s.powtorzenia)).toEqual([10, 10, 10]);
+    expect(pompki?.serie[0]?.ciezar_kg).toBeNull();
+  });
+
+  it("nie dopisuje nic, gdy ćwiczenie jest już ukończone", () => {
+    planA();
+    przeszlyTrening(100);
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+    for (let i = 0; i < 5; i += 1) {
+      zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100 });
+    }
+
+    odhaczCwiczenie(db, { cwiczenie: "przysiad" });
+
+    expect(przysiad()?.serie_zrobione).toBe(5);
+  });
+
+  it("wymaga liczby serii przy ćwiczeniu spoza planu", () => {
+    planA();
+    przeszlyTrening(100);
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "podciąganie", powtorzenia: 8 });
+
+    expect(() => odhaczCwiczenie(db, { cwiczenie: "podciąganie" })).toThrow(/seri/i);
+  });
+
+  it("odmawia, gdy nie ma z czego złożyć propozycji", () => {
+    dodajDzienPlanu(db, {
+      kod: "X",
+      nazwa: "Bez celów",
+      dzien_tygodnia: null,
+      cwiczenia: [{ nazwa: "wiosłowanie", typ: "silowe" }],
+    });
+    rozpocznijTrening(db, { kod: "X", ts: "2026-08-24T09:00:00.000Z" });
+
+    expect(() => odhaczCwiczenie(db, { cwiczenie: "wiosłowanie", ile: 3 })).toThrow(/ręcznie/i);
   });
 });
 
