@@ -445,6 +445,21 @@ label {
   margin: 0 0 20px;
 }
 
+.blad-formularza {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--blad) 14%, transparent);
+  border: 1px solid var(--blad);
+  color: var(--blad);
+  font-size: 0.88rem;
+}
+
+.przycisk[disabled] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 [hidden] {
   display: none !important;
 }

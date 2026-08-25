@@ -17,20 +17,37 @@ let stan = {};
 
 // === Warstwa komunikacji ================================================
 
+/** Błąd niosący kod odpowiedzi — pozwala odróżnić złe hasło od awarii sieci. */
+class BladApi extends Error {
+  constructor(komunikat, status) {
+    super(komunikat);
+    this.status = status;
+  }
+}
+
 async function api(sciezka, opcje = {}) {
-  const odpowiedz = await fetch(`/api${sciezka}`, {
-    headers: { "content-type": "application/json" },
-    ...opcje,
-    body: opcje.dane === undefined ? opcje.body : JSON.stringify(opcje.dane),
-  });
+  let odpowiedz;
+  try {
+    odpowiedz = await fetch(`/api${sciezka}`, {
+      headers: { "content-type": "application/json" },
+      ...opcje,
+      body: opcje.dane === undefined ? opcje.body : JSON.stringify(opcje.dane),
+    });
+  } catch {
+    // Brak sieci albo serwer nie odpowiada — to zupełnie inna sytuacja
+    // niż odrzucone hasło i użytkownik musi ją odróżnić.
+    throw new BladApi("Brak połączenia z serwerem", 0);
+  }
 
   if (odpowiedz.status === 401) {
-    pokazLogowanie();
-    throw new Error("Wymagane logowanie");
+    // Przy samym logowaniu nie przerzucamy ekranu — użytkownik już na nim jest,
+    // a przeładowanie skasowałoby wpisane hasło.
+    if (!opcje.bezPrzekierowania) pokazLogowanie();
+    throw new BladApi("Wymagane logowanie", 401);
   }
 
   const tresc = await odpowiedz.json().catch(() => ({}));
-  if (!odpowiedz.ok) throw new Error(tresc.blad ?? "Coś poszło nie tak");
+  if (!odpowiedz.ok) throw new BladApi(tresc.blad ?? "Coś poszło nie tak", odpowiedz.status);
   return tresc;
 }
 
@@ -507,15 +524,41 @@ function pokazLogowanie() {
 
 document.getElementById("formularz-logowania")?.addEventListener("submit", async (zdarzenie) => {
   zdarzenie.preventDefault();
-  const haslo = document.getElementById("haslo").value;
+
+  const pole = document.getElementById("haslo");
+  const przycisk = document.getElementById("przycisk-zaloguj");
+  const blad = document.getElementById("blad-logowania");
+  const haslo = pole.value.trim();
+
+  const pokazBlad = (tekst) => {
+    blad.textContent = tekst;
+    blad.hidden = false;
+  };
+
+  blad.hidden = true;
+
+  if (!haslo) return pokazBlad("Wpisz hasło.");
+
+  // Widoczna informacja, że coś się dzieje — bez tego przy wolnej sieci
+  // przycisk sprawia wrażenie martwego.
+  przycisk.disabled = true;
+  przycisk.textContent = "Logowanie…";
 
   try {
-    await api("/logowanie", { method: "POST", dane: { haslo } });
+    await api("/logowanie", { method: "POST", dane: { haslo }, bezPrzekierowania: true });
     ekranLogowania.hidden = true;
     aplikacja.hidden = false;
     await odswiez();
-  } catch {
-    komunikat("Nieprawidłowe hasło", true);
+  } catch (problem) {
+    pokazBlad(
+      problem.status === 401
+        ? "Nieprawidłowe hasło. Sprawdź wielkość liter."
+        : (problem.message ?? "Nie udało się zalogować"),
+    );
+    pole.select?.();
+  } finally {
+    przycisk.disabled = false;
+    przycisk.textContent = "Zaloguj";
   }
 });
 

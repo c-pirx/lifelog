@@ -19,9 +19,22 @@
         <h1>Asystent</h1>
         <p>Dziennik diety i treningów.</p>
         <label for="haslo">Hasło</label>
-        <input id="haslo" type="password" autocomplete="current-password" required />
+        <input
+          id="haslo"
+          name="haslo"
+          type="password"
+          autocomplete="current-password"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+        <!-- Błąd pokazujemy tutaj, a nie komunikatem na dole ekranu:
+             na telefonie dół zasłania klawiatura i wyglądałoby to tak,
+             jakby przycisk nie działał. -->
+        <p id="blad-logowania" class="blad-formularza" hidden></p>
         <div class="przyciski">
-          <button class="przycisk glowny" type="submit">Zaloguj</button>
+          <button class="przycisk glowny" type="submit" id="przycisk-zaloguj">Zaloguj</button>
         </div>
       </form>
     </div>
