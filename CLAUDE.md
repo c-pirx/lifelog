@@ -58,6 +58,19 @@ ssh asystent 'bash /opt/asystent/wdrozenie/02-aplikacja.sh'
 — niezacommitowane zmiany nie pojadą. To celowe: chroni przed wysłaniem
 lokalnego `.env`.
 
+### Gałęzie
+
+**Na produkcję i na GitHuba jedzie wyłącznie `master`.** Pilnuje tego zapora
+w `wyslij.sh` — skrypt pakuje HEAD katalogu, z którego go uruchomiono, więc
+odpalony z gałęzi roboczej wysłałby kod spoza historii master i wersje by się
+rozjechały (raz się to zdarzyło; wyszło dobrze tylko dlatego, że różnica była
+czystym przewinięciem).
+
+Praca bieżąca idzie na gałęziach roboczych — Claude Code zakłada je we własnych
+worktree w `.claude/worktrees/`. Gotową pracę scala się do master przewinięciem
+(`git merge --ff-only`), a gałąź po scaleniu usuwa. Jedna gałąź robocza naraz;
+zaległe gałęzie wskazujące na scalone commity to szum, nie kopia zapasowa.
+
 Szczegóły, układ katalogów i odtwarzanie bazy z kopii: [wdrozenie/README.md](wdrozenie/README.md).
 
 Sekrety produkcyjne: `/etc/asystent/env` na serwerze. **Nie ma ich w kopiach

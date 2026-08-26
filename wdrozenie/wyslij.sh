@@ -16,6 +16,17 @@ set -euo pipefail
 HOST="${1:-asystent}"
 KATALOG_KODU=/opt/asystent
 
+# Na produkcję jedzie wyłącznie master. Skrypt pakuje HEAD katalogu, z którego
+# go uruchomiono — bez tej zapory wdrożenie z gałęzi roboczej albo z worktree
+# wysłałoby kod, którego nie ma w historii master, i wersje by się rozjechały.
+# Świadome odstępstwo: WYMUS_GALAZ=1 bash wdrozenie/wyslij.sh
+GALAZ=$(git rev-parse --abbrev-ref HEAD)
+if [ "$GALAZ" != "master" ] && [ "${WYMUS_GALAZ:-}" != "1" ]; then
+  echo "STOP: wdrażamy wyłącznie z gałęzi master, a tu jest: $GALAZ"
+  echo "Scal zmiany do master i uruchom ponownie."
+  exit 1
+fi
+
 if [ -n "$(git status --porcelain)" ]; then
   echo "UWAGA: masz niezapisane zmiany. Wysyłam ostatni commit, nie katalog roboczy."
   echo
