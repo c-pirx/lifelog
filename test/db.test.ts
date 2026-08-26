@@ -1,6 +1,31 @@
+import Database from "better-sqlite3";
+import { readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { otworzBaze, uruchomMigracje } from "../src/db/index.js";
+
+/** Katalog migracji liczony od tego pliku — w git worktree cwd bywa gdzie indziej. */
+const KATALOG_MIGRACJI = fileURLToPath(new URL("../migrations/", import.meta.url));
+
+/**
+ * Baza doprowadzona do stanu sprzed wskazanej migracji: wszystkie wcześniejsze
+ * pliki zastosowane i odnotowane, tak jakby stała na starej wersji aplikacji.
+ */
+function bazaPrzedMigracja(nazwaMigracji: string) {
+  const db = new Database(":memory:");
+  db.pragma("foreign_keys = ON");
+  db.exec("CREATE TABLE _migracje (nazwa TEXT PRIMARY KEY, zastosowano TEXT NOT NULL)");
+
+  const zapisz = db.prepare("INSERT INTO _migracje (nazwa, zastosowano) VALUES (?, ?)");
+  for (const nazwa of readdirSync(KATALOG_MIGRACJI).filter((n) => n.endsWith(".sql")).sort()) {
+    if (nazwa >= nazwaMigracji) break;
+    db.exec(readFileSync(KATALOG_MIGRACJI + nazwa, "utf8"));
+    zapisz.run(nazwa, "2026-01-01T00:00:00.000Z");
+  }
+
+  return db;
+}
 
 describe("migracje", () => {
   it("tworzą komplet tabel w pustej bazie", () => {
@@ -16,6 +41,7 @@ describe("migracje", () => {
       "posilki",
       "pozycje_posilku",
       "cwiczenia",
+      "plany",
       "dni_planu",
       "cwiczenia_w_dniu",
       "sesje",
@@ -32,7 +58,104 @@ describe("migracje", () => {
   });
 });
 
+describe("migracja 0004 — plany", () => {
+  /** Baza sprzed migracji, z dniem planu i rozegraną na nim sesją. */
+  function bazaZHistoria() {
+    const db = bazaPrzedMigracja("0004");
+
+    const dzien = db
+      .prepare("INSERT INTO dni_planu (kod, nazwa, dzien_tygodnia) VALUES ('A', 'Nogi', 1)")
+      .run();
+    db.prepare(
+      `INSERT INTO sesje (dzien_id, start_ts, data_lokalna, status)
+       VALUES (?, '2026-08-17T09:00:00.000Z', '2026-08-17', 'zakonczona')`,
+    ).run(dzien.lastInsertRowid);
+
+    return { db, dzienId: Number(dzien.lastInsertRowid) };
+  }
+
+  it("zawija istniejące dni w jeden plan domyślny", () => {
+    const { db, dzienId } = bazaZHistoria();
+
+    uruchomMigracje(db);
+
+    const plan = db
+      .prepare<[], { nazwa: string; domyslny: number }>("SELECT nazwa, domyslny FROM plany")
+      .get();
+    expect(plan?.domyslny).toBe(1);
+
+    const dzien = db
+      .prepare<[number], { plan_id: number }>("SELECT plan_id FROM dni_planu WHERE id = ?")
+      .get(dzienId);
+    expect(dzien?.plan_id).toBeGreaterThan(0);
+  });
+
+  it("nie osierocia sesji przy przebudowie tabeli dni", () => {
+    const { db, dzienId } = bazaZHistoria();
+
+    uruchomMigracje(db);
+
+    const sesja = db
+      .prepare<[], { dzien_id: number }>("SELECT dzien_id FROM sesje")
+      .get();
+    expect(sesja?.dzien_id).toBe(dzienId);
+    expect(db.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("przywraca kontrolę klucza obcego po migracjach", () => {
+    const { db } = bazaZHistoria();
+
+    uruchomMigracje(db);
+
+    expect(db.pragma("foreign_keys", { simple: true })).toBe(1);
+  });
+});
+
 describe("więzy schematu", () => {
+  it("dopuszczają tylko jeden plan domyślny", () => {
+    const db = otworzBaze({ sciezka: ":memory:" });
+    const wstaw = db.prepare("INSERT INTO plany (nazwa, domyslny) VALUES (?, 1)");
+
+    wstaw.run("Pierwszy");
+    expect(() => wstaw.run("Drugi")).toThrow();
+  });
+
+  it("pozwalają dwóm planom mieć dzień o tym samym kodzie", () => {
+    const db = otworzBaze({ sciezka: ":memory:" });
+    const plan = db.prepare("INSERT INTO plany (nazwa, domyslny) VALUES (?, 0)");
+    const pierwszy = plan.run("PPL");
+    const drugi = plan.run("Full body");
+
+    const dzien = db.prepare("INSERT INTO dni_planu (plan_id, kod, nazwa) VALUES (?, 'A', 'Nogi')");
+    dzien.run(pierwszy.lastInsertRowid);
+
+    expect(() => dzien.run(drugi.lastInsertRowid)).not.toThrow();
+  });
+
+  it("nie pozwalają powtórzyć kodu dnia w jednym planie", () => {
+    const db = otworzBaze({ sciezka: ":memory:" });
+    const plan = db.prepare("INSERT INTO plany (nazwa, domyslny) VALUES ('PPL', 0)").run();
+
+    const dzien = db.prepare("INSERT INTO dni_planu (plan_id, kod, nazwa) VALUES (?, 'A', ?)");
+    dzien.run(plan.lastInsertRowid, "Nogi");
+
+    expect(() => dzien.run(plan.lastInsertRowid, "Inne nogi")).toThrow();
+  });
+
+  it("usuwają dni razem z planem (kaskada)", () => {
+    const db = otworzBaze({ sciezka: ":memory:" });
+    const plan = db.prepare("INSERT INTO plany (nazwa, domyslny) VALUES ('PPL', 0)").run();
+    db.prepare("INSERT INTO dni_planu (plan_id, kod, nazwa) VALUES (?, 'A', 'Nogi')").run(
+      plan.lastInsertRowid,
+    );
+
+    db.prepare("DELETE FROM plany WHERE id = ?").run(plan.lastInsertRowid);
+
+    expect(db.prepare<[], { ile: number }>("SELECT COUNT(*) AS ile FROM dni_planu").get()?.ile).toBe(
+      0,
+    );
+  });
+
   it("nie pozwalają na dwie aktywne sesje naraz", () => {
     const db = otworzBaze({ sciezka: ":memory:" });
     const wstaw = db.prepare(

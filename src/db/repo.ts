@@ -56,10 +56,18 @@ export type WierszCwiczenia = {
 
 export type WierszDniaPlanu = {
   id: number;
+  plan_id: number;
   kod: string;
   nazwa: string;
   dzien_tygodnia: number | null;
   aktywny: number;
+};
+
+export type WierszPlanu = {
+  id: number;
+  nazwa: string;
+  opis: string | null;
+  domyslny: number;
 };
 
 export type WierszCwiczeniaWDniu = {
@@ -316,22 +324,77 @@ export function wszystkieCwiczenia(db: Baza): WierszCwiczenia[] {
 
 // === PLAN TRENINGOWY ====================================================
 
-const KOLUMNY_DNIA = "id, kod, nazwa, dzien_tygodnia, aktywny";
+const KOLUMNY_PLANU = "id, nazwa, opis, domyslny";
 
-export function dniPlanu(db: Baza): WierszDniaPlanu[] {
+/** Plan domyślny zawsze pierwszy — to on rządzi harmonogramem i zakładką. */
+export function plany(db: Baza): WierszPlanu[] {
   return db
-    .prepare<[], WierszDniaPlanu>(
-      `SELECT ${KOLUMNY_DNIA} FROM dni_planu ORDER BY dzien_tygodnia IS NULL, dzien_tygodnia, kod`,
-    )
+    .prepare<[], WierszPlanu>(`SELECT ${KOLUMNY_PLANU} FROM plany ORDER BY domyslny DESC, id`)
     .all();
 }
 
-export function dzienPlanuPoKodzie(db: Baza, kod: string): WierszDniaPlanu | undefined {
+export function planPoId(db: Baza, id: number): WierszPlanu | undefined {
+  return db.prepare<[number], WierszPlanu>(`SELECT ${KOLUMNY_PLANU} FROM plany WHERE id = ?`).get(id);
+}
+
+export function planPoNazwie(db: Baza, nazwa: string): WierszPlanu | undefined {
   return db
-    .prepare<[string], WierszDniaPlanu>(
-      `SELECT ${KOLUMNY_DNIA} FROM dni_planu WHERE kod = ? COLLATE NOCASE`,
+    .prepare<[string], WierszPlanu>(
+      `SELECT ${KOLUMNY_PLANU} FROM plany WHERE nazwa = ? COLLATE NOCASE`,
     )
-    .get(kod);
+    .get(nazwa);
+}
+
+export function planDomyslny(db: Baza): WierszPlanu | undefined {
+  return db.prepare<[], WierszPlanu>(`SELECT ${KOLUMNY_PLANU} FROM plany WHERE domyslny = 1`).get();
+}
+
+export function wstawPlan(db: Baza, nazwa: string, opis: string | null, domyslny: boolean): number {
+  const wynik = db
+    .prepare("INSERT INTO plany (nazwa, opis, domyslny) VALUES (?, ?, ?)")
+    .run(nazwa, opis, domyslny ? 1 : 0);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function aktualizujPlan(
+  db: Baza,
+  id: number,
+  pola: Partial<{ nazwa: string; opis: string | null; domyslny: number }>,
+): number {
+  const klucze = Object.keys(pola);
+  if (klucze.length === 0) return 0;
+  const przypisania = klucze.map((k) => `${k} = @${k}`).join(", ");
+  return db.prepare(`UPDATE plany SET ${przypisania} WHERE id = @id`).run({ ...pola, id }).changes;
+}
+
+/** Zdejmuje flagę ze wszystkich planów. Wołane w transakcji razem z założeniem nowej. */
+export function wyczyscDomyslny(db: Baza): number {
+  return db.prepare("UPDATE plany SET domyslny = 0 WHERE domyslny = 1").run().changes;
+}
+
+const KOLUMNY_DNIA = "id, plan_id, kod, nazwa, dzien_tygodnia, aktywny";
+
+/** Bez `planId` — dni ze wszystkich planów; zakładka Trening potrzebuje kompletu. */
+export function dniPlanu(db: Baza, planId?: number): WierszDniaPlanu[] {
+  const warunek = planId === undefined ? "" : "WHERE plan_id = @planId";
+  return db
+    .prepare<{ planId?: number }, WierszDniaPlanu>(
+      `SELECT ${KOLUMNY_DNIA} FROM dni_planu ${warunek}
+       ORDER BY dzien_tygodnia IS NULL, dzien_tygodnia, kod`,
+    )
+    .all({ planId });
+}
+
+export function dzienPlanuPoKodzie(
+  db: Baza,
+  kod: string,
+  planId: number,
+): WierszDniaPlanu | undefined {
+  return db
+    .prepare<[string, number], WierszDniaPlanu>(
+      `SELECT ${KOLUMNY_DNIA} FROM dni_planu WHERE kod = ? COLLATE NOCASE AND plan_id = ?`,
+    )
+    .get(kod, planId);
 }
 
 export function dzienPlanuPoId(db: Baza, id: number): WierszDniaPlanu | undefined {
@@ -340,24 +403,48 @@ export function dzienPlanuPoId(db: Baza, id: number): WierszDniaPlanu | undefine
     .get(id);
 }
 
-export function dzienPlanuNaDzienTygodnia(db: Baza, dzien: number): WierszDniaPlanu | undefined {
+/**
+ * Harmonogram czyta wyłącznie plan domyślny. Bez tego zawężenia szablon
+ * z ustawionym dniem tygodnia potrafiłby przejąć poniedziałek.
+ */
+export function dzienPlanuNaDzienTygodnia(
+  db: Baza,
+  dzien: number,
+  planId: number,
+): WierszDniaPlanu | undefined {
   return db
-    .prepare<[number], WierszDniaPlanu>(
-      `SELECT ${KOLUMNY_DNIA} FROM dni_planu WHERE dzien_tygodnia = ? AND aktywny = 1`,
+    .prepare<[number, number], WierszDniaPlanu>(
+      `SELECT ${KOLUMNY_DNIA} FROM dni_planu
+       WHERE dzien_tygodnia = ? AND plan_id = ? AND aktywny = 1`,
     )
-    .get(dzien);
+    .get(dzien, planId);
 }
 
 export function wstawDzienPlanu(
   db: Baza,
+  planId: number,
   kod: string,
   nazwa: string,
   dzienTygodnia: number | null,
 ): number {
   const wynik = db
-    .prepare("INSERT INTO dni_planu (kod, nazwa, dzien_tygodnia) VALUES (?, ?, ?)")
-    .run(kod, nazwa, dzienTygodnia);
+    .prepare("INSERT INTO dni_planu (plan_id, kod, nazwa, dzien_tygodnia) VALUES (?, ?, ?, ?)")
+    .run(planId, kod, nazwa, dzienTygodnia);
   return Number(wynik.lastInsertRowid);
+}
+
+/**
+ * Gasi dni planu spoza podanej listy kodów zamiast je kasować — usunięcie
+ * wywróciłoby się na kluczu obcym, gdy dzień ma za sobą rozegrane sesje.
+ */
+export function wygasDniPozaLista(db: Baza, planId: number, kody: string[]): number {
+  const puste = kody.map(() => "?").join(", ") || "NULL";
+  return db
+    .prepare(
+      `UPDATE dni_planu SET aktywny = 0
+       WHERE plan_id = ? AND kod COLLATE NOCASE NOT IN (${puste})`,
+    )
+    .run(planId, ...kody).changes;
 }
 
 export function aktualizujDzienPlanu(

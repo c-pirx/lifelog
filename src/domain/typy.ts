@@ -124,8 +124,21 @@ export type CwiczenieWDniu = {
   ciezar_cel_kg: number | null;
 };
 
+/**
+ * Pojemnik na dni treningowe. Jeden plan jest domyślny — to on definiuje
+ * harmonogram tygodnia; pozostałe zostają szablonami do odpalenia z ręki.
+ */
+export type Plan = {
+  id: number;
+  nazwa: string;
+  opis: string | null;
+  domyslny: boolean;
+  dni: DzienPlanu[];
+};
+
 export type DzienPlanu = {
   id: number;
+  plan_id: number;
   kod: string;
   nazwa: string;
   dzien_tygodnia: number | null;

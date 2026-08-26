@@ -50,16 +50,46 @@ export function uruchomMigracje(db: Baza): string[] {
   const zastosowaneTeraz: string[] = [];
   const zapisz = db.prepare("INSERT INTO _migracje (nazwa, zastosowano) VALUES (?, ?)");
 
-  for (const migracja of wczytajMigracje()) {
-    if (juzZastosowane.has(migracja.nazwa)) continue;
+  /**
+   * Zdjęcie w SQLite więzu UNIQUE zadeklarowanego przy kolumnie wymaga
+   * przebudowy tabeli: nowa obok, kopia, DROP, RENAME. DROP na tabeli, do
+   * której prowadzą klucze obce, SQLite wykonuje jak skasowanie wszystkich
+   * wierszy i przerywa na naruszeniu więzów — dlatego migracje biegną
+   * z wyłączonym kluczem.
+   *
+   * Pragma jest bezczynna wewnątrz transakcji, a każda migracja jest w nią
+   * opakowana, więc przełącznik musi stać wokół całej pętli.
+   */
+  const kluczeWlaczone = db.pragma("foreign_keys", { simple: true }) === 1;
+  if (kluczeWlaczone) db.pragma("foreign_keys = OFF");
 
-    // Każda migracja jest atomowa: albo przechodzi w całości, albo wcale.
-    db.transaction(() => {
-      db.exec(migracja.sql);
-      zapisz.run(migracja.nazwa, new Date().toISOString());
-    })();
+  try {
+    for (const migracja of wczytajMigracje()) {
+      if (juzZastosowane.has(migracja.nazwa)) continue;
 
-    zastosowaneTeraz.push(migracja.nazwa);
+      // Każda migracja jest atomowa: albo przechodzi w całości, albo wcale.
+      db.transaction(() => {
+        db.exec(migracja.sql);
+        zapisz.run(migracja.nazwa, new Date().toISOString());
+      })();
+
+      zastosowaneTeraz.push(migracja.nazwa);
+    }
+  } finally {
+    if (kluczeWlaczone) db.pragma("foreign_keys = ON");
+  }
+
+  // To dopiero zamienia wyłączony klucz z ryzyka w kontrolę. Bez tego
+  // przebudowa mogłaby po cichu osierocić sesje, a błąd wyszedłby tygodnie
+  // później, przy pierwszym odczycie historii.
+  if (kluczeWlaczone && zastosowaneTeraz.length > 0) {
+    const osierocone = db.pragma("foreign_key_check") as unknown[];
+    if (osierocone.length > 0) {
+      throw new Error(
+        `Migracje (${zastosowaneTeraz.join(", ")}) zostawiły ${osierocone.length} ` +
+          "osieroconych wierszy — baza wymaga ręcznego sprawdzenia.",
+      );
+    }
   }
 
   return zastosowaneTeraz;

@@ -5,12 +5,16 @@ import {
   dodajDzienPlanu,
   historiaCwiczenia,
   odhaczCwiczenie,
+  planDomyslny,
   planTreningowy,
+  plany,
   propozycjaSerii,
   rozpocznijTrening,
   stanTreningu,
+  ustawPlanDomyslny,
   usunDzienPlanu,
   zakonczTrening,
+  zapiszPlan,
   zapiszSerie,
 } from "../src/domain/workouts.js";
 import type { Seria } from "../src/domain/typy.js";
@@ -100,6 +104,133 @@ describe("plan treningowy", () => {
     planA();
     expect(usunDzienPlanu(db, "A")).toBe(true);
     expect(planTreningowy(db)).toEqual([]);
+  });
+});
+
+describe("plany jako pojemniki na dni", () => {
+  /** Drugi plan z dniem o tym samym kodzie „A" co plan domyślny. */
+  function planSzablonowy() {
+    return zapiszPlan(db, {
+      nazwa: "PPL",
+      dni: [
+        { kod: "A", nazwa: "Push", dzien_tygodnia: 1, cwiczenia: [{ nazwa: "pompki" }] },
+      ],
+    });
+  }
+
+  it("pierwszy plan w bazie od razu przejmuje harmonogram", () => {
+    planA();
+    expect(planDomyslny(db)?.domyslny).toBe(true);
+  });
+
+  it("dwa plany mogą mieć dzień o tym samym kodzie", () => {
+    planA();
+    const szablon = planSzablonowy();
+
+    expect(szablon.dni[0]?.kod).toBe("A");
+    expect(plany(db)).toHaveLength(2);
+  });
+
+  it("kod bez wskazanego planu rozstrzyga się w planie domyślnym", () => {
+    planA();
+    planSzablonowy();
+
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-24T09:00:00.000Z" });
+
+    expect(stanTreningu(db).sesja?.dzien_nazwa).toBe("Nogi i klatka");
+  });
+
+  it("id dnia trafia we właściwy plan mimo tego samego kodu", () => {
+    planA();
+    const szablon = planSzablonowy();
+
+    rozpocznijTrening(db, { dzien_id: szablon.dni[0]?.id, ts: "2026-08-24T09:00:00.000Z" });
+
+    expect(stanTreningu(db).sesja?.dzien_nazwa).toBe("Push");
+  });
+
+  it("harmonogram pomija dni z planów niedomyślnych", () => {
+    planA();
+    planSzablonowy();
+
+    // Poniedziałek: oba plany mają na niego dzień, wygrać ma domyślny.
+    rozpocznijTrening(db, { ts: "2026-08-24T09:00:00.000Z" });
+
+    expect(stanTreningu(db).sesja?.dzien_nazwa).toBe("Nogi i klatka");
+  });
+
+  it("przełączenie planu domyślnego zmienia dzień z harmonogramu", () => {
+    planA();
+    planSzablonowy();
+
+    ustawPlanDomyslny(db, "PPL");
+    rozpocznijTrening(db, { ts: "2026-08-24T09:00:00.000Z" });
+
+    expect(stanTreningu(db).sesja?.dzien_nazwa).toBe("Push");
+    expect(plany(db)[0]?.nazwa).toBe("PPL");
+  });
+
+  it("zgłasza przełączenie na plan, którego nie ma", () => {
+    planA();
+    expect(() => ustawPlanDomyslny(db, "Nie istnieje")).toThrow(/plan/i);
+  });
+});
+
+describe("nadpisywanie planu", () => {
+  function planDwudniowy() {
+    return zapiszPlan(db, {
+      nazwa: "FBW",
+      dni: [
+        { kod: "A", nazwa: "Pierwszy", cwiczenia: [{ nazwa: "przysiad" }] },
+        { kod: "B", nazwa: "Drugi", cwiczenia: [{ nazwa: "wyciskanie" }] },
+      ],
+    });
+  }
+
+  it("gasi dzień nieobecny w nowej wersji zamiast go kasować", () => {
+    const plan = planDwudniowy();
+    const dzienB = plan.dni.find((d) => d.kod === "B");
+
+    zapiszPlan(db, {
+      nazwa: "FBW",
+      dni: [{ kod: "A", nazwa: "Pierwszy", cwiczenia: [{ nazwa: "przysiad" }] }],
+    });
+
+    expect(plany(db)[0]?.dni.map((d) => d.kod)).toEqual(["A"]);
+    // Wiersz zostaje w bazie, żeby sesje rozegrane na tym dniu miały na co wskazywać.
+    expect(
+      db
+        .prepare<[number], { aktywny: number }>("SELECT aktywny FROM dni_planu WHERE id = ?")
+        .get(dzienB?.id as number)?.aktywny,
+    ).toBe(0);
+  });
+
+  it("nie gubi historii treningów z wygaszonego dnia", () => {
+    const plan = planDwudniowy();
+    rozpocznijTrening(db, { dzien_id: plan.dni.find((d) => d.kod === "B")?.id, ts: "2026-08-20T09:00:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "wyciskanie", powtorzenia: 5, ciezar_kg: 80, ts: "2026-08-20T09:10:00.000Z" });
+    zakonczTrening(db, { ts: "2026-08-20T10:00:00.000Z" });
+
+    zapiszPlan(db, {
+      nazwa: "FBW",
+      dni: [{ kod: "A", nazwa: "Pierwszy", cwiczenia: [{ nazwa: "przysiad" }] }],
+    });
+
+    expect(historiaCwiczenia(db, "wyciskanie").serie).toHaveLength(1);
+  });
+
+  it("przywraca wygaszony dzień, gdy wraca do planu", () => {
+    planDwudniowy();
+    zapiszPlan(db, { nazwa: "FBW", dni: [{ kod: "A", nazwa: "Pierwszy", cwiczenia: [] }] });
+    zapiszPlan(db, {
+      nazwa: "FBW",
+      dni: [
+        { kod: "A", nazwa: "Pierwszy", cwiczenia: [] },
+        { kod: "B", nazwa: "Drugi", cwiczenia: [] },
+      ],
+    });
+
+    expect(plany(db)[0]?.dni.map((d) => d.kod)).toEqual(["A", "B"]);
   });
 });
 

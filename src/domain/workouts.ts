@@ -14,6 +14,7 @@ import type {
   CwiczenieWDniu,
   DzienPlanu,
   NowaSeria,
+  Plan,
   PostepCwiczenia,
   Propozycja,
   Seria,
@@ -69,13 +70,52 @@ export type NowyDzienPlanu = {
   kod: string;
   nazwa: string;
   dzien_tygodnia?: number | null;
+  /** Nazwa planu. Pominięta — dzień trafia do planu domyślnego. */
+  plan?: string;
   cwiczenia: NoweCwiczenieWPlanie[];
 };
+
+export type NowyPlan = {
+  nazwa: string;
+  opis?: string | null;
+  /** Czy plan ma od razu przejąć harmonogram. Pierwszy plan w bazie zawsze przejmuje. */
+  domyslny?: boolean;
+  dni: NowyDzienPlanu[];
+};
+
+const PIERWSZY_PLAN = "Mój plan";
+
+/**
+ * Plan, do którego trafia dzień bez wskazanej nazwy planu.
+ *
+ * W pustej bazie tworzy go od ręki: dyktowanie planu Claude'owi nie może
+ * wymagać osobnego kroku „najpierw załóż plan".
+ */
+function zapewnijPlan(db: Baza, nazwa?: string): repo.WierszPlanu {
+  if (nazwa !== undefined) {
+    const przycieta = nazwa.trim();
+    if (przycieta === "") throw new BladDomeny("Nazwa planu nie może być pusta", "pusta_nazwa_planu");
+
+    const istniejacy = repo.planPoNazwie(db, przycieta);
+    if (istniejacy) return istniejacy;
+
+    // Pierwszy plan w bazie od razu przejmuje harmonogram — inaczej aplikacja
+    // po dodaniu planu nadal twierdziłaby, że nie ma dziś czego trenować.
+    const id = repo.wstawPlan(db, przycieta, null, repo.planDomyslny(db) === undefined);
+    return repo.planPoId(db, id) as repo.WierszPlanu;
+  }
+
+  const domyslny = repo.planDomyslny(db);
+  if (domyslny) return domyslny;
+
+  const id = repo.wstawPlan(db, PIERWSZY_PLAN, null, true);
+  return repo.planPoId(db, id) as repo.WierszPlanu;
+}
 
 /**
  * Zapisuje dzień planu. Ponowne wywołanie z tym samym kodem nadpisuje dzień
  * w całości — plan jest dyktowany Claude'owi i łatwiej podać go od nowa,
- * niż opisywać różnicę.
+ * niż opisywać różnicę. Kod rozstrzyga się w obrębie planu, nie globalnie.
  */
 export function dodajDzienPlanu(db: Baza, dane: NowyDzienPlanu): DzienPlanu {
   const kod = dane.kod.trim();
@@ -90,34 +130,8 @@ export function dodajDzienPlanu(db: Baza, dane: NowyDzienPlanu): DzienPlanu {
   }
 
   const id = db.transaction(() => {
-    const istniejacy = repo.dzienPlanuPoKodzie(db, kod);
-
-    const dzienId = istniejacy
-      ? (repo.aktualizujDzienPlanu(db, istniejacy.id, {
-          kod,
-          nazwa: dane.nazwa,
-          dzien_tygodnia: dzienTyg,
-        }),
-        istniejacy.id)
-      : repo.wstawDzienPlanu(db, kod, dane.nazwa, dzienTyg);
-
-    repo.usunCwiczeniaWDniu(db, dzienId);
-
-    dane.cwiczenia.forEach((c, indeks) => {
-      const cwiczenie = zapewnijCwiczenie(db, c.nazwa, c.typ ?? "silowe", c.partia ?? null);
-      repo.wstawCwiczenieWDniu(db, {
-        dzien_id: dzienId,
-        cwiczenie_id: cwiczenie.id,
-        kolejnosc: indeks + 1,
-        serie_cel: c.serie_cel ?? null,
-        powt_cel: c.powt_cel ?? null,
-        czas_cel_s: c.czas_cel_s ?? null,
-        dystans_cel_m: c.dystans_cel_m ?? null,
-        ciezar_cel_kg: c.ciezar_cel_kg ?? null,
-      });
-    });
-
-    return dzienId;
+    const plan = zapewnijPlan(db, dane.plan);
+    return zapiszDzien(db, plan.id, { ...dane, kod, dzien_tygodnia: dzienTyg });
   })();
 
   const zapisany = dzienPlanuPoId(db, id);
@@ -125,9 +139,87 @@ export function dodajDzienPlanu(db: Baza, dane: NowyDzienPlanu): DzienPlanu {
   return zapisany;
 }
 
+/** Wspólne wnętrze zapisu dnia — używane pojedynczo i przy zapisie całego planu. */
+function zapiszDzien(db: Baza, planId: number, dane: NowyDzienPlanu): number {
+  const kod = dane.kod.trim();
+  const istniejacy = repo.dzienPlanuPoKodzie(db, kod, planId);
+
+  const dzienId = istniejacy
+    ? (repo.aktualizujDzienPlanu(db, istniejacy.id, {
+        kod,
+        nazwa: dane.nazwa,
+        dzien_tygodnia: dane.dzien_tygodnia ?? null,
+        // Dzień wracający do planu po nadpisaniu ma znów być widoczny.
+        aktywny: 1,
+      }),
+      istniejacy.id)
+    : repo.wstawDzienPlanu(db, planId, kod, dane.nazwa, dane.dzien_tygodnia ?? null);
+
+  repo.usunCwiczeniaWDniu(db, dzienId);
+
+  dane.cwiczenia.forEach((c, indeks) => {
+    const cwiczenie = zapewnijCwiczenie(db, c.nazwa, c.typ ?? "silowe", c.partia ?? null);
+    repo.wstawCwiczenieWDniu(db, {
+      dzien_id: dzienId,
+      cwiczenie_id: cwiczenie.id,
+      kolejnosc: indeks + 1,
+      serie_cel: c.serie_cel ?? null,
+      powt_cel: c.powt_cel ?? null,
+      czas_cel_s: c.czas_cel_s ?? null,
+      dystans_cel_m: c.dystans_cel_m ?? null,
+      ciezar_cel_kg: c.ciezar_cel_kg ?? null,
+    });
+  });
+
+  return dzienId;
+}
+
+/**
+ * Tworzy albo nadpisuje cały plan wraz z dniami.
+ *
+ * Dni nieobecne w nowej wersji **gasną** (`aktywny = 0`) zamiast zniknąć:
+ * usunięcie wywróciłoby się na kluczu obcym dokładnie wtedy, kiedy najbardziej
+ * boli — gdy dzień ma za sobą miesiące rozegranych sesji.
+ */
+export function zapiszPlan(db: Baza, dane: NowyPlan): Plan {
+  const nazwa = dane.nazwa.trim();
+  if (nazwa === "") throw new BladDomeny("Nazwa planu nie może być pusta", "pusta_nazwa_planu");
+
+  const id = db.transaction(() => {
+    const plan = zapewnijPlan(db, nazwa);
+    if (dane.opis !== undefined) repo.aktualizujPlan(db, plan.id, { opis: dane.opis });
+
+    for (const dzien of dane.dni) zapiszDzien(db, plan.id, dzien);
+    repo.wygasDniPozaLista(db, plan.id, dane.dni.map((d) => d.kod.trim()));
+
+    if (dane.domyslny) {
+      repo.wyczyscDomyslny(db);
+      repo.aktualizujPlan(db, plan.id, { domyslny: 1 });
+    }
+
+    return plan.id;
+  })();
+
+  return zbudujPlan(db, repo.planPoId(db, id) as repo.WierszPlanu);
+}
+
+/** Przełącza plan rządzący harmonogramem. Zdjęcie i założenie flagi w jednej transakcji. */
+export function ustawPlanDomyslny(db: Baza, nazwa: string): Plan {
+  const plan = repo.planPoNazwie(db, nazwa.trim());
+  if (!plan) throw new BladDomeny(`Nie znaleziono planu o nazwie "${nazwa}"`, "nieznany_plan");
+
+  db.transaction(() => {
+    repo.wyczyscDomyslny(db);
+    repo.aktualizujPlan(db, plan.id, { domyslny: 1 });
+  })();
+
+  return zbudujPlan(db, repo.planPoId(db, plan.id) as repo.WierszPlanu);
+}
+
 function zbudujDzien(wiersz: repo.WierszDniaPlanu, cwiczenia: repo.WierszCwiczeniaWDniu[]): DzienPlanu {
   return {
     id: wiersz.id,
+    plan_id: wiersz.plan_id,
     kod: wiersz.kod,
     nazwa: wiersz.nazwa,
     dzien_tygodnia: wiersz.dzien_tygodnia,
@@ -138,24 +230,55 @@ function zbudujDzien(wiersz: repo.WierszDniaPlanu, cwiczenia: repo.WierszCwiczen
   };
 }
 
+function zbudujPlan(db: Baza, wiersz: repo.WierszPlanu): Plan {
+  return {
+    id: wiersz.id,
+    nazwa: wiersz.nazwa,
+    opis: wiersz.opis,
+    domyslny: wiersz.domyslny === 1,
+    dni: repo
+      .dniPlanu(db, wiersz.id)
+      .filter((d) => d.aktywny === 1)
+      .map((d) => zbudujDzien(d, repo.cwiczeniaWDniu(db, d.id))),
+  };
+}
+
+/** Wszystkie plany z dniami; domyślny pierwszy. */
+export function plany(db: Baza): Plan[] {
+  return repo.plany(db).map((w) => zbudujPlan(db, w));
+}
+
+export function planDomyslny(db: Baza): Plan | null {
+  const wiersz = repo.planDomyslny(db);
+  return wiersz ? zbudujPlan(db, wiersz) : null;
+}
+
 function dzienPlanuPoId(db: Baza, id: number): DzienPlanu | null {
   const wiersz = repo.dzienPlanuPoId(db, id);
   if (!wiersz) return null;
   return zbudujDzien(wiersz, repo.cwiczeniaWDniu(db, id));
 }
 
-export function dzienPlanu(db: Baza, kod: string): DzienPlanu | null {
-  const wiersz = repo.dzienPlanuPoKodzie(db, kod);
+/** Dzień szukany w planie domyślnym, o ile nie wskazano innego. */
+export function dzienPlanu(db: Baza, kod: string, plan?: string): DzienPlanu | null {
+  const wPlanie = plan !== undefined ? repo.planPoNazwie(db, plan.trim()) : repo.planDomyslny(db);
+  if (!wPlanie) return null;
+
+  const wiersz = repo.dzienPlanuPoKodzie(db, kod, wPlanie.id);
   if (!wiersz) return null;
   return zbudujDzien(wiersz, repo.cwiczeniaWDniu(db, wiersz.id));
 }
 
+/** Dni planu domyślnego — to, co dotąd znaczyło „plan treningowy". */
 export function planTreningowy(db: Baza): DzienPlanu[] {
-  return repo.dniPlanu(db).map((w) => zbudujDzien(w, repo.cwiczeniaWDniu(db, w.id)));
+  return planDomyslny(db)?.dni ?? [];
 }
 
-export function usunDzienPlanu(db: Baza, kod: string): boolean {
-  const wiersz = repo.dzienPlanuPoKodzie(db, kod);
+export function usunDzienPlanu(db: Baza, kod: string, plan?: string): boolean {
+  const wPlanie = plan !== undefined ? repo.planPoNazwie(db, plan.trim()) : repo.planDomyslny(db);
+  if (!wPlanie) return false;
+
+  const wiersz = repo.dzienPlanuPoKodzie(db, kod, wPlanie.id);
   if (!wiersz) return false;
   return repo.usunDzienPlanu(db, wiersz.id) > 0;
 }
@@ -172,7 +295,14 @@ export function aktywnaSesja(db: Baza): Sesja | null {
 }
 
 export type OpcjeStartu = Opcje & {
+  /**
+   * Droga aplikacji: id jest jednoznaczne również wtedy, gdy dwa plany mają
+   * dzień o tym samym kodzie.
+   */
+  dzien_id?: number;
   kod?: string;
+  /** Plan, w którym szukać kodu. Pominięty — plan domyślny. */
+  plan?: string;
   /**
    * Sesja bez dnia planu — świadomie, a nie z braku kodu. Samo pominięcie
    * `kod` sięga do harmonogramu, więc w poniedziałek otworzyłoby dzień A
@@ -180,6 +310,55 @@ export type OpcjeStartu = Opcje & {
    */
   bez_planu?: boolean;
 };
+
+/**
+ * Który dzień otwiera sesja. Kolejność jest tu całą regułą: jawne wskazanie
+ * bije domyślanie się, a `bez_planu` bije wszystko.
+ */
+function dzienNaStart(
+  db: Baza,
+  opcje: OpcjeStartu,
+  ts: string,
+  strefa: string,
+): repo.WierszDniaPlanu | undefined {
+  if (opcje.bez_planu) return undefined;
+
+  if (opcje.dzien_id !== undefined) {
+    const dzien = repo.dzienPlanuPoId(db, opcje.dzien_id);
+    if (!dzien) {
+      throw new BladDomeny(`Nie znaleziono dnia planu o id ${opcje.dzien_id}`, "nieznany_dzien");
+    }
+    return dzien;
+  }
+
+  if (opcje.kod) {
+    const plan = opcje.plan !== undefined ? repo.planPoNazwie(db, opcje.plan.trim()) : repo.planDomyslny(db);
+    if (!plan) {
+      throw new BladDomeny(
+        opcje.plan !== undefined
+          ? `Nie znaleziono planu o nazwie "${opcje.plan}"`
+          : "Nie ma jeszcze żadnego planu treningowego",
+        "nieznany_plan",
+      );
+    }
+
+    const dzien = repo.dzienPlanuPoKodzie(db, opcje.kod, plan.id);
+    if (!dzien) {
+      throw new BladDomeny(
+        `Nie znaleziono dnia planu o kodzie "${opcje.kod}" w planie "${plan.nazwa}"`,
+        "nieznany_dzien",
+      );
+    }
+    return dzien;
+  }
+
+  // Harmonogram czyta wyłącznie plan domyślny — szablon z ustawionym dniem
+  // tygodnia nie ma prawa przejąć poniedziałku.
+  const domyslny = repo.planDomyslny(db);
+  return domyslny
+    ? repo.dzienPlanuNaDzienTygodnia(db, dzienTygodnia(ts, strefa), domyslny.id)
+    : undefined;
+}
 
 export function rozpocznijTrening(db: Baza, opcje: OpcjeStartu = {}): Sesja {
   const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
@@ -195,19 +374,7 @@ export function rozpocznijTrening(db: Baza, opcje: OpcjeStartu = {}): Sesja {
     );
   }
 
-  // Jawnie wskazany dzień ma pierwszeństwo; harmonogram jest tylko podpowiedzią,
-  // a bez_planu bije jedno i drugie.
-  const dzien = opcje.bez_planu
-    ? undefined
-    : opcje.kod
-      ? (repo.dzienPlanuPoKodzie(db, opcje.kod) ??
-        (() => {
-          throw new BladDomeny(
-            `Nie znaleziono dnia planu o kodzie "${opcje.kod}"`,
-            "nieznany_dzien",
-          );
-        })())
-      : repo.dzienPlanuNaDzienTygodnia(db, dzienTygodnia(ts, strefa));
+  const dzien = dzienNaStart(db, opcje, ts, strefa);
 
   const id = repo.wstawSesje(db, {
     dzien_id: dzien?.id ?? null,
