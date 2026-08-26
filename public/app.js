@@ -1512,6 +1512,102 @@ document.addEventListener("keydown", (zdarzenie) => {
   if (zdarzenie.key === "Escape" && menu && !menu.hidden) przelaczMenu(false);
 });
 
+// Szuflada słucha też palca: pociągnięcie od lewej krawędzi wysuwa ją,
+// pociągnięcie w lewo na otwartej — chowa. Panel podąża za palcem,
+// a o wyniku rozstrzyga, czy minął jedną trzecią swojej szerokości.
+
+const panelMenu = menu?.querySelector("aside");
+const KRAWEDZ_GESTU = 32;
+let gest = null;
+
+function przesunPanel(przesuniecie, szerokosc) {
+  panelMenu.style.transform = `translateX(${przesuniecie}px)`;
+  menu.style.opacity = String(1 + przesuniecie / szerokosc);
+}
+
+function dosunPanel(otworzyc, szerokosc) {
+  menu.classList.remove("przeciaganie");
+
+  if (otworzyc) {
+    panelMenu.style.transform = "";
+    menu.style.opacity = "";
+    przelaczMenu(true);
+    return;
+  }
+
+  // hidden dopiero po dojechaniu panelu do krawędzi — natychmiastowe
+  // schowanie ucinałoby animację w miejscu, w którym palec puścił.
+  let sprzatniete = false;
+  const sprzatnij = () => {
+    if (sprzatniete) return;
+    sprzatniete = true;
+    przelaczMenu(false);
+    panelMenu.style.transform = "";
+    menu.style.opacity = "";
+  };
+  panelMenu.addEventListener("transitionend", sprzatnij, { once: true });
+  // Panel stojący już u celu nie wyśle transitionend — bez zapasowego
+  // timera niewidoczne tło zostałoby na wierzchu i łapało stuknięcia.
+  setTimeout(sprzatnij, 300);
+  requestAnimationFrame(() => przesunPanel(-szerokosc, szerokosc));
+}
+
+document.addEventListener(
+  "touchstart",
+  (zdarzenie) => {
+    if (!menu || !panelMenu || zdarzenie.touches.length !== 1) return;
+    const { clientX, clientY } = zdarzenie.touches[0];
+    const otwieranie = menu.hidden;
+    if (otwieranie && clientX > KRAWEDZ_GESTU) return;
+    gest = { startX: clientX, startY: clientY, otwieranie, aktywny: false, szerokosc: 0 };
+  },
+  { passive: true },
+);
+
+document.addEventListener(
+  "touchmove",
+  (zdarzenie) => {
+    if (!gest) return;
+    const { clientX, clientY } = zdarzenie.touches[0];
+    const dx = clientX - gest.startX;
+
+    if (!gest.aktywny) {
+      const dy = clientY - gest.startY;
+      if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+      // Ruch bardziej pionowy to przewijanie, a poziomy w złą stronę
+      // to nie gest szuflady — oba oddajemy przeglądarce.
+      const zlyKierunek = gest.otwieranie ? dx <= 0 : dx >= 0;
+      if (Math.abs(dy) > Math.abs(dx) || zlyKierunek) {
+        gest = null;
+        return;
+      }
+      if (gest.otwieranie) menu.hidden = false;
+      menu.classList.add("przeciaganie");
+      gest.aktywny = true;
+      gest.szerokosc = panelMenu.offsetWidth;
+    }
+
+    // Bez tego strona przewijałaby się równolegle z ciągniętą szufladą.
+    zdarzenie.preventDefault();
+    const cel = gest.otwieranie ? dx - gest.szerokosc : dx;
+    przesunPanel(Math.min(0, Math.max(-gest.szerokosc, cel)), gest.szerokosc);
+  },
+  { passive: false },
+);
+
+function zakonczGest(zdarzenie) {
+  if (!gest) return;
+  const { startX, otwieranie, aktywny, szerokosc } = gest;
+  gest = null;
+  if (!aktywny) return;
+
+  const dx = zdarzenie.changedTouches[0].clientX - startX;
+  dosunPanel(otwieranie ? dx > szerokosc / 3 : dx > -szerokosc / 3, szerokosc);
+}
+
+document.addEventListener("touchend", zakonczGest);
+document.addEventListener("touchcancel", zakonczGest);
+
 widok.addEventListener("click", (zdarzenie) => {
   const cel = zdarzenie.target;
 
