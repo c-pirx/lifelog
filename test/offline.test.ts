@@ -425,9 +425,12 @@ describe("wpis posiłku", () => {
 
     // Data dnia i wyjściowa godzina — bez nich app.js nie odróżni „godzina
     // zmieniona" od „godzina nietknięta" i nie zakotwiczy edycji w dniu wpisu.
-    expect(html).toContain('data-dzien="2026-08-25"');
+    // Nazwa data-dzien-wpisu jest celowa: goły data-dzien łapałby delegowany
+    // handler paska dat przy każdym stuknięciu w pole formularza.
+    expect(html).toContain('data-dzien-wpisu="2026-08-25"');
+    expect(html).not.toContain('data-dzien="');
     expect(html).toContain('data-godzina="08:15"');
-    expect(html).toContain('data-mial-pozycje="1"');
+    expect(html).toContain('data-ile-pozycji="2"');
     // Po wierszu na każdą pozycję plus przycisk dokładania.
     expect(html.match(/data-wiersz/g)).toHaveLength(2);
     expect(html).toContain("data-dodaj-wiersz");
@@ -437,9 +440,10 @@ describe("wpis posiłku", () => {
   it("posiłek bez rozbicia deklaruje to w formularzu", () => {
     const html = wpisPosilku({ ...posilek, pozycje: [] }, 5);
 
-    // Granica „wyczyść vs nie ruszaj" to obecność klucza w żądaniu — formularz
-    // bez tej flagi wysyłałby [] i „czyścił" rozbicie, którego nigdy nie było.
-    expect(html).toContain('data-mial-pozycje="0"');
+    // Granica „wyczyść vs nie ruszaj" to obecność klucza w żądaniu — bez
+    // licznika wierszy app.js nie odróżni nietkniętego edytora od jawnego
+    // wyczyszczenia rozbicia.
+    expect(html).toContain('data-ile-pozycji="0"');
   });
 
   it("wpis z kolejki nie dostaje przycisków edycji", () => {

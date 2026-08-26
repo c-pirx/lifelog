@@ -7,9 +7,10 @@
  * Stan (id posiłku otwartego do edycji) przychodzi parametrem z app.js.
  *
  * Granica „wyczyść rozbicie vs nie ruszaj" w żądaniu poprawki leży na
- * obecności klucza `pozycje` — stąd atrybut data-mial-pozycje na formularzu:
+ * obecności klucza `pozycje` — stąd atrybut data-ile-pozycji na formularzu:
  * bez niego skasowanie wszystkich wierszy nie dałoby się odróżnić od
- * formularza posiłku, który rozbicia nigdy nie miał.
+ * formularza posiłku, który rozbicia nigdy nie miał, a nietknięty edytor
+ * od jawnego zastąpienia tą samą listą.
  */
 
 const esc = (tekst) =>
@@ -87,8 +88,8 @@ export function wpisPosilku(p, edytowanyPosilek) {
   if (p.id === edytowanyPosilek) {
     return `
       <form id="edycja-posilku-${p.id}" data-posilek="${p.id}" class="wpis-edycja"
-            data-dzien="${esc(p.data_lokalna)}" data-godzina="${esc(p.godzina)}"
-            data-mial-pozycje="${p.pozycje?.length ? 1 : 0}">
+            data-dzien-wpisu="${esc(p.data_lokalna)}" data-godzina="${esc(p.godzina)}"
+            data-ile-pozycji="${p.pozycje?.length ?? 0}">
         <div class="pola">${polaPosilku(p, `e${p.id}-`)}</div>
         <div class="pozycje-edycja">
           <div class="cel">Składniki — makro całości przeliczy się z ich sumy</div>

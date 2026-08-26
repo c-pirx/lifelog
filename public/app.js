@@ -511,22 +511,61 @@ function czasEdycji(formularz) {
   const znormalizowana = `${dopasowanie[1].padStart(2, "0")}:${dopasowanie[2]}`;
   if (znormalizowana === formularz.dataset.godzina) return undefined;
 
-  return `${formularz.dataset.dzien} ${znormalizowana}`;
+  // Atrybut nazywa się dzien-wpisu, nie dzien — goły data-dzien na formularzu
+  // wpadałby w delegowany handler paska dat przy każdym stuknięciu w pole.
+  return `${formularz.dataset.dzienWpisu} ${znormalizowana}`;
+}
+
+/**
+ * Pola posiłku, które użytkownik faktycznie ZMIENIŁ (porównanie
+ * z defaultValue). Formularz edycji nie może wysyłać pól nietkniętych:
+ * jawnie podane kcal wygrywa z auto-sumą pozycji po stronie serwera,
+ * więc prefill z obecną wartością blokowałby przeliczanie na zawsze.
+ */
+function zmienioneMakro(formularz) {
+  const dane = {};
+  const zmienione = (nazwa) => {
+    const pole = formularz.elements[nazwa];
+    return pole && pole.value !== pole.defaultValue;
+  };
+
+  if (zmienione("opis") && formularz.elements.opis.value.trim()) {
+    dane.opis = formularz.elements.opis.value;
+  }
+  for (const nazwa of ["kcal", "bialko_g", "wegle_g", "tluszcz_g"]) {
+    if (!zmienione(nazwa)) continue;
+    const wartosc = liczbaZPola(formularz, nazwa);
+    if (wartosc !== undefined) dane[nazwa] = wartosc;
+  }
+  return dane;
 }
 
 /**
  * Pozycje z wierszy formularza edycji. Granica „wyczyść vs nie ruszaj" leży
  * na obecności klucza w żądaniu: undefined = rozbicia nie tykamy, [] = posiłek
  * miał pozycje i użytkownik skasował wszystkie wiersze.
+ *
+ * Nietknięty edytor nie wysyła klucza wcale — zastąpienie identyczną listą
+ * uruchomiłoby auto-sumę i po cichu przepisało nagłówek przy poprawce
+ * samego opisu.
  */
 function pozycjeZFormularza(formularz) {
+  const wiersze = [...formularz.querySelectorAll("[data-wiersz]")];
+
+  const nietkniety =
+    String(wiersze.length) === formularz.dataset.ilePozycji &&
+    wiersze.every((w) =>
+      [...w.querySelectorAll("input")].every((pole) => pole.value === pole.defaultValue),
+    );
+  if (nietkniety) return undefined;
+
   const liczba = (pole) => {
     const wartosc = pole?.value?.replace(",", ".").trim();
     return wartosc ? Number(wartosc) : undefined;
   };
 
   const pozycje = [];
-  for (const wiersz of formularz.querySelectorAll("[data-wiersz]")) {
+  for (const wiersz of wiersze) {
     const nazwa = wiersz.querySelector('[name="poz-nazwa"]')?.value?.trim();
     // Wiersz bez nazwy to niedokończony dodatek, nie składnik.
     if (!nazwa) continue;
@@ -540,7 +579,6 @@ function pozycjeZFormularza(formularz) {
     });
   }
 
-  if (pozycje.length === 0 && formularz.dataset.mialPozycje !== "1") return undefined;
   return pozycje;
 }
 
@@ -1930,13 +1968,21 @@ widok.addEventListener("submit", (zdarzenie) => {
 
   if (formularz.id.startsWith("edycja-posilku-")) {
     const id = Number(formularz.dataset.posilek);
-    const dane = makroZFormularza(formularz);
+    const dane = zmienioneMakro(formularz);
     const czas = czasEdycji(formularz);
     if (czas) dane.czas = czas;
     const pozycje = pozycjeZFormularza(formularz);
     if (pozycje !== undefined) dane.pozycje = pozycje;
 
     edytowanyPosilek = null;
+
+    // Nic nie zmieniono — zamykamy formularz bez żądania, zamiast łapać
+    // od serwera błąd „brak zmian".
+    if (Object.keys(dane).length === 0) {
+      odswiez().catch((blad) => komunikat(blad.message, true));
+      return;
+    }
+
     akcja(
       () =>
         api("/wpis", {
