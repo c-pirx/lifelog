@@ -2,11 +2,12 @@
 
 export type Pora = "sniadanie" | "obiad" | "kolacja" | "przekaska";
 export type ZrodloWpisu = "czat" | "zdjecie" | "apka";
-export type Pewnosc = "dokladne" | "szacowane";
+export type Pewnosc = "dokladne" | "szacowane" | "niepewne";
 export type TypCwiczenia = "silowe" | "cardio" | "na_czas";
 export type StatusSesji = "aktywna" | "zakonczona" | "porzucona";
 
 export const PORY: readonly Pora[] = ["sniadanie", "obiad", "kolacja", "przekaska"];
+export const PEWNOSCI: readonly Pewnosc[] = ["dokladne", "szacowane", "niepewne"];
 export const TYPY_CWICZEN: readonly TypCwiczenia[] = ["silowe", "cardio", "na_czas"];
 
 /** Cztery liczby opisujące wartość odżywczą. */
@@ -98,7 +99,10 @@ export type PodsumowanieDnia = {
   /** Ile procent celu kalorycznego zrealizowano; null gdy brak celów. */
   procent_kcal: number | null;
   posilki: Posilek[];
+  /** Wpisy oparte na szacunku — wszystko poza `dokladne`. */
   ile_szacowanych: number;
+  /** Podzbiór szacowanych: wpisy z najniższą pewnością. */
+  ile_niepewnych: number;
 };
 
 // === TRENING ============================================================

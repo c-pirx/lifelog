@@ -234,6 +234,7 @@ export function podsumowanieDnia(db: Baza, data?: string, opcje: Opcje = {}): Po
     pozostalo: cele ? odejmijMakro(cele, spozyte) : null,
     procent_kcal: cele && cele.kcal > 0 ? Math.round((spozyte.kcal / cele.kcal) * 100) : null,
     posilki,
-    ile_szacowanych: posilki.filter((p) => p.pewnosc === "szacowane").length,
+    ile_szacowanych: posilki.filter((p) => p.pewnosc !== "dokladne").length,
+    ile_niepewnych: posilki.filter((p) => p.pewnosc === "niepewne").length,
   };
 }

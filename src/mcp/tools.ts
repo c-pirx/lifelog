@@ -16,7 +16,7 @@ import { zmienWpis } from "../domain/edits.js";
 import { trendWagi, zapiszWage } from "../domain/metrics.js";
 import { dopiszKomentarz, raport, zapewnijRaporty } from "../domain/raporty.js";
 import type { PostepCwiczenia } from "../domain/typy.js";
-import { PORY, TYPY_CWICZEN } from "../domain/typy.js";
+import { PEWNOSCI, PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
@@ -114,16 +114,19 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       title: "Zapisz posiłek",
       description:
         "Zapisuje zjedzony posiłek wraz z makroskładnikami.\n\n" +
-        "ZASADA SZACOWANIA — stosuj ją zawsze:\n" +
-        "• Opis konkretny (podana gramatura lub jednoznaczny produkt, np. „200 g piersi z kurczaka”, " +
-        "„owsianka 80 g z bananem”): oszacuj makro i zapisz OD RAZU z pewnosc='dokladne'.\n" +
-        "• Opis ogólnikowy („zjadłem obiad”, „coś u mamy”, „kanapki”): NAJPIERW dopytaj o skład " +
-        "i wielkość porcji. Dopiero gdy użytkownik nie potrafi doprecyzować, zapisz najlepsze " +
-        "oszacowanie z pewnosc='szacowane'.\n\n" +
+        "ZASADA SZACOWANIA — trzy poziomy pewności, stosuj ją zawsze:\n" +
+        "• pewnosc='dokladne' — podana gramatura, etykieta lub jednoznaczny produkt " +
+        "(„200 g piersi z kurczaka”): oszacuj makro i zapisz OD RAZU.\n" +
+        "• pewnosc='szacowane' — opis konkretny, ale bez wag („owsianka z bananem i masłem " +
+        "orzechowym”): oszacuj porcje i zapisz OD RAZU.\n" +
+        "• pewnosc='niepewne' — ogólnik („zjadłem obiad u mamy”) albo zdjęcie bez szczegółów: " +
+        "NAJPIERW dopytaj o skład i wielkość porcji. Dopiero gdy użytkownik nie potrafi " +
+        "doprecyzować, zapisz najlepsze oszacowanie z pewnosc='niepewne'.\n\n" +
         "ZAWSZE podaj w odpowiedzi przyjęte wartości, żeby użytkownik mógł je poprawić jednym zdaniem. " +
         "W polu surowe_wejscie umieść oryginalną wypowiedź użytkownika — pozwoli to później przeliczyć " +
-        "posiłek bez zgadywania. Rozbicie na składniki (pozycje) jest opcjonalne; suma z pól głównych " +
-        "i tak decyduje o podsumowaniu dnia.",
+        "posiłek bez zgadywania. Gdy użytkownik wymienia składniki, podaj je w pozycje z makro każdego " +
+        "z osobna — pozwoli to później poprawiać pojedynczy składnik zamiast całego posiłku. " +
+        "Suma z pól głównych i tak decyduje o podsumowaniu dnia.",
       inputSchema: {
         opis: z.string().describe("Krótki opis posiłku, np. „kurczak z ryżem i brokułami”"),
         kcal: z.number().describe("Kalorie całego posiłku"),
@@ -136,7 +139,7 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
           .describe("Pomiń, aby wywnioskować z godziny"),
         czas: z.string().optional().describe(OPIS_CZASU),
         pewnosc: z
-          .enum(["dokladne", "szacowane"])
+          .enum(PEWNOSCI as unknown as [string, ...string[]])
           .optional()
           .describe("Patrz zasada szacowania w opisie narzędzia. Domyślnie 'szacowane'."),
         zrodlo: z
@@ -159,7 +162,7 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
             tluszcz_g: args.tluszcz_g,
             pora: args.pora as never,
             ts: czas(args.czas),
-            pewnosc: args.pewnosc,
+            pewnosc: args.pewnosc as never,
             zrodlo: args.zrodlo,
             surowe_wejscie: args.surowe_wejscie,
             pozycje: args.pozycje,
@@ -606,7 +609,7 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
             wegle_g: z.number().optional(),
             tluszcz_g: z.number().optional(),
             pora: z.enum(PORY as unknown as [string, ...string[]]).optional(),
-            pewnosc: z.enum(["dokladne", "szacowane"]).optional(),
+            pewnosc: z.enum(PEWNOSCI as unknown as [string, ...string[]]).optional(),
             powtorzenia: z.number().int().optional(),
             ciezar_kg: z.number().optional(),
             czas_s: z.number().int().optional(),

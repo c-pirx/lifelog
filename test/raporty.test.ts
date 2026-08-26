@@ -168,6 +168,47 @@ describe("liczby w raporcie", () => {
     expect(raport(db, TYDZIEN_3)?.dieta.ile_szacowanych).toBe(1);
   });
 
+  it("wlicza niepewne do szacowanych i liczy je też osobno", () => {
+    posilek(TYDZIEN_3, 2000, { pewnosc: "dokladne" });
+    posilek("2026-08-17", 2000, { pewnosc: "szacowane" });
+    posilek("2026-08-18", 2000, { pewnosc: "niepewne" });
+
+    zapewnijRaporty(db, { teraz: WTOREK });
+
+    const dieta = raport(db, TYDZIEN_3)?.dieta;
+    expect(dieta?.ile_szacowanych).toBe(2);
+    expect(dieta?.ile_niepewnych).toBe(1);
+  });
+
+  it("czyta starą migawkę bez pola ile_niepewnych", () => {
+    // Raporty sprzed trzeciego poziomu pewności zostają w bazie na zawsze —
+    // migawek nie przeliczamy, więc odczyt nie może na nich wybuchnąć.
+    db.prepare(
+      `INSERT INTO raporty_tygodniowe (tydzien_od, tydzien_do, dane, utworzono)
+       VALUES (?, ?, ?, ?)`,
+    ).run(
+      TYDZIEN_1,
+      "2026-08-08",
+      JSON.stringify({
+        dieta: {
+          dni_z_zapisem: 3,
+          srednie: { kcal: 2000, bialko_g: 150, wegle_g: 200, tluszcz_g: 70 },
+          cel_dzienny: null,
+          dni_w_celu: 0,
+          ile_szacowanych: 2,
+        },
+        waga: { start: null, koniec: null, zmiana_kg: null },
+        trening: { sesje: 0, sesje_w_planie: 0, serie: 0, objetosc_kg: 0, cwiczenia: [] },
+        zmiana: null,
+      }),
+      "2026-08-09T07:01:00.000Z",
+    );
+
+    const stary = raport(db, TYDZIEN_1);
+    expect(stary?.dieta.ile_szacowanych).toBe(2);
+    expect(stary?.dieta.ile_niepewnych).toBeUndefined();
+  });
+
   it("objętość liczy wyłącznie z serii siłowych", () => {
     posilek(TYDZIEN_3, 2000);
     trening(TYDZIEN_3, [

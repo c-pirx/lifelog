@@ -26,7 +26,8 @@ export function makroWTekscie(m: Makro): string {
 }
 
 export function posilekWTekscie(p: Posilek): string {
-  const znacznik = p.pewnosc === "szacowane" ? " (szacunek)" : "";
+  const znacznik =
+    p.pewnosc === "szacowane" ? " (szacunek)" : p.pewnosc === "niepewne" ? " (niepewne)" : "";
   return `#${p.id} ${p.godzina} ${p.pora}: ${p.opis} — ${makroWTekscie(p)}${znacznik}`;
 }
 
@@ -59,7 +60,8 @@ export function podsumowanieWTekscie(d: PodsumowanieDnia): string {
   }
 
   if (d.ile_szacowanych > 0) {
-    linie.push("", `Wpisów opartych na szacunku: ${d.ile_szacowanych}.`);
+    const niepewne = d.ile_niepewnych > 0 ? `, w tym niepewnych: ${d.ile_niepewnych}` : "";
+    linie.push("", `Wpisów opartych na szacunku: ${d.ile_szacowanych}${niepewne}.`);
   }
 
   return linie.join("\n");
@@ -219,7 +221,10 @@ export function raportWTekscie(r: RaportTygodniowy): string {
       );
     }
     if (r.dieta.ile_szacowanych > 0) {
-      linie.push(`Wpisów opartych na szacunku: ${r.dieta.ile_szacowanych}.`);
+      // Starsze migawki raportów nie znają pola ile_niepewnych — nie przeliczamy ich.
+      const ileNiepewnych = r.dieta.ile_niepewnych ?? 0;
+      const niepewne = ileNiepewnych > 0 ? `, w tym niepewnych: ${ileNiepewnych}` : "";
+      linie.push(`Wpisów opartych na szacunku: ${r.dieta.ile_szacowanych}${niepewne}.`);
     }
   }
 

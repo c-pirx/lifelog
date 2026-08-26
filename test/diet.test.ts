@@ -154,6 +154,16 @@ describe("podsumowanie dnia", () => {
     expect(podsumowanieDnia(db, "2026-08-25").ile_szacowanych).toBe(2);
   });
 
+  it("wlicza niepewne do szacowanych i liczy je też osobno", () => {
+    zapiszPosilek(db, { opis: "a", kcal: 100, pewnosc: "dokladne", ts: "2026-08-25T07:00:00.000Z" });
+    zapiszPosilek(db, { opis: "b", kcal: 100, pewnosc: "szacowane", ts: "2026-08-25T08:00:00.000Z" });
+    zapiszPosilek(db, { opis: "c", kcal: 100, pewnosc: "niepewne", ts: "2026-08-25T09:00:00.000Z" });
+
+    const dzien = podsumowanieDnia(db, "2026-08-25");
+    expect(dzien.ile_szacowanych).toBe(2);
+    expect(dzien.ile_niepewnych).toBe(1);
+  });
+
   it("działa dla dnia bez posiłków", () => {
     const dzien = podsumowanieDnia(db, "2026-08-25");
 

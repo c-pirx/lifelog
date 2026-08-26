@@ -111,6 +111,76 @@ describe("migracja 0004 — plany", () => {
   });
 });
 
+describe("migracja 0005 — pewność", () => {
+  /** Baza sprzed migracji, z posiłkiem i jego pozycją — jest co osierocić. */
+  function bazaZPosilkiem() {
+    const db = bazaPrzedMigracja("0005");
+
+    const posilek = db
+      .prepare(
+        `INSERT INTO posilki (ts, data_lokalna, pora, opis, kcal, bialko_g, wegle_g, tluszcz_g,
+                              zrodlo, pewnosc, utworzono)
+         VALUES ('2026-08-25T12:00:00.000Z', '2026-08-25', 'obiad', 'kurczak z ryżem',
+                 700, 45, 80, 15, 'czat', 'szacowane', '2026-08-25T12:00:00.000Z')`,
+      )
+      .run();
+    db.prepare("INSERT INTO pozycje_posilku (posilek_id, nazwa, kcal) VALUES (?, 'ryż', 210)").run(
+      posilek.lastInsertRowid,
+    );
+
+    return { db, posilekId: Number(posilek.lastInsertRowid) };
+  }
+
+  it("zachowuje posiłki, ich id i powiązane pozycje", () => {
+    const { db, posilekId } = bazaZPosilkiem();
+
+    uruchomMigracje(db);
+
+    const posilek = db
+      .prepare<[number], { opis: string; pewnosc: string }>(
+        "SELECT opis, pewnosc FROM posilki WHERE id = ?",
+      )
+      .get(posilekId);
+    expect(posilek).toEqual({ opis: "kurczak z ryżem", pewnosc: "szacowane" });
+
+    const pozycja = db
+      .prepare<[number], { nazwa: string }>(
+        "SELECT nazwa FROM pozycje_posilku WHERE posilek_id = ?",
+      )
+      .get(posilekId);
+    expect(pozycja?.nazwa).toBe("ryż");
+    expect(db.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("dopuszcza nową wartość i dalej odrzuca nieznane", () => {
+    const { db } = bazaZPosilkiem();
+    uruchomMigracje(db);
+
+    const wstaw = db.prepare(
+      `INSERT INTO posilki (ts, data_lokalna, pora, opis, kcal, bialko_g, wegle_g, tluszcz_g,
+                            zrodlo, pewnosc, utworzono)
+       VALUES ('2026-08-25T18:00:00.000Z', '2026-08-25', 'kolacja', 'x', 1, 1, 1, 1, 'czat', ?,
+               '2026-08-25T18:00:00.000Z')`,
+    );
+
+    expect(() => wstaw.run("niepewne")).not.toThrow();
+    expect(() => wstaw.run("bzdura")).toThrow();
+  });
+
+  it("odtwarza indeks po dacie — DROP TABLE zabrał go razem ze starą tabelą", () => {
+    const { db } = bazaZPosilkiem();
+    uruchomMigracje(db);
+
+    const indeksy = db
+      .prepare<[], { name: string }>(
+        "SELECT name FROM sqlite_master WHERE type = 'index' AND tbl_name = 'posilki'",
+      )
+      .all()
+      .map((w) => w.name);
+    expect(indeksy).toContain("idx_posilki_data");
+  });
+});
+
 describe("więzy schematu", () => {
   it("dopuszczają tylko jeden plan domyślny", () => {
     const db = otworzBaze({ sciezka: ":memory:" });

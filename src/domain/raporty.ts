@@ -59,7 +59,11 @@ export type StatDiety = {
   srednie: Makro;
   cel_dzienny: Makro | null;
   dni_w_celu: number;
+  /** Wpisy oparte na szacunku — wszystko poza `dokladne`. */
   ile_szacowanych: number;
+  /** Podzbiór szacowanych z najniższą pewnością. Starsze migawki raportów
+   *  tego pola nie mają — migawek nie przeliczamy. */
+  ile_niepewnych?: number;
 };
 
 export type StatWagi = {
@@ -198,15 +202,15 @@ function statDiety(db: Baza, od: string, doDaty: string): StatDiety {
   }
 
   const cel = celeNaDzien(db, doDaty);
+  const posilki = repo.posilkiZZakresu(db, od, doDaty);
 
   return {
     dni_z_zapisem: sumy.length,
     srednie: podzielMakro(suma, sumy.length),
     cel_dzienny: cel ? tylkoMakro(cel) : null,
     dni_w_celu: wCelu,
-    ile_szacowanych: repo
-      .posilkiZZakresu(db, od, doDaty)
-      .filter((p) => p.pewnosc === "szacowane").length,
+    ile_szacowanych: posilki.filter((p) => p.pewnosc !== "dokladne").length,
+    ile_niepewnych: posilki.filter((p) => p.pewnosc === "niepewne").length,
   };
 }
 
@@ -493,6 +497,7 @@ export function tydzienWToku(db: Baza, opcje: Opcje = {}): PostepTygodnia {
         cel_dzienny: biezacy.dieta.cel_dzienny,
         dni_w_celu: 0,
         ile_szacowanych: 0,
+        ile_niepewnych: 0,
       };
 
   return {

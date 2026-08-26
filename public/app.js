@@ -621,6 +621,7 @@ function wpisPosilku(p) {
           <span class="godzina">${esc(p.godzina)}</span>
           <span class="opis">${esc(p.opis)}</span>
           ${p.pewnosc === "szacowane" ? '<span class="znacznik">szacunek</span>' : ""}
+          ${p.pewnosc === "niepewne" ? '<span class="znacznik niepewne">niepewne</span>' : ""}
           ${p.oczekuje ? '<span class="znacznik">⏳ czeka</span>' : ""}
         </div>
         <div class="szczegoly">

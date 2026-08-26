@@ -103,6 +103,7 @@ describe("lista narzędzi", () => {
 
     expect(opis).toMatch(/ZASADA SZACOWANIA/);
     expect(opis).toMatch(/dopytaj/i);
+    expect(opis).toMatch(/niepewne/);
   });
 });
 
@@ -133,6 +134,20 @@ describe("przepływ dietetyczny", () => {
     const dzien = await wywolaj("podsumowanie_dnia", { data: "2026-08-25" });
     expect(dzien).toMatch(/400 kcal/);
     expect(dzien).toMatch(/owsianka z bananem/);
+  });
+
+  it("oznacza wpis z najniższą pewnością w odpowiedzi i w podsumowaniu", async () => {
+    const zapis = await wywolaj("zapisz_posilek", {
+      opis: "obiad u mamy",
+      kcal: 800,
+      czas: "2026-08-24 14:00",
+      pewnosc: "niepewne",
+    });
+
+    expect(zapis).toMatch(/\(niepewne\)/);
+
+    const dzien = await wywolaj("podsumowanie_dnia", { data: "2026-08-24" });
+    expect(dzien).toMatch(/w tym niepewnych: 1/);
   });
 
   it("przyjmuje czas polski i nie gubi doby", async () => {

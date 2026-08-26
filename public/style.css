@@ -383,6 +383,12 @@ nav button[aria-current="page"] {
   vertical-align: 1px;
 }
 
+/* Najniższa pewność estymacji — cieplejszy kolor niż zwykły „szacunek",
+   żeby wpis prosił się o doprecyzowanie. */
+.znacznik.niepewne {
+  color: var(--ostrzezenie);
+}
+
 /* Licznik czasu sesji tuż nad „Zakończ trening": etykieta z lewej, liczba
    z prawej, żeby dało się ją odczytać kątem oka bez czytania podpisu. */
 .czas-treningu {
