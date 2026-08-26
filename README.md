@@ -1,4 +1,4 @@
-# Diet & training assistant
+# Lifelog — diet & training assistant
 
 *[Wersja polska →](README.pl.md)*
 

@@ -1080,15 +1080,31 @@ body:has(#timer:not([hidden])) .komunikat {
   max-width: 340px;
 }
 
+/* Znak marki nad formularzem jest wyśrodkowany, pola niżej zostają
+   przy lewej — inaczej etykieta odrywałaby się od swojego pola. */
+#logowanie .marka {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+#logowanie .logo {
+  width: 72px;
+  height: 72px;
+  margin-bottom: 16px;
+}
+
 #logowanie h1 {
-  font-size: 1.3rem;
-  margin: 0 0 6px;
+  font-size: 1.7rem;
+  letter-spacing: 0.01em;
+  margin: 0 0 4px;
 }
 
 #logowanie p {
   color: var(--tekst-cichy);
   font-size: 0.9rem;
-  margin: 0 0 20px;
+  margin: 0 0 28px;
 }
 
 .blad-formularza {

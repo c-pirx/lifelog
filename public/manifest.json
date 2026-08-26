@@ -1,6 +1,6 @@
 {
-  "name": "Asystent diety i treningu",
-  "short_name": "Asystent",
+  "name": "Lifelog — dziennik diety i treningów",
+  "short_name": "Lifelog",
   "description": "Dziennik posiłków i treningów",
   "start_url": "/",
   "scope": "/",

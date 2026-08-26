@@ -6,8 +6,8 @@
     <meta name="theme-color" content="#0f1115" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Asystent" />
-    <title>Asystent</title>
+    <meta name="apple-mobile-web-app-title" content="Lifelog" />
+    <title>Lifelog</title>
     <link rel="manifest" href="/manifest.json" />
     <link rel="apple-touch-icon" href="/icons/ikona-180.png" />
     <link rel="icon" href="/icons/ikona-192.png" />
@@ -16,8 +16,29 @@
   <body>
     <div id="logowanie" hidden>
       <form id="formularz-logowania">
-        <h1>Asystent</h1>
-        <p>Dziennik diety i treningów.</p>
+        <!-- Logo w tym samym języku co ikony aplikacji: linia tętna rysowana
+             wprost w SVG, kolory z palety (akcent na ciemnym tle). -->
+        <div class="marka">
+          <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+            <defs>
+              <linearGradient id="logo-tlo" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#95e6b9" />
+                <stop offset="1" stop-color="#4f9c74" />
+              </linearGradient>
+            </defs>
+            <rect x="2" y="2" width="60" height="60" rx="17" fill="url(#logo-tlo)" />
+            <path
+              d="M12 36h9l5-15 9.5 24 5-15.5H52"
+              fill="none"
+              stroke="#0f1115"
+              stroke-width="4.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          <h1>Lifelog</h1>
+          <p>Dziennik diety i treningów.</p>
+        </div>
         <label for="haslo">Hasło</label>
         <input
           id="haslo"

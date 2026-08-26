@@ -1,4 +1,4 @@
-# Asystent diety i treningu
+# Lifelog — asystent diety i treningu
 
 *[English version →](README.md)*
 

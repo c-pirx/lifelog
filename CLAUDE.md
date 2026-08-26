@@ -1,4 +1,4 @@
-# Asystent diety i treningu
+# Lifelog — asystent diety i treningu
 
 Osobisty dziennik posiłków i treningów jednego użytkownika. Dwa wejścia do
 jednej bazy: **Claude** (przez MCP — dyktowanie zdaniem) oraz **aplikacja
