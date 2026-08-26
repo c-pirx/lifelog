@@ -10,6 +10,7 @@ import type { HistoriaCwiczenia } from "../domain/workouts.js";
 import type {
   DzienPlanu,
   Makro,
+  Plan,
   PodsumowanieDnia,
   Posilek,
   PostepCwiczenia,
@@ -155,6 +156,24 @@ export function planWTekscie(dni: DzienPlanu[]): string {
       return `${d.kod} — ${d.nazwa} (${kiedy})\n${cwiczenia}`;
     })
     .join("\n\n");
+}
+
+/**
+ * Plany z dniami. Domyślny jest oznaczony wprost, bo to jedyna różnica, która
+ * cokolwiek zmienia — reszta planów czeka jako szablony.
+ */
+export function planyWTekscie(plany: Plan[]): string {
+  if (plany.length === 0) {
+    return "Nie ma jeszcze żadnego planu. Utwórz go przez zarzadzaj_planem z akcją zapisz_plan.";
+  }
+
+  return plany
+    .map((p) => {
+      const naglowek = `▸ ${p.nazwa}${p.domyslny ? "  (domyślny)" : ""}`;
+      const opis = p.opis ? `\n  ${p.opis}` : "";
+      return `${naglowek}${opis}\n\n${planWTekscie(p.dni)}`;
+    })
+    .join("\n\n\n");
 }
 
 export function historiaWTekscie(h: HistoriaCwiczenia): string {

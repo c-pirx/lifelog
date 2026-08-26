@@ -22,6 +22,9 @@ import {
   historiaCwiczenia,
   odhaczCwiczenie,
   planTreningowy,
+  plany,
+  ustawPlanDomyslny,
+  zapiszPlan,
   rozpocznijTrening,
   stanTreningu,
   usunDzienPlanu,
@@ -32,6 +35,7 @@ import { parsujCzas, STREFA_DOMYSLNA } from "../lib/time.js";
 import {
   historiaWTekscie,
   planWTekscie,
+  planyWTekscie,
   podsumowanieWTekscie,
   posilekWTekscie,
   raportWTekscie,
@@ -66,6 +70,28 @@ const OPIS_CZASU =
   'Czas zdarzenia. Przyjmuje "HH:MM" (dzisiaj), "YYYY-MM-DD HH:MM" (czas polski) ' +
   "albo pełne ISO 8601 ze strefą. Pomiń, żeby użyć chwili obecnej. " +
   "NIE przeliczaj sam na UTC — podaj czas polski, serwer go zamieni.";
+
+/** Ćwiczenie w planie — ten sam kształt przy pojedynczym dniu i przy całym planie. */
+const SCHEMAT_CWICZENIA_W_PLANIE = z.object({
+  nazwa: z.string(),
+  typ: z
+    .enum(TYPY_CWICZEN as unknown as [string, ...string[]])
+    .optional()
+    .describe("Domyślnie 'silowe'. 'cardio' dla biegu/roweru, 'na_czas' dla deski."),
+  partia: z.string().optional(),
+  serie_cel: z.number().int().positive().optional(),
+  powt_cel: z.string().optional().describe("Np. „5” albo zakres „8-12”"),
+  czas_cel_s: z.number().int().positive().optional(),
+  dystans_cel_m: z.number().positive().optional(),
+  ciezar_cel_kg: z
+    .number()
+    .nonnegative()
+    .optional()
+    .describe(
+      "Ciężar roboczy. Dzięki niemu aplikacja odhacza serię jednym stuknięciem; " +
+        "pominięty spada na wynik z poprzedniego treningu.",
+    ),
+});
 
 const schematPozycji = z.object({
   nazwa: z.string(),
@@ -248,56 +274,78 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
   server.registerTool(
     "zarzadzaj_planem",
     {
-      title: "Zarządzaj planem treningowym",
+      title: "Zarządzaj planami treningowymi",
       description:
-        "Podgląd i edycja stałego planu treningowego.\n" +
-        "• akcja='pokaz' — wyświetla cały plan.\n" +
-        "• akcja='zapisz_dzien' — tworzy lub NADPISUJE dzień o podanym kodzie wraz z listą ćwiczeń. " +
+        "Podgląd i edycja planów treningowych. Planów może być wiele, ale tylko JEDEN jest " +
+        "domyślny — to on definiuje harmonogram tygodnia i to jego dzień aplikacja podpowiada " +
+        "po wejściu w zakładkę Trening. Pozostałe czekają jako szablony do odpalenia z ręki.\n\n" +
+        "• akcja='pokaz' — wyświetla wszystkie plany z dniami.\n" +
+        "• akcja='zapisz_plan' — tworzy lub NADPISUJE cały plan wraz z dniami (pole dni). " +
+        "Dni pominięte w nowej wersji znikają z planu, ale ich historia zostaje.\n" +
+        "• akcja='ustaw_domyslny' — przestawia, który plan rządzi harmonogramem.\n" +
+        "• akcja='zapisz_dzien' — tworzy lub NADPISUJE pojedynczy dzień wraz z listą ćwiczeń. " +
         "Podawaj zawsze pełną listę ćwiczeń tego dnia, bo poprzednia jest zastępowana.\n" +
         "• akcja='usun_dzien' — usuwa dzień o podanym kodzie.\n\n" +
-        "dzien_tygodnia (1 = poniedziałek … 7 = niedziela) buduje stały harmonogram, dzięki któremu " +
-        "rozpocznij_trening sam podpowiada właściwy dzień.",
+        "Pole plan wskazuje, o który plan chodzi; pominięte oznacza plan domyślny. Kod dnia " +
+        "musi być unikalny w obrębie planu, ale różne plany mogą mieć własne „A”.\n" +
+        "dzien_tygodnia (1 = poniedziałek … 7 = niedziela) buduje stały harmonogram.",
       inputSchema: {
-        akcja: z.enum(["pokaz", "zapisz_dzien", "usun_dzien"]),
+        akcja: z.enum(["pokaz", "zapisz_plan", "ustaw_domyslny", "zapisz_dzien", "usun_dzien"]),
+        plan: z.string().optional().describe("Nazwa planu, np. „PPL”. Pominięta — plan domyślny."),
+        opis: z.string().optional().describe("Jednozdaniowy opis planu, np. „redukcja, 4 dni”"),
+        domyslny: z
+          .boolean()
+          .optional()
+          .describe("Przy zapisz_plan: czy plan ma od razu przejąć harmonogram."),
         kod: z.string().optional().describe("Krótki identyfikator dnia, np. „A”, „push”"),
-        nazwa: z.string().optional().describe("Nazwa opisowa, np. „Nogi i klatka”"),
+        nazwa: z.string().optional().describe("Nazwa opisowa dnia, np. „Nogi i klatka”"),
         dzien_tygodnia: z.number().int().min(1).max(7).nullable().optional(),
-        cwiczenia: z
+        cwiczenia: z.array(SCHEMAT_CWICZENIA_W_PLANIE).optional(),
+        dni: z
           .array(
             z.object({
-              nazwa: z.string(),
-              typ: z
-                .enum(TYPY_CWICZEN as unknown as [string, ...string[]])
-                .optional()
-                .describe("Domyślnie 'silowe'. 'cardio' dla biegu/roweru, 'na_czas' dla deski."),
-              partia: z.string().optional(),
-              serie_cel: z.number().int().positive().optional(),
-              powt_cel: z.string().optional().describe("Np. „5” albo zakres „8-12”"),
-              czas_cel_s: z.number().int().positive().optional(),
-              dystans_cel_m: z.number().positive().optional(),
-              ciezar_cel_kg: z
-                .number()
-                .nonnegative()
-                .optional()
-                .describe(
-                  "Ciężar roboczy. Dzięki niemu aplikacja odhacza serię jednym stuknięciem; " +
-                    "pominięty spada na wynik z poprzedniego treningu.",
-                ),
+              kod: z.string(),
+              nazwa: z.string().optional(),
+              dzien_tygodnia: z.number().int().min(1).max(7).nullable().optional(),
+              cwiczenia: z.array(SCHEMAT_CWICZENIA_W_PLANIE).optional(),
             }),
           )
-          .optional(),
+          .optional()
+          .describe("Tylko przy zapisz_plan: komplet dni tego planu."),
       },
     },
     async (args) =>
       zBezpiecznikiem(() => {
-        if (args.akcja === "pokaz") return planWTekscie(planTreningowy(db));
+        if (args.akcja === "pokaz") return planyWTekscie(plany(db));
+
+        if (args.akcja === "ustaw_domyslny") {
+          if (!args.plan) return "Podaj nazwę planu (pole plan).";
+          const plan = ustawPlanDomyslny(db, args.plan);
+          return `Plan „${plan.nazwa}” rządzi teraz harmonogramem.\n\n${planyWTekscie([plan])}`;
+        }
+
+        if (args.akcja === "zapisz_plan") {
+          if (!args.plan) return "Podaj nazwę planu (pole plan).";
+          const plan = zapiszPlan(db, {
+            nazwa: args.plan,
+            opis: args.opis ?? null,
+            domyslny: args.domyslny ?? false,
+            dni: (args.dni ?? []).map((d) => ({
+              kod: d.kod,
+              nazwa: d.nazwa ?? d.kod,
+              dzien_tygodnia: d.dzien_tygodnia ?? null,
+              cwiczenia: (d.cwiczenia ?? []) as never,
+            })),
+          });
+          return `Zapisano plan:\n\n${planyWTekscie([plan])}`;
+        }
 
         if (!args.kod) {
           return "Podaj kod dnia planu (pole kod).";
         }
 
         if (args.akcja === "usun_dzien") {
-          return usunDzienPlanu(db, args.kod)
+          return usunDzienPlanu(db, args.kod, args.plan)
             ? `Usunięto dzień ${args.kod} z planu.`
             : `Nie znaleziono dnia o kodzie ${args.kod}.`;
         }
@@ -305,6 +353,7 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         const dzien = dodajDzienPlanu(db, {
           kod: args.kod,
           nazwa: args.nazwa ?? args.kod,
+          plan: args.plan,
           dzien_tygodnia: args.dzien_tygodnia ?? null,
           cwiczenia: (args.cwiczenia ?? []) as never,
         });

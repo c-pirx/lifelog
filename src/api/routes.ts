@@ -29,6 +29,8 @@ import {
   historiaCwiczenia,
   odhaczCwiczenie,
   planTreningowy,
+  plany,
+  ustawPlanDomyslny,
   rozpocznijTrening,
   stanTreningu,
   zakonczTrening,
@@ -87,6 +89,8 @@ const schematWpisu = z.object({
 const schematDniaPlanu = z.object({
   kod: z.string().min(1),
   nazwa: z.string().min(1),
+  /** Nazwa planu; pominięta — dzień trafia do planu domyślnego. */
+  plan: z.string().min(1).optional(),
   dzien_tygodnia: z.number().int().min(1).max(7).nullable().optional(),
   cwiczenia: z.array(
     z.object({
@@ -192,11 +196,20 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
 
   // === Trening ==========================================================
 
+  // `/plan` to dni planu domyślnego — tyle, ile potrzebuje harmonogram.
+  // `/plany` niesie komplet, bo zakładka Trening pokazuje też szablony.
   api.get("/plan", (c) => c.json(planTreningowy(db)));
+
+  api.get("/plany", (c) => c.json(plany(db)));
 
   api.post("/plan", async (c) => {
     const dane = schematDniaPlanu.parse(await c.req.json());
     return c.json(dodajDzienPlanu(db, dane as never), 201);
+  });
+
+  api.post("/plan/domyslny", async (c) => {
+    const { plan } = z.object({ plan: z.string().min(1) }).parse(await c.req.json());
+    return c.json(ustawPlanDomyslny(db, plan));
   });
 
   api.get("/trening", (c) => c.json(stanTreningu(db)));
@@ -208,15 +221,23 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   api.post("/trening/start", async (c) => {
     const {
       kod,
+      plan,
+      dzien_id: dzienId,
       bez_planu: bezPlanu,
       czas: kiedy,
     } = (await c.req.json().catch(() => ({}))) as {
       kod?: string;
+      plan?: string;
+      dzien_id?: number;
       bez_planu?: boolean;
       czas?: string;
     };
+    // Aplikacja podaje `dzien_id`, bo kod dnia nie jest już jednoznaczny
+    // między planami; czat nadal mówi kodem.
     rozpocznijTrening(db, {
       kod,
+      plan,
+      dzien_id: dzienId,
       bez_planu: bezPlanu,
       ts: czas(kiedy),
       strefa: ustawienia.strefa,

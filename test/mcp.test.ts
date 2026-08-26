@@ -219,6 +219,30 @@ describe("przepływ treningowy", () => {
     await wywolaj("zakoncz_trening", {});
   });
 
+  it("zapisuje cały plan naraz i przełącza domyślny", async () => {
+    const zapisany = await wywolaj("zarzadzaj_planem", {
+      akcja: "zapisz_plan",
+      plan: "PPL",
+      dni: [
+        { kod: "A", nazwa: "Push", dzien_tygodnia: 2, cwiczenia: [{ nazwa: "pompki", serie_cel: 3 }] },
+        { kod: "B", nazwa: "Pull", cwiczenia: [{ nazwa: "podciąganie", serie_cel: 3 }] },
+      ],
+    });
+    expect(zapisany).toMatch(/PPL/);
+    expect(zapisany).toMatch(/Push/);
+
+    // Kod „A" istnieje już w planie domyślnym — plany nie mogą sobie kolidować.
+    const przelaczony = await wywolaj("zarzadzaj_planem", {
+      akcja: "ustaw_domyslny",
+      plan: "PPL",
+    });
+    expect(przelaczony).toMatch(/PPL/);
+
+    const plan = await wywolaj("zarzadzaj_planem", { akcja: "pokaz" });
+    expect(plan).toMatch(/PPL/);
+    expect(plan).toMatch(/domyślny/i);
+  });
+
   it("nie pozwala zapisać serii bez otwartej sesji", async () => {
     const wynik = await klient.callTool({
       name: "zapisz_serie",

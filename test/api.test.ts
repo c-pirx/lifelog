@@ -172,6 +172,33 @@ describe("trening przez API", () => {
     expect(po.wg_planu[0]?.propozycja).toMatchObject({ powtorzenia: 5, ciezar_kg: 100 });
   });
 
+  it("wystawia plany z dniami i zaznacza domyślny", async () => {
+    const plany = await pobierz<{ nazwa: string; domyslny: boolean; dni: { kod: string }[] }[]>(
+      "/api/plany",
+    );
+
+    expect(plany[0]?.domyslny).toBe(true);
+    expect(plany[0]?.dni.map((d) => d.kod)).toContain("A");
+  });
+
+  it("przełącza plan domyślny", async () => {
+    await wyslij("/api/plan", {
+      plan: "PPL",
+      kod: "A",
+      nazwa: "Push",
+      cwiczenia: [{ nazwa: "pompki", serie_cel: 3, powt_cel: "10" }],
+    });
+
+    const odpowiedz = await wyslij("/api/plan/domyslny", { plan: "PPL" });
+    expect(odpowiedz.status).toBe(200);
+
+    const plany = await pobierz<{ nazwa: string; domyslny: boolean }[]>("/api/plany");
+    expect(plany[0]).toMatchObject({ nazwa: "PPL", domyslny: true });
+
+    // Sprzątamy po sobie: reszta bloku zakłada, że rządzi plan z dniem „A" na nogi.
+    await wyslij("/api/plan/domyslny", { plan: "Mój plan" });
+  });
+
   it("odhacza całe ćwiczenie jednym żądaniem", async () => {
     const odpowiedz = await wyslij("/api/trening/cwiczenie/odhacz", { cwiczenie: "przysiad" });
     expect(odpowiedz.status).toBe(201);
