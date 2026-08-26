@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 259 testów
+npm test             # 302 testy
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -159,6 +159,18 @@ nie sama blokada przycisku. Przycisk odhaczania serii to trzecia droga do
 zapisu i ma własne opakowanie (`akcjaPrzycisku`). Przy słabym zasięgu żądanie
 odrzuca się po kilku sekundach i bez blokady wpis zapisywał się dwa razy.
 
+**Formularz edycji posiłku wysyła tylko pola zmienione** (porównanie
+z `defaultValue`). Prefill kcal wysłany przy każdej poprawce byłby wartością
+jawną, a jawna wygrywa z auto-sumą — przeliczanie nagłówka z pozycji nigdy
+nie uruchomiłoby się z aplikacji. Z tego samego powodu nietknięty edytor
+składników nie wysyła klucza `pozycje`: zastąpienie identyczną listą też
+uruchamia auto-sumę.
+
+**Atrybuty `data-*` na formularzach nie mogą kolidować z delegowanymi
+handlerami na `#widok`.** `data-dzien` na formularzu edycji łapał handler
+paska dat i każde stuknięcie w pole rzucało `RangeError` z `przesunDate` —
+stąd `data-dzien-wpisu`.
+
 **Rekord liczy się z sesji wcześniejszych niż bieżąca.** Inaczej pierwsza
 dzisiejsza seria sama ustanawiałaby rekord, a każda następna już tylko
 wyrównywała — oznaczenie traciłoby sens dokładnie w dniu, w którym ma działać.
@@ -207,13 +219,17 @@ z zamkniętą aplikacją. Trzy pliki, każdy z osobnym zadaniem:
   zatrzymuje kolejkę, 400 wyrzuca wpis (inaczej jeden zły zapis blokuje ją
   na zawsze).
 - **`public/nakladka.js`** — czyste funkcje pokazujące wpisy z kolejki na tle
-  stanu z serwera. **Nie liczą niczego domenowego**: nie oceniają słabszej
-  serii, nie wnioskują pory posiłku. To jedyny kawałek offline'u objęty
-  testami (`test/offline.test.ts`) — reszta wymaga przeglądarki.
+  stanu z serwera: dodania, usunięcia i poprawki posiłków (znacznik „⏳ zmiana";
+  `czas` i `pozycje` z poprawki świadomie ignorowane — przenoszenie wpisu
+  między dniami to robota domeny). **Nie liczą niczego domenowego**: nie
+  oceniają słabszej serii, nie wnioskują pory posiłku. To jedyny kawałek
+  offline'u objęty testami (`test/offline.test.ts`) — reszta wymaga przeglądarki.
 
-Tą samą zasadą rządzi się `public/raporty.js` (panel tygodnia i archiwum):
-renderuje, ale nie ocenia — werdykty „na kursie" i „idzie lepiej" przychodzą
-gotowe z serwera. Testy leżą obok, w `test/offline.test.ts`.
+Tą samą zasadą rządzą się `public/raporty.js` (panel tygodnia i archiwum)
+oraz `public/dieta.js` i `public/posilek.js` (zakładka Dieta i wspólny
+renderer wpisu posiłku): renderują, ale nie oceniają — werdykty „na kursie"
+i „idzie lepiej" przychodzą gotowe z serwera. Testy leżą obok,
+w `test/offline.test.ts`.
 
 Każdy zapis z aplikacji niesie `czas` powstania wpisu. Bez tego seria wpisana
 o 18:05 i wysłana o 19:30 wylądowałaby w historii pod złą godziną.
@@ -292,8 +308,11 @@ API) → eksport CSV.
 Zrobione: wykresy (SVG wprost w `app.js`, bez biblioteki), tani wariant
 szablonów — podpowiedzi z najczęstszych posiłków (`czestePosilki`), które
 wypełniają formularz, ale go nie wysyłają — tygodniowy raport z podglądem
-tempa na ekranie Postępy oraz odhaczanie serii wraz z widokiem pojedynczego
-ćwiczenia.
+tempa na ekranie Postępy, odhaczanie serii wraz z widokiem pojedynczego
+ćwiczenia, a także zakładka Dieta (historia dni pod `GET /dieta`,
+`historiaDiety`), edycja pozycji składowych posiłku i godziny wpisu
+(`zmien_wpis` / `POST /wpis`, auto-suma nagłówka per pole) oraz trzeci
+poziom pewności estymacji (`niepewne`).
 
 Odłożone świadomie przy odhaczaniu: podsumowanie po zakończeniu treningu,
 lista ostatnich sesji z poprawianiem serii wstecz, edycja planu w aplikacji,
