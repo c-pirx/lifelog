@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 227 testów
+npm test             # 235 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -110,6 +110,14 @@ proces potomny wstawał martwy, a vitest raportował mylące „Connection close
 **Timer przerwy żyje poza `#widok`.** `odswiez()` podmienia całą zawartość
 widoku, więc odliczanie umieszczone w środku ginęłoby przy każdej zapisanej
 serii — czyli dokładnie wtedy, kiedy jest potrzebne.
+
+**Kafelki timera podają całkowity czas przerwy, nie dokładkę.** Stan liczy się
+od `startPrzerwy`, a kafelek zmienia `celPrzerwy` — po 90 sekundach stuknięcie
+w 120 daje pozostałe 30, a nie kolejne dwie minuty. Krok, którego czas już
+minął, znika, bo nie ma czego zaoferować. Arytmetyka siedzi w `public/przerwa.js`
+i jako jedyna część timera jest objęta testami (`test/przerwa.test.ts`);
+odliczanie po dojściu do zera nie gaśnie od razu — kafelki nadal się
+przeterminowują, więc interwał stoi dopiero wtedy, gdy nie został żaden.
 
 **Blokada podwójnego zapisu obejmuje formularze i przyciski osobno.**
 Formularz wysyła się też klawiszem „Gotowe" z klawiatury telefonu, a ta droga

@@ -183,8 +183,41 @@ nav button[aria-current="page"] {
   min-width: 62px;
 }
 
+/* Timer jest wyśrodkowany przez translateX(-50%), więc każda klatka drżenia
+   musi to przesunięcie powtórzyć — inaczej odjechałby na brzeg ekranu. */
+@keyframes drzenie-timera {
+  0%,
+  100% {
+    transform: translateX(-50%);
+  }
+  15% {
+    transform: translateX(calc(-50% - 3px));
+  }
+  35% {
+    transform: translateX(calc(-50% + 3px));
+  }
+  55% {
+    transform: translateX(calc(-50% - 2px));
+  }
+  75% {
+    transform: translateX(calc(-50% + 2px));
+  }
+  90% {
+    transform: translateX(calc(-50% - 1px));
+  }
+}
+
+/* Trzy przebiegi, nie w kółko: przerwa się skończyła, ale telefon leży obok
+   sztangi i migający bez końca kafelek rozpraszałby przez całą serię. */
 #timer.minela {
   border-color: var(--akcent);
+  animation: drzenie-timera 0.5s ease-in-out 3;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #timer.minela {
+    animation: none;
+  }
 }
 
 #timer.minela .odliczanie {

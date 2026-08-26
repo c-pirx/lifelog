@@ -8,6 +8,7 @@
 
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "./nakladka.js";
+import { czasWTekscie, stanPrzerwy } from "./przerwa.js";
 import { ekranRaporty, panelTygodnia } from "./raporty.js";
 
 const widok = document.getElementById("widok");
@@ -264,11 +265,14 @@ window.addEventListener("offline", () => void pokazStanSieci());
 /**
  * Odliczanie między seriami.
  *
- * Czas liczymy od znacznika docelowego, a nie odejmując sekundy w interwale:
- * przeglądarka na wygaszonym ekranie dławi setInterval i licznik oparty na
- * dekrementacji zacząłby się spóźniać o kilkadziesiąt sekund. Przy takim
- * dławieniu wibracja potrafi przyjść z opóźnieniem, ale pokazany czas jest
- * zawsze prawdziwy.
+ * Czas liczymy od znacznika początku przerwy, a nie odejmując sekundy
+ * w interwale: przeglądarka na wygaszonym ekranie dławi setInterval i licznik
+ * oparty na dekrementacji zacząłby się spóźniać o kilkadziesiąt sekund. Przy
+ * takim dławieniu wibracja potrafi przyjść z opóźnieniem, ale pokazany czas
+ * jest zawsze prawdziwy.
+ *
+ * Reguła kafelków — całkowity czas przerwy zamiast dokładki — siedzi
+ * w `przerwa.js`, bo jako jedyna część timera daje się objąć testami.
  */
 
 const KROKI_PRZERWY = [90, 120, 180];
@@ -276,6 +280,7 @@ const DOMYSLNA_PRZERWA = 120;
 
 const elementTimera = document.getElementById("timer");
 const czasTimera = document.getElementById("timer-czas");
+const wyborPrzerwy = elementTimera?.querySelector(".wybor");
 
 // localStorage potrafi rzucić w trybie prywatnym — brak zapamiętanej przerwy
 // nie jest powodem, żeby timer przestał działać.
@@ -295,7 +300,15 @@ const zapamietane = (klucz) => {
   }
 };
 
-let koniecPrzerwy = null;
+/** Początek bieżącej przerwy; kafelki liczą swój czas właśnie od niego. */
+let startPrzerwy = null;
+
+/** Całkowity czas przerwy w sekundach — zmieniany kafelkiem, nie restartowany. */
+let celPrzerwy = null;
+
+/** Wibracja ma pójść raz, a nie przy każdym tiku po dojściu do zera. */
+let zadzwonilo = false;
+
 let tykanie;
 
 function wybranaPrzerwa() {
@@ -304,47 +317,82 @@ function wybranaPrzerwa() {
 }
 
 function odswiezTimer() {
-  const pozostalo = Math.round((koniecPrzerwy - Date.now()) / 1000);
+  const stan = stanPrzerwy(startPrzerwy, celPrzerwy, Date.now(), KROKI_PRZERWY);
+  czasTimera.textContent = czasWTekscie(stan.pozostalo);
 
-  if (pozostalo <= 0) {
-    czasTimera.textContent = "gotowe";
-    elementTimera.classList.add("minela");
-    clearInterval(tykanie);
-    koniecPrzerwy = null;
+  let widocznych = 0;
+  for (const kafelek of elementTimera.querySelectorAll("[data-przerwa]")) {
+    const opis = stan.kafelki.find((k) => k.sekundy === Number(kafelek.dataset.przerwa));
+    kafelek.hidden = !opis?.widoczny;
+    kafelek.setAttribute("aria-pressed", String(Boolean(opis?.wybrany)));
+    if (!kafelek.hidden) widocznych += 1;
+  }
+  if (wyborPrzerwy) wyborPrzerwy.hidden = widocznych === 0;
+
+  if (!stan.gotowe) return;
+
+  // Klasa niesie drżenie i kolor; zdejmuje ją dopiero nowa przerwa albo
+  // wydłużenie bieżącej.
+  elementTimera.classList.add("minela");
+
+  if (!zadzwonilo) {
+    zadzwonilo = true;
     navigator.vibrate?.([180, 90, 180]);
-    return;
   }
 
-  czasTimera.textContent = `${Math.floor(pozostalo / 60)}:${String(pozostalo % 60).padStart(2, "0")}`;
+  // Odliczanie stoi, ale kafelki nadal się przeterminowują — interwał gasimy
+  // dopiero wtedy, gdy nie ma już czego chować.
+  if (widocznych === 0) {
+    clearInterval(tykanie);
+    tykanie = undefined;
+  }
 }
 
-function startujPrzerwe(sekundy = wybranaPrzerwa()) {
-  zapamietaj("przerwa_s", String(sekundy));
-  koniecPrzerwy = Date.now() + sekundy * 1000;
-
-  elementTimera.hidden = false;
-  elementTimera.classList.remove("minela");
-  elementTimera
-    .querySelectorAll("[data-przerwa]")
-    .forEach((b) =>
-      b.setAttribute("aria-pressed", String(Number(b.dataset.przerwa) === sekundy)),
-    );
-
+function tykaj() {
   clearInterval(tykanie);
   tykanie = setInterval(odswiezTimer, 250);
   odswiezTimer();
 }
 
+/** Nowa przerwa — po zapisaniu serii. */
+function startujPrzerwe(sekundy = wybranaPrzerwa()) {
+  startPrzerwy = Date.now();
+  celPrzerwy = sekundy;
+  zadzwonilo = false;
+
+  elementTimera.hidden = false;
+  elementTimera.classList.remove("minela");
+  tykaj();
+}
+
+/**
+ * Kafelek wydłuża trwającą przerwę, a nie zaczyna nowej: po 90 sekundach
+ * stuknięcie w 120 daje pozostałe 30, nie kolejne dwie minuty. Wybór
+ * zapamiętujemy, żeby następna seria zaczynała od tego samego kroku.
+ */
+function zmienCelPrzerwy(sekundy) {
+  zapamietaj("przerwa_s", String(sekundy));
+  if (startPrzerwy === null) return startujPrzerwe(sekundy);
+
+  celPrzerwy = sekundy;
+  zadzwonilo = false;
+  elementTimera.classList.remove("minela");
+  tykaj();
+}
+
 function zatrzymajPrzerwe() {
   clearInterval(tykanie);
-  koniecPrzerwy = null;
+  tykanie = undefined;
+  startPrzerwy = null;
+  celPrzerwy = null;
+  zadzwonilo = false;
   elementTimera.hidden = true;
   elementTimera.classList.remove("minela");
 }
 
 elementTimera?.addEventListener("click", (zdarzenie) => {
   const wybor = zdarzenie.target.closest("[data-przerwa]");
-  if (wybor) return startujPrzerwe(Number(wybor.dataset.przerwa));
+  if (wybor) return zmienCelPrzerwy(Number(wybor.dataset.przerwa));
   if (zdarzenie.target.closest("#timer-zamknij")) zatrzymajPrzerwe();
 });
 
