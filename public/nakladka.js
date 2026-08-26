@@ -313,11 +313,31 @@ export function nalozNaAktywnosci(aktywnosci = [], kolejka = [], data) {
   return [...zostajace, ...oczekujace];
 }
 
-/** To samo dla dnia z zakładki Aktywności — sumy trzeba przeliczyć po nałożeniu. */
-export function nalozNaDzienAktywnosci(dzien, kolejka = []) {
+/**
+ * Treningi dnia z uwzględnieniem usunięć czekających w kolejce.
+ *
+ * Trening znika z listy od razu, zamiast wisieć do odzyskania zasięgu —
+ * inaczej użytkownik stuknąłby „usuń" drugi raz, sądząc, że pierwszy nie zadziałał.
+ */
+export function nalozNaTreningi(treningi = [], kolejka = []) {
+  const usuwane = new Set(
+    kolejka
+      .filter((w) => dopasujSciezke(w, "/wpis"))
+      .filter((w) => w.dane?.typ === "sesja" && w.dane?.akcja === "usun")
+      .map((w) => w.dane.id),
+  );
+
+  if (usuwane.size === 0) return treningi;
+  return treningi.filter((t) => !usuwane.has(t.id));
+}
+
+/** Cały dzień z zakładki — sumy aktywności trzeba przeliczyć po nałożeniu. */
+export function nalozNaDzienRuchu(dzien, kolejka = []) {
   const aktywnosci = nalozNaAktywnosci(dzien.aktywnosci, kolejka, dzien.data);
-  if (aktywnosci === dzien.aktywnosci) return dzien;
+  const treningi = nalozNaTreningi(dzien.treningi ?? [], kolejka);
+
+  if (aktywnosci === dzien.aktywnosci && treningi === (dzien.treningi ?? [])) return dzien;
 
   const suma = (pole) => aktywnosci.reduce((s, a) => s + (Number(a[pole]) || 0), 0);
-  return { ...dzien, aktywnosci, dystans_m: suma("dystans_m"), czas_s: suma("czas_s") };
+  return { ...dzien, aktywnosci, treningi, dystans_m: suma("dystans_m"), czas_s: suma("czas_s") };
 }

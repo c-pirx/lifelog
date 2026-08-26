@@ -21,6 +21,7 @@ import { PEWNOSCI, PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
+  historiaSesji,
   odhaczCwiczenie,
   planTreningowy,
   plany,
@@ -187,8 +188,8 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       title: "Podsumowanie dnia lub tygodnia",
       description:
         "Bez argumentów: bilans dzisiejszego dnia — zjedzone makro, cele, ile zostało, lista " +
-        "posiłków z identyfikatorami (przydatne do poprawek) oraz aktywności poza planem, " +
-        "jeśli tego dnia jakieś były.\n" +
+        "posiłków z identyfikatorami (przydatne do poprawek) oraz cały ruch tego dnia: " +
+        "odbyte treningi z wynikami i aktywności poza planem, jeśli jakieś były.\n" +
         'Z okres="tydzien": raport zamkniętego tygodnia (niedziela–sobota) z dietą, wagą, treningiem ' +
         "i porównaniem do tygodnia wcześniej. Raporty powstają same w niedzielę o 9:00; bez podanej " +
         "daty zwracany jest najnowszy.\n" +
@@ -223,7 +224,11 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
             );
           }
           const dzien = podsumowanieDnia(db, args.data, { strefa });
-          return podsumowanieWTekscie(dzien, aktywnosciZDnia(db, dzien.data, { strefa }));
+          return podsumowanieWTekscie(
+            dzien,
+            aktywnosciZDnia(db, dzien.data, { strefa }),
+            historiaSesji(db, dzien.data, dzien.data, { strefa }),
+          );
         }
 
         // Odczyt dogenerowuje zaległości — raport jest gotowy w chwili, gdy
@@ -646,7 +651,10 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "• typ='seria' — pola: powtorzenia, ciezar_kg, czas_s, dystans_m, rpe\n" +
         "• typ='waga' — pola: kg, notatka\n" +
         "• typ='aktywnosc' — pola: dyscyplina, dystans_m, czas_s, rpe, notatka, czas " +
-        "(identyfikatory aktywności są w podsumowaniu dnia)\n\n" +
+        "(identyfikatory aktywności są w podsumowaniu dnia)\n" +
+        "• typ='sesja' — TYLKO akcja='usun'. Kasuje cały trening razem ze wszystkimi jego " +
+        "seriami i jest nieodwracalne; upewnij się, że użytkownik o to prosi. Pojedynczy " +
+        "wynik poprawia się przez typ='seria'.\n\n" +
         "Podawaj wyłącznie pola, które mają się zmienić — reszta zostaje nietknięta. " +
         "Po poprawieniu szacunku na potwierdzoną wartość ustaw pewnosc='dokladne'.\n" +
         "pozycje ZASTĘPUJĄ całe rozbicie posiłku — podawaj zawsze komplet składników; pusta " +
@@ -654,7 +662,7 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "przeliczony z ich sumy — chyba że pole podano jawnie w tej samej poprawce; następna " +
         "poprawka pozycji znów przeliczy.",
       inputSchema: {
-        typ: z.enum(["posilek", "seria", "waga", "aktywnosc"]),
+        typ: z.enum(["posilek", "seria", "waga", "aktywnosc", "sesja"]),
         id: z.number().int().positive(),
         akcja: z.enum(["popraw", "usun"]),
         dane: z

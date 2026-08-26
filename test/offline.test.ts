@@ -10,13 +10,19 @@
 
 import { describe, expect, it } from "vitest";
 
-import { czasWysilku, ekranAktywnosci, wpisAktywnosci } from "../public/aktywnosci.js";
+import {
+  czasWysilku,
+  ekranAktywnosci,
+  wpisAktywnosci,
+  wpisTreningu,
+  wpisyDnia,
+} from "../public/aktywnosci.js";
 import { ekranDieta } from "../public/dieta.js";
 import { decyzjaKolejki } from "../public/kolejka.js";
 import {
   nalozNaAktywnosci,
   nalozNaDzien,
-  nalozNaDzienAktywnosci,
+  nalozNaDzienRuchu,
   nalozNaTrening,
 } from "../public/nakladka.js";
 import { wpisPosilku } from "../public/posilek.js";
@@ -662,7 +668,7 @@ describe("nakładka na aktywności", () => {
       aktywnosci: zSerwera(),
     };
 
-    const wynik = nalozNaDzienAktywnosci(dzien, [
+    const wynik = nalozNaDzienRuchu(dzien, [
       {
         id: 10,
         sciezka: "/aktywnosci",
@@ -750,5 +756,171 @@ describe("widok aktywności", () => {
   it("czas wysiłku podaje minuty, a od godziny w górę godziny", () => {
     expect(czasWysilku(1500)).toBe("25 min");
     expect(czasWysilku(3900)).toBe("1 h 05 min");
+  });
+});
+
+describe("historia ruchu w widoku", () => {
+  const treningZSerwera = (godzina = "17:00") => ({
+    id: 7,
+    dzien_kod: "A",
+    dzien_nazwa: "Nogi i klatka",
+    data_lokalna: "2026-08-25",
+    godzina,
+    trwanie_s: 4500,
+    serie_lacznie: 3,
+    cwiczenia: [
+      {
+        cwiczenie_id: 3,
+        nazwa: "przysiad",
+        typ: "silowe",
+        serie: [
+          { id: 1, nr_serii: 1, powtorzenia: 5, ciezar_kg: 100 },
+          { id: 2, nr_serii: 2, powtorzenia: 5, ciezar_kg: 100 },
+          { id: 3, nr_serii: 3, powtorzenia: 5, ciezar_kg: 110 },
+        ],
+      },
+    ],
+  });
+
+  const rowerZSerwera = (godzina = "07:20") => ({
+    id: 1,
+    godzina,
+    data_lokalna: "2026-08-25",
+    dyscyplina: "rower",
+    dystans_m: 18_000,
+    czas_s: 3600,
+    rpe: null,
+    notatka: null,
+  });
+
+  it("wpis treningu pokazuje wyniki, zwijając serie pod rząd", () => {
+    const html = wpisTreningu(treningZSerwera());
+
+    expect(html).toContain("Trening A");
+    expect(html).toContain("Nogi i klatka");
+    expect(html).toContain("3 serie");
+    expect(html).toContain("1 h 15 min");
+    expect(html).toContain("5×100 kg ×2 · 5×110 kg");
+  });
+
+  it("trening da się usunąć, ale nie poprawić serii po serii", () => {
+    const html = wpisTreningu(treningZSerwera());
+
+    expect(html).toContain('data-usun-sesje="7"');
+    expect(html).not.toContain("data-edytuj-serie");
+  });
+
+  it("trening z usunięciem w kolejce traci przycisk i dostaje znacznik", () => {
+    const html = wpisTreningu({ ...treningZSerwera(), oczekujace_usuniecie: true });
+
+    expect(html).toContain("⏳ usuwanie");
+    expect(html).not.toContain("data-usun-sesje");
+  });
+
+  it("wpisy dnia idą po godzinie, niezależnie od rodzaju", () => {
+    const dzien = {
+      data: "2026-08-25",
+      dystans_m: 18_000,
+      czas_s: 3600,
+      aktywnosci: [rowerZSerwera("07:20")],
+      treningi: [treningZSerwera("17:00")],
+    };
+
+    expect(wpisyDnia(dzien).map((w) => w.rodzaj)).toEqual(["aktywnosc", "trening"]);
+
+    const wieczornyRower = {
+      ...dzien,
+      aktywnosci: [rowerZSerwera("19:30")],
+    };
+    expect(wpisyDnia(wieczornyRower).map((w) => w.rodzaj)).toEqual(["trening", "aktywnosc"]);
+  });
+
+  it("rozwinięty dzień pokazuje trening i aktywność, zwinięty tylko skrót", () => {
+    const historia = {
+      od: "2026-08-12",
+      do: "2026-08-25",
+      dni: [
+        {
+          data: "2026-08-25",
+          dystans_m: 18_000,
+          czas_s: 3600,
+          aktywnosci: [rowerZSerwera()],
+          treningi: [treningZSerwera()],
+        },
+      ],
+    };
+
+    const zwiniety = ekranAktywnosci(historia, null, null, "2026-08-25");
+    expect(zwiniety).toContain("Trening A · rower 18.0 km");
+    expect(zwiniety).not.toContain("5×100 kg");
+
+    const rozwiniety = ekranAktywnosci(historia, "2026-08-25", null, "2026-08-25");
+    expect(rozwiniety).toContain("5×100 kg ×2");
+    expect(rozwiniety).toContain("rower");
+  });
+
+  it("kolejka ukrywa trening, którego usunięcie czeka na wysłanie", () => {
+    const dzien = {
+      data: "2026-08-25",
+      dystans_m: 0,
+      czas_s: 0,
+      aktywnosci: [],
+      treningi: [treningZSerwera()],
+    };
+
+    const wynik = nalozNaDzienRuchu(dzien, [
+      { id: 9, sciezka: "/wpis", dane: { typ: "sesja", id: 7, akcja: "usun" } },
+    ]);
+
+    expect(wynik.treningi).toHaveLength(0);
+  });
+
+  it("usunięcie posiłku w kolejce nie rusza treningów", () => {
+    const dzien = {
+      data: "2026-08-25",
+      dystans_m: 0,
+      czas_s: 0,
+      aktywnosci: [],
+      treningi: [treningZSerwera()],
+    };
+
+    const wynik = nalozNaDzienRuchu(dzien, [
+      { id: 10, sciezka: "/wpis", dane: { typ: "posilek", id: 7, akcja: "usun" } },
+    ]);
+
+    expect(wynik.treningi).toHaveLength(1);
+  });
+});
+
+describe("skrót dnia w historii ruchu", () => {
+  const dzien = (treningi, aktywnosci = []) => ({
+    od: "2026-08-12",
+    do: "2026-08-25",
+    dni: [{ data: "2026-08-25", dystans_m: 0, czas_s: 0, treningi, aktywnosci }],
+  });
+
+  const sesja = (id, kod = "T", trwanie_s = 4500) => ({
+    id,
+    dzien_kod: kod,
+    dzien_nazwa: "Test",
+    data_lokalna: "2026-08-25",
+    godzina: "17:00",
+    trwanie_s,
+    serie_lacznie: 1,
+    cwiczenia: [{ cwiczenie_id: 1, nazwa: "pompki", typ: "silowe", serie: [{ powtorzenia: 10 }] }],
+  });
+
+  it("zwija powtórzony napis zamiast wypisywać go sześć razy", () => {
+    const html = ekranAktywnosci(dzien([sesja(1), sesja(2), sesja(3)]), null, null, "2026-08-25");
+
+    expect(html).toContain("Trening T ×3");
+    expect(html).not.toContain("Trening T · Trening T");
+  });
+
+  it("krótszy niż minuta trening nie chwali się „0 min”", () => {
+    const html = wpisTreningu(sesja(1, "T", 40));
+
+    expect(html).not.toContain("0 min");
+    expect(html).toContain("Trening T");
   });
 });

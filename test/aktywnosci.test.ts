@@ -3,12 +3,17 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { otworzBaze, type Baza } from "../src/db/index.js";
 import {
   aktywnosciZDnia,
-  historiaAktywnosci,
+  historiaRuchu,
   statAktywnosci,
   zapiszAktywnosc,
 } from "../src/domain/aktywnosci.js";
 import { czyBladDomeny } from "../src/domain/bledy.js";
-import { rozpocznijTrening, stanTreningu } from "../src/domain/workouts.js";
+import {
+  rozpocznijTrening,
+  stanTreningu,
+  zakonczTrening,
+  zapiszSerie,
+} from "../src/domain/workouts.js";
 
 let db: Baza;
 
@@ -131,7 +136,7 @@ describe("dzień i historia", () => {
   });
 
   it("grupuje historię po dniach, od najnowszego, z sumami dnia", () => {
-    const historia = historiaAktywnosci(db, { dni: 14, przed: "2026-08-26" });
+    const historia = historiaRuchu(db, { dni: 14, przed: "2026-08-26" });
 
     expect(historia.do).toBe("2026-08-25");
     expect(historia.dni.map((d) => d.data)).toEqual(["2026-08-25", "2026-08-23"]);
@@ -143,7 +148,7 @@ describe("dzień i historia", () => {
   });
 
   it("okno „przed” zaczyna się dzień wcześniej — strony się nie zazębiają", () => {
-    const historia = historiaAktywnosci(db, { dni: 1, przed: "2026-08-25" });
+    const historia = historiaRuchu(db, { dni: 1, przed: "2026-08-25" });
 
     expect(historia.od).toBe("2026-08-24");
     expect(historia.do).toBe("2026-08-24");
@@ -194,5 +199,72 @@ describe("statystyka tygodnia", () => {
     const stat = statAktywnosci(db, "2026-08-23", "2026-08-29");
 
     expect(stat).toEqual({ ile: 0, czas_s: 0, dystans_m: 0, dyscypliny: [] });
+  });
+});
+
+describe("historia ruchu scala treningi z aktywnościami", () => {
+  function trening(data: string, ciezar: number) {
+    rozpocznijTrening(db, { bez_planu: true, ts: `${data}T16:00:00.000Z` });
+    zapiszSerie(db, {
+      cwiczenie: "przysiad",
+      powtorzenia: 5,
+      ciezar_kg: ciezar,
+      ts: `${data}T16:05:00.000Z`,
+    });
+    zakonczTrening(db, { ts: `${data}T17:00:00.000Z` });
+  }
+
+  it("dzień z samym treningiem też trafia do historii", () => {
+    trening("2026-08-24", 100);
+
+    const historia = historiaRuchu(db, { dni: 14, przed: "2026-08-26" });
+
+    expect(historia.dni.map((d) => d.data)).toEqual(["2026-08-24"]);
+    expect(historia.dni[0]?.treningi).toHaveLength(1);
+    expect(historia.dni[0]?.aktywnosci).toHaveLength(0);
+  });
+
+  it("dzień z jednym i drugim niesie oba wpisy", () => {
+    trening("2026-08-24", 100);
+    zapiszAktywnosc(db, {
+      dyscyplina: "rower",
+      dystans_m: 12_000,
+      czas_s: 2400,
+      ts: "2026-08-24T06:00:00.000Z",
+    });
+
+    const [dzien] = historiaRuchu(db, { dni: 14, przed: "2026-08-26" }).dni;
+
+    expect(dzien?.treningi).toHaveLength(1);
+    expect(dzien?.aktywnosci).toHaveLength(1);
+  });
+
+  it("sumy dnia liczą się z aktywności, nie z treningu", () => {
+    // Bieżnia w sesji ma dystans, ale to seria treningu — kilometry dnia
+    // opisują wyjścia poza plan i nie mogą jej wchłonąć.
+    rozpocznijTrening(db, { bez_planu: true, ts: "2026-08-24T16:00:00.000Z" });
+    zapiszSerie(db, {
+      cwiczenie: "bieżnia",
+      typ: "cardio",
+      dystans_m: 3000,
+      ts: "2026-08-24T16:05:00.000Z",
+    });
+    zakonczTrening(db, { ts: "2026-08-24T17:00:00.000Z" });
+    zapiszAktywnosc(db, {
+      dyscyplina: "rower",
+      dystans_m: 12_000,
+      ts: "2026-08-24T06:00:00.000Z",
+    });
+
+    const [dzien] = historiaRuchu(db, { dni: 14, przed: "2026-08-26" }).dni;
+
+    expect(dzien?.dystans_m).toBe(12_000);
+  });
+
+  it("okno „przed” obejmuje treningi tak samo jak aktywności", () => {
+    trening("2026-08-24", 100);
+
+    expect(historiaRuchu(db, { dni: 1, przed: "2026-08-24" }).dni).toHaveLength(0);
+    expect(historiaRuchu(db, { dni: 1, przed: "2026-08-25" }).dni).toHaveLength(1);
   });
 });

@@ -13,10 +13,16 @@ import { sprawdzWartosci } from "./aktywnosci.js";
 import { BladDomeny } from "./bledy.js";
 import { PEWNOSCI, PORY, type NowaPozycja, type Pewnosc, type Pora } from "./typy.js";
 
-export type TypWpisu = "posilek" | "seria" | "waga" | "aktywnosc";
+export type TypWpisu = "posilek" | "seria" | "waga" | "aktywnosc" | "sesja";
 export type AkcjaWpisu = "popraw" | "usun";
 
-export const TYPY_WPISOW: readonly TypWpisu[] = ["posilek", "seria", "waga", "aktywnosc"];
+export const TYPY_WPISOW: readonly TypWpisu[] = [
+  "posilek",
+  "seria",
+  "waga",
+  "aktywnosc",
+  "sesja",
+];
 
 export type ZmianyPosilku = {
   opis?: string;
@@ -81,6 +87,9 @@ function tylkoPodane<T extends object>(dane: T, dozwolone: readonly (keyof T)[])
 function brakWpisu(typ: TypWpisu, id: number): never {
   throw new BladDomeny(`Nie znaleziono wpisu typu "${typ}" o id ${id}`, "nieznany_wpis");
 }
+
+/** „1 serią", „3 seriami" — komunikat po usunięciu treningu ma brzmieć po polsku. */
+const odmianaSerii = (ile: number): string => (ile === 1 ? "serią" : "seriami");
 
 const POLA_MAKRO = ["kcal", "bialko_g", "wegle_g", "tluszcz_g"] as const;
 
@@ -305,6 +314,18 @@ function usun(db: Baza, typ: TypWpisu, id: number): string {
       repo.usunAktywnosc(db, id);
       return `Usunięto aktywność „${wpis.dyscyplina}" z ${wpis.data_lokalna}`;
     }
+    case "sesja": {
+      const wpis = repo.sesjaPoId(db, id);
+      if (!wpis) brakWpisu(typ, id);
+
+      // Liczymy PRZED skasowaniem — po kaskadzie nie będzie już czego policzyć,
+      // a to jedyna informacja, jaką użytkownik dostanie: cofnięcia nie ma.
+      const ile = repo.serieSesji(db, id).length;
+      repo.usunSesje(db, id);
+
+      const nazwa = wpis.dzien_kod ? `Trening ${wpis.dzien_kod}` : "Trening bez planu";
+      return `Usunięto: ${nazwa} z ${wpis.data_lokalna} wraz z ${ile} ${odmianaSerii(ile)}`;
+    }
   }
 }
 
@@ -324,6 +345,16 @@ export function zmienWpis(
 
   if (akcja === "usun") {
     return { typ, id, akcja, opis: usun(db, typ, id) };
+  }
+
+  // Sesja nie ma czego poprawiać poza notatką; udawanie, że ma, tylko myliłoby.
+  // Wyniki poprawia się seria po serii — one mają własne identyfikatory.
+  if (typ === "sesja") {
+    throw new BladDomeny(
+      "Treningu nie da się poprawić w całości — popraw pojedyncze serie (typ='seria') " +
+        "albo usuń cały trening (akcja='usun').",
+      "sesji_nie_poprawiamy",
+    );
   }
 
   const dane = zadanie.dane ?? {};

@@ -6,13 +6,20 @@
  * ciężaru. Dlatego formularz serii jest wstępnie wypełniony poprzednim wynikiem.
  */
 
-import { ekranAktywnosci, polaAktywnosci, wpisAktywnosci } from "./aktywnosci.js";
+import { ekranAktywnosci, polaAktywnosci, wpisAktywnosci, wpisTreningu } from "./aktywnosci.js";
 import { ekranDieta } from "./dieta.js";
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
-import { nalozNaAktywnosci, nalozNaDzien, nalozNaDzienAktywnosci, nalozNaTrening } from "./nakladka.js";
+import {
+  nalozNaAktywnosci,
+  nalozNaDzien,
+  nalozNaDzienRuchu,
+  nalozNaTreningi,
+  nalozNaTrening,
+} from "./nakladka.js";
 import { polaPosilku, szablonWiersza, wpisPosilku } from "./posilek.js";
 import { czasWTekscie, stanPrzerwy, trwanieWTekscie } from "./przerwa.js";
 import { ekranRaporty, panelTygodnia } from "./raporty.js";
+import { seriaWTekscie, serieZgrupowane } from "./seria.js";
 
 const widok = document.getElementById("widok");
 const tytulEkranu = document.getElementById("tytul-ekranu");
@@ -674,16 +681,6 @@ function pasekMakro(etykieta, spozyte, cel, jednostka) {
     </div>`;
 }
 
-function seriaWTekscie(seria) {
-  const czesci = [];
-  if (seria.powtorzenia != null) {
-    czesci.push(seria.ciezar_kg ? `${seria.powtorzenia}×${seria.ciezar_kg} kg` : `${seria.powtorzenia} powt.`);
-  }
-  if (seria.czas_s != null) czesci.push(`${seria.czas_s} s`);
-  if (seria.dystans_m != null) czesci.push(`${(seria.dystans_m / 1000).toFixed(2)} km`);
-  return czesci.join(", ") || "—";
-}
-
 /** Puste zamiast null/undefined — inaczej w polu formularza wylądowałoby „null". */
 const wartosciSerii = (seria = {}) => ({
   powtorzenia: seria.powtorzenia ?? "",
@@ -787,22 +784,24 @@ function ekranDzis(dzien, czeste = []) {
       </div>
     </section>
 
-    ${sekcjaAktywnosci(dzien.aktywnosci ?? [])}`;
+    ${sekcjaAktywnosci(dzien.aktywnosci ?? [], dzien.treningi ?? [])}`;
 }
 
 /**
- * Aktywności dnia na ekranie Dziś — po to, żeby wyjazd podyktowany Claude'owi
- * było widać tam, gdzie użytkownik i tak patrzy. Pełna historia mieszka
- * w zakładce; tutaj jest tylko dzisiaj.
+ * Ruch dnia na ekranie Dziś — treningi i aktywności razem, po to żeby wyjazd
+ * podyktowany Claude'owi było widać tam, gdzie użytkownik i tak patrzy.
+ * Pełna historia mieszka w zakładce; tutaj jest tylko dzisiaj.
  */
-function sekcjaAktywnosci(aktywnosci) {
-  const lista = aktywnosci.length
-    ? aktywnosci.map((a) => wpisAktywnosci(a, edytowanaAktywnosc)).join("")
-    : '<div class="pusto">Nic poza planem treningowym.</div>';
+function sekcjaAktywnosci(aktywnosci, treningi) {
+  const wpisy =
+    treningi.map((t) => wpisTreningu(t)).join("") +
+    aktywnosci.map((a) => wpisAktywnosci(a, edytowanaAktywnosc)).join("");
+
+  const lista = wpisy || '<div class="pusto">Nic dziś nie zapisano.</div>';
 
   return `
     <section class="karta">
-      <h2>Aktywności</h2>
+      <h2>Ruch</h2>
       ${lista}
       <form id="formularz-aktywnosci" hidden>
         <div class="pola">${polaAktywnosci()}</div>
@@ -977,25 +976,6 @@ function celWTekscie(cwiczenie) {
 
 /** „2 serie", ale „5 serii" — napis na łączu zbiorczego odhaczenia. */
 const odmianaSerii = (ile) => (ile < 5 ? "serie" : "serii");
-
-/**
- * „10 powt. ×12" zamiast dwunastu identycznych wpisów po kropce.
- *
- * Serie w ramach sesji są zwykle takie same, więc wypisywanie każdej z osobna
- * robi z historii papkę — a to jedyna treść, po którą ten widok istnieje.
- * Grupują się tylko sąsiadujące: 5×100 · 5×95 · 5×100 zostaje rozpisane,
- * bo kolejność mówi o przebiegu treningu.
- */
-function serieZgrupowane(serie) {
-  const grupy = [];
-  for (const s of serie) {
-    const opis = seriaWTekscie(s);
-    const ostatnia = grupy.at(-1);
-    if (ostatnia && ostatnia.opis === opis) ostatnia.ile += 1;
-    else grupy.push({ opis, ile: 1 });
-  }
-  return grupy.map((g) => (g.ile > 1 ? `${g.opis} ×${g.ile}` : g.opis)).join(" · ");
-}
 
 function serieWKarcie(cwiczenie) {
   if (!cwiczenie.serie.length) return "";
@@ -1504,9 +1484,10 @@ async function odswiez() {
     if (!wybranaData) dzisiajData = dzien.data;
 
     stan.dzien = nalozNaDzien(dzien, kolejka);
-    // Aktywności przyszły razem z dniem jedną odpowiedzią, ale nakładka jest
-    // osobna — sumy makro i sumy kilometrów nie mają ze sobą nic wspólnego.
+    // Ruch przyszedł razem z dniem jedną odpowiedzią, ale nakładka jest osobna —
+    // sumy makro i sumy kilometrów nie mają ze sobą nic wspólnego.
     stan.dzien.aktywnosci = nalozNaAktywnosci(dzien.aktywnosci ?? [], kolejka, dzien.data);
+    stan.dzien.treningi = nalozNaTreningi(dzien.treningi ?? [], kolejka);
     stan.czeste = czeste;
     dataEkranu.textContent = stan.dzien.data;
     widok.innerHTML = ekranDzis(stan.dzien, czeste);
@@ -1594,7 +1575,7 @@ async function odswiez() {
     const historia = await api(`/aktywnosci?dni=${14 * stronAktywnosci}`);
     stan.aktywnosci = {
       ...historia,
-      dni: historia.dni.map((d) => nalozNaDzienAktywnosci(d, kolejka)),
+      dni: historia.dni.map((d) => nalozNaDzienRuchu(d, kolejka)),
     };
     dataEkranu.textContent = `${14 * stronAktywnosci} dni`;
     widok.innerHTML = ekranAktywnosci(
@@ -1845,6 +1826,28 @@ widok.addEventListener("click", (zdarzenie) => {
   if (cel.closest("[data-anuluj-aktywnosci]")) {
     edytowanaAktywnosc = null;
     odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  const usunSesje = cel.closest("[data-usun-sesje]");
+  if (usunSesje) {
+    const id = Number(usunSesje.dataset.usunSesje);
+    const trening =
+      stan.dzien?.treningi?.find((t) => t.id === id) ??
+      stan.aktywnosci?.dni.flatMap((d) => d.treningi ?? []).find((t) => t.id === id);
+
+    // Jedyne miejsce poza odhaczaniem całego ćwiczenia, które o coś pyta —
+    // i jedyne bez „Cofnij": odtworzenie sesji razem z seriami byłoby osobną
+    // ścieżką zapisu, a stuknięcie kasuje naraz cały trening.
+    const ile = trening?.serie_lacznie ?? 0;
+    const seriami = ile === 1 ? "1 zapisaną serią" : `${ile} zapisanymi seriami`;
+    if (!confirm(`Usunąć ten trening razem z ${seriami}? Tego nie da się cofnąć.`)) return;
+
+    akcjaPrzycisku(
+      usunSesje,
+      () => api("/wpis", { method: "POST", dane: { typ: "sesja", id, akcja: "usun" } }),
+      "Usunięto trening",
+    );
     return;
   }
 

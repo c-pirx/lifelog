@@ -17,6 +17,7 @@ import type {
   PostepCwiczenia,
   PozycjaPosilku,
   Seria,
+  SesjaZWynikami,
   StanTreningu,
 } from "../domain/typy.js";
 
@@ -72,7 +73,24 @@ export function aktywnoscWTekscie(a: Aktywnosc): string {
   return `#${a.id} ${a.godzina} ${a.dyscyplina}: ${czesci.join(", ")}${notatka}`;
 }
 
-export function podsumowanieWTekscie(d: PodsumowanieDnia, aktywnosci: Aktywnosc[] = []): string {
+/** Odbyty trening w jednej linii — nagłówek plus wyniki ćwiczenie po ćwiczeniu. */
+export function treningWTekscie(t: SesjaZWynikami): string {
+  const nazwa = t.dzien_kod ? `Trening ${t.dzien_kod}` : "Trening bez planu";
+  const opis = t.dzien_nazwa ? ` (${t.dzien_nazwa})` : "";
+  const trwanie = t.trwanie_s ? `, ${trwanieWTekscie(t.trwanie_s)}` : "";
+  const naglowek = `#${t.id} ${t.godzina} ${nazwa}${opis} — ${t.serie_lacznie} serii${trwanie}`;
+
+  return [
+    naglowek,
+    ...t.cwiczenia.map((c) => `    · ${c.nazwa}: ${c.serie.map(seriaWTekscie).join(" | ")}`),
+  ].join("\n");
+}
+
+export function podsumowanieWTekscie(
+  d: PodsumowanieDnia,
+  aktywnosci: Aktywnosc[] = [],
+  treningi: SesjaZWynikami[] = [],
+): string {
   const linie = [`Podsumowanie ${d.data}`, `Zjedzone: ${makroWTekscie(d.spozyte)}`];
 
   if (d.cele && d.pozostalo) {
@@ -105,8 +123,13 @@ export function podsumowanieWTekscie(d: PodsumowanieDnia, aktywnosci: Aktywnosc[
     linie.push("", `Wpisów opartych na szacunku: ${d.ile_szacowanych}${niepewne}.`);
   }
 
-  // Dzień milczy o aktywnościach tylko wtedy, gdy żadnej nie było — pusta
-  // sekcja przy każdym podsumowaniu byłaby szumem w każdej rozmowie.
+  // Dzień milczy o ruchu tylko wtedy, gdy żadnego nie było — pusta sekcja przy
+  // każdym podsumowaniu byłaby szumem w każdej rozmowie.
+  if (treningi.length > 0) {
+    linie.push("", "Treningi:");
+    linie.push(...treningi.map((t) => `  ${treningWTekscie(t)}`));
+  }
+
   if (aktywnosci.length > 0) {
     linie.push("", "Aktywności poza planem:");
     linie.push(...aktywnosci.map((a) => `  ${aktywnoscWTekscie(a)}`));

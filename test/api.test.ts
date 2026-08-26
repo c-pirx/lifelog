@@ -477,3 +477,66 @@ describe("aktywności poza planem", () => {
     expect(odpowiedz.status).toBe(401);
   });
 });
+
+describe("historia ruchu", () => {
+  /** Trening odbyty i zamknięty przez REST — tą samą drogą, co aplikacja. */
+  async function odbytyTrening() {
+    await wyslij("/api/plan", {
+      kod: "H",
+      nazwa: "Historia",
+      cwiczenia: [{ nazwa: "przysiad historyczny", typ: "silowe", serie_cel: 2, powt_cel: "5" }],
+    });
+    await wyslij("/api/trening/start", { kod: "H" });
+    await wyslij("/api/trening/seria", {
+      cwiczenie: "przysiad historyczny",
+      powtorzenia: 5,
+      ciezar_kg: 100,
+    });
+    await wyslij("/api/trening/koniec", {});
+  }
+
+  it("zakładka dostaje odbyte treningi razem z aktywnościami", async () => {
+    await odbytyTrening();
+
+    const historia = await pobierz<{
+      dni: { data: string; treningi: { dzien_kod: string; serie_lacznie: number }[] }[];
+    }>("/api/aktywnosci?dni=7");
+
+    const trening = historia.dni.flatMap((d) => d.treningi).find((t) => t.dzien_kod === "H");
+    expect(trening?.serie_lacznie).toBe(1);
+  });
+
+  it("dzień niesie treningi obok posiłków i aktywności — jednym żądaniem", async () => {
+    const dzien = await pobierz<{ treningi: { dzien_kod: string | null }[] }>("/api/dzien");
+
+    expect(dzien.treningi.map((t) => t.dzien_kod)).toContain("H");
+  });
+
+  it("usuwa cały trening razem z seriami", async () => {
+    const dzien = await pobierz<{ treningi: { id: number; dzien_kod: string | null }[] }>(
+      "/api/dzien",
+    );
+    const trening = dzien.treningi.find((t) => t.dzien_kod === "H");
+
+    const odpowiedz = await wyslij("/api/wpis", {
+      typ: "sesja",
+      id: trening?.id,
+      akcja: "usun",
+    });
+    expect(odpowiedz.status).toBe(200);
+
+    const po = await pobierz<{ treningi: { dzien_kod: string | null }[] }>("/api/dzien");
+    expect(po.treningi.map((t) => t.dzien_kod)).not.toContain("H");
+
+    // Ćwiczenie zostaje — znika wykonanie, nie definicja.
+    const historia = await pobierz<{ serie: unknown[] }>(
+      `/api/historia/${encodeURIComponent("przysiad historyczny")}`,
+    );
+    expect(historia.serie).toHaveLength(0);
+  });
+
+  it("odmawia poprawiania sesji", async () => {
+    const odpowiedz = await wyslij("/api/wpis", { typ: "sesja", id: 1, akcja: "popraw", dane: {} });
+    expect(odpowiedz.status).toBe(400);
+  });
+});

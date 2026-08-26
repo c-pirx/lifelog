@@ -307,10 +307,19 @@ Nie trzeba niczego zaczynać ani kończyć — to jeden wpis. Jeśli podasz i dy
 i czas, zapiszą się oba; wystarczy jedno z nich.
 
 W aplikacji: zakładka **Aktywności** w bocznym menu (☰), a dzisiejsze wpisy widać
-też na ekranie **Dziś**, pod posiłkami. Poprawiasz i usuwasz tak samo jak posiłek
-— ołówkiem i krzyżykiem albo zdaniem:
+też na ekranie **Dziś**, w sekcji „Ruch". Poprawiasz i usuwasz tak samo jak
+posiłek — ołówkiem i krzyżykiem albo zdaniem:
 
 > ta przejażdżka to było raczej 7 km
+
+**W tej samej zakładce leży historia odbytych treningów.** Stuknięcie w dzień
+rozwija wszystko, co tego dnia robiłeś: siłownię z wynikami ćwiczenie po
+ćwiczeniu i wyjścia poza planem, po godzinach. Krzyżyk przy treningu kasuje go
+razem ze wszystkimi seriami — aplikacja pyta o potwierdzenie, bo **tego nie da
+się cofnąć**. Pojedynczy wynik poprawisz zdaniem do Claude'a, nie tutaj.
+
+Treningi otwarte i zamknięte bez ani jednej zapisanej serii się nie pokazują —
+nie ma w nich czego oglądać.
 
 **Czego tu nie ma: spalonych kalorii.** Każde ich oszacowanie byłoby zgadywaniem,
 a liczba raz pokazana zaczyna wyglądać na prawdę — i kusić, żeby „odrobić" ją

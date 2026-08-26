@@ -11,7 +11,7 @@ import { z } from "zod";
 
 import { hasloPoprawne, tokenWazny, utworzToken, WAZNOSC_SESJI_DNI } from "../auth.js";
 import type { Baza } from "../db/index.js";
-import { aktywnosciZDnia, historiaAktywnosci, zapiszAktywnosc } from "../domain/aktywnosci.js";
+import { aktywnosciZDnia, historiaRuchu, zapiszAktywnosc } from "../domain/aktywnosci.js";
 import { czyBladDomeny } from "../domain/bledy.js";
 import {
   celeNaDzien,
@@ -29,6 +29,7 @@ import { PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
+  historiaSesji,
   odhaczCwiczenie,
   planTreningowy,
   plany,
@@ -91,7 +92,7 @@ const schematAktywnosci = z.object({
 });
 
 const schematWpisu = z.object({
-  typ: z.enum(["posilek", "seria", "waga", "aktywnosc"]),
+  typ: z.enum(["posilek", "seria", "waga", "aktywnosc", "sesja"]),
   id: z.number().int().positive(),
   akcja: z.enum(["popraw", "usun"]),
   dane: z.record(z.string(), z.unknown()).optional(),
@@ -180,6 +181,7 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
     return c.json({
       ...dzien,
       aktywnosci: aktywnosciZDnia(db, dzien.data, { strefa: ustawienia.strefa }),
+      treningi: historiaSesji(db, dzien.data, dzien.data, { strefa: ustawienia.strefa }),
     });
   });
 
@@ -217,15 +219,15 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
 
   // === Aktywności poza planem ==========================================
 
-  // Jedna trasa, dwa odczyty: `data` daje pojedynczy dzień (ekran Dziś),
-  // `dni`/`przed` rosnące okno historii (zakładka Aktywności) — tak samo jak
-  // `/dzien` i `/dieta` dzielą się rolami po stronie diety.
+  // Jedna trasa, dwa odczyty: `data` daje same aktywności jednego dnia,
+  // `dni`/`przed` rosnące okno pełnej historii ruchu — z treningami włącznie.
+  // Tak samo jak `/dzien` i `/dieta` dzielą się rolami po stronie diety.
   api.get("/aktywnosci", (c) => {
     const data = c.req.query("data");
     if (data) return c.json(aktywnosciZDnia(db, data, { strefa: ustawienia.strefa }));
 
     return c.json(
-      historiaAktywnosci(db, {
+      historiaRuchu(db, {
         dni: Math.min(Number(c.req.query("dni") ?? 14), 92),
         przed: c.req.query("przed"),
         strefa: ustawienia.strefa,

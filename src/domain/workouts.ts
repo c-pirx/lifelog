@@ -7,18 +7,26 @@
 
 import type { Baza } from "../db/index.js";
 import * as repo from "../db/repo.js";
-import { dataLokalna, dzienTygodnia, terazUtc, STREFA_DOMYSLNA } from "../lib/time.js";
+import {
+  dataLokalna,
+  dzienTygodnia,
+  godzinaLokalna,
+  terazUtc,
+  STREFA_DOMYSLNA,
+} from "../lib/time.js";
 import { BladDomeny } from "./bledy.js";
 import type {
   Cwiczenie,
   CwiczenieWDniu,
   DzienPlanu,
   NowaSeria,
+  CwiczenieWSesji,
   Plan,
   PostepCwiczenia,
   Propozycja,
   Seria,
   Sesja,
+  SesjaZWynikami,
   StanTreningu,
   TypCwiczenia,
   ZrodloPropozycji,
@@ -797,6 +805,62 @@ export type HistoriaCwiczenia = {
   rekord_ciezar: number | null;
   rekord_powtorzenia: number | null;
 };
+
+/**
+ * Zakończone treningi z zakresu dat, każdy z seriami pogrupowanymi po ćwiczeniu.
+ *
+ * Sesje bez ani jednej serii są pomijane: to ślad po otwarciu i zamknięciu
+ * treningu, który w historii ruchu nie niesie żadnej informacji, a potrafi
+ * zapchać listę.
+ */
+export function historiaSesji(
+  db: Baza,
+  od: string,
+  doDaty: string,
+  opcje: Opcje = {},
+): SesjaZWynikami[] {
+  const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
+  const sesje = repo.sesjeZZakresu(db, od, doDaty);
+
+  const wgSesji = new Map<number, Seria[]>();
+  for (const seria of repo.serieDlaSesji(db, sesje.map((s) => s.id))) {
+    const lista = wgSesji.get(seria.sesja_id);
+    if (lista) lista.push(seria);
+    else wgSesji.set(seria.sesja_id, [seria]);
+  }
+
+  return sesje
+    .filter((s) => wgSesji.has(s.id))
+    .map((s) => {
+      const serie = wgSesji.get(s.id) ?? [];
+
+      // Kolejność ćwiczeń bierze się z kolejności pierwszej serii — tak, jak
+      // trening naprawdę przebiegł, a nie jak stał w planie.
+      const wgCwiczenia = new Map<number, CwiczenieWSesji>();
+      for (const seria of serie) {
+        const istniejace = wgCwiczenia.get(seria.cwiczenie_id);
+        if (istniejace) istniejace.serie.push(seria);
+        else {
+          wgCwiczenia.set(seria.cwiczenie_id, {
+            cwiczenie_id: seria.cwiczenie_id,
+            nazwa: seria.nazwa,
+            typ: seria.typ,
+            serie: [seria],
+          });
+        }
+      }
+
+      return {
+        ...zbudujSesje(s),
+        godzina: godzinaLokalna(s.start_ts, strefa),
+        trwanie_s: s.koniec_ts
+          ? Math.max(0, Math.round((Date.parse(s.koniec_ts) - Date.parse(s.start_ts)) / 1000))
+          : null,
+        serie_lacznie: serie.length,
+        cwiczenia: [...wgCwiczenia.values()],
+      };
+    });
+}
 
 export function historiaCwiczenia(db: Baza, nazwa: string, limitSesji = 10): HistoriaCwiczenia {
   const cwiczenie = znajdzCwiczenie(db, nazwa);

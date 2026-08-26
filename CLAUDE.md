@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 355 testów
+npm test             # 384 testy
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -238,7 +238,9 @@ Tą samą zasadą rządzą się `public/raporty.js` (panel tygodnia i archiwum),
 `public/dieta.js` i `public/posilek.js` (zakładka Dieta i wspólny renderer wpisu
 posiłku) oraz `public/aktywnosci.js` (zakładka Aktywności razem z rendererem
 wpisu — jeden plik, bo `aktywnosc.js` obok `aktywnosci.js` prosiłoby się
-o pomyłkę przy imporcie): renderują, ale nie oceniają — werdykty „na kursie"
+o pomyłkę przy imporcie) wsparta `public/seria.js` (jak seria czyta się
+w tekście — wspólne z ekranem Trening, bo dwie kopie tej samej funkcji
+rozjechałyby się przy pierwszej poprawce): renderują, ale nie oceniają — werdykty „na kursie"
 i „idzie lepiej" przychodzą gotowe z serwera. Testy leżą obok,
 w `test/offline.test.ts`.
 
@@ -283,8 +285,23 @@ Bieg, rower, spacer, basen — wysiłek, o którym użytkownik mówi po fakcie
 („przejechałem 5 km"). Zapis jest **jednostrzałowy**: nic się nie otwiera i nic
 nie zamyka. W czacie robi to `zapisz_serie` z `aktywnosc: true` (nazwa dyscypliny
 idzie w polu `cwiczenie`), w aplikacji zakładka **Aktywności** w szufladzie oraz
-sekcja na ekranie Dziś. Poprawki i usuwanie jak wszędzie — `zmien_wpis`
+sekcja „Ruch" na ekranie Dziś. Poprawki i usuwanie jak wszędzie — `zmien_wpis`
 z `typ='aktywnosc'` i trasa `POST /wpis`.
+
+**Zakładka scala dwa byty, baza ich nie scala.** Historia ruchu (`historiaRuchu`)
+pokazuje obok siebie odbyte treningi z wynikami i aktywności poza planem —
+patrzący wstecz chce jednej listy „co robiłem", a nie dwóch ekranów do
+zestawiania w głowie. Scalanie jest **wyłącznie w odczycie**: tabele, raport
+i ocena tygodnia dalej trzymają rozdział. Do historii wchodzą tylko sesje
+**zakończone i mające choć jedną serię** — pusta sesja to ślad po otwarciu
+i zamknięciu treningu, w historii nic nie znaczy. Ekran Dziś i `podsumowanie_dnia`
+pokazują to samo, żeby pytanie „co dziś robiłem" nie dawało dwóch odpowiedzi.
+
+**Usunięcie treningu idzie przez `zmien_wpis` z `typ='sesja'`** (tylko `usun`;
+poprawianie odmawia i kieruje do `typ='seria'`). Serie znikają **kaskadą ze
+schematu**, nie ręcznym kasowaniem. Cofnięcia nie ma — odtworzenie sesji razem
+z seriami byłoby osobną ścieżką zapisu — dlatego aplikacja pyta `confirm()`
+przed wysłaniem. To drugie i ostatnie miejsce, które o cokolwiek pyta.
 
 **Osobna tabela `aktywnosci`, a nie sesja z jedną serią.** Trzy powody, każdy
 sam w sobie wystarczający: `idx_sesja_aktywna` dopuszcza jedną otwartą sesję,
@@ -356,10 +373,15 @@ tempa na ekranie Postępy, odhaczanie serii wraz z widokiem pojedynczego
 ćwiczenia, a także zakładka Dieta (historia dni pod `GET /dieta`,
 `historiaDiety`), edycja pozycji składowych posiłku i godziny wpisu
 (`zmien_wpis` / `POST /wpis`, auto-suma nagłówka per pole), trzeci
-poziom pewności estymacji (`niepewne`) oraz aktywności poza planem
-(zakładka Aktywności, `GET/POST /aktywnosci`, `zapisz_serie` z `aktywnosc`).
+poziom pewności estymacji (`niepewne`), aktywności poza planem
+(zakładka Aktywności, `GET/POST /aktywnosci`, `zapisz_serie` z `aktywnosc`)
+oraz historia odbytych treningów w tej samej zakładce wraz z usuwaniem całej
+sesji (`historiaSesji`, `zmien_wpis` z `typ='sesja'`).
+
+Z listy odłożonych spadło przez to „lista ostatnich sesji"; **poprawianie serii
+wstecz nadal czeka** — zakładka pokazuje wyniki, ale ich nie edytuje.
 
 Odłożone świadomie przy odhaczaniu: podsumowanie po zakończeniu treningu,
-lista ostatnich sesji z poprawianiem serii wstecz, edycja planu w aplikacji,
+poprawianie serii wstecz, edycja planu w aplikacji,
 podpowiedzi nazw przy ćwiczeniu spoza planu (dziś literówka rozdziela historię
 ćwiczenia — `repo.wszystkieCwiczenia` czeka nietknięte), supersety.

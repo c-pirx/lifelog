@@ -574,6 +574,22 @@ export function zamknijSesje(
     .run(status, koniecTs, notatki, id).changes;
 }
 
+/** Zakończone sesje z zakresu, najnowsza pierwsza — materiał na historię ruchu. */
+export function sesjeZZakresu(db: Baza, od: string, doDaty: string): WierszSesji[] {
+  return db
+    .prepare<[string, string], WierszSesji>(
+      `SELECT ${KOLUMNY_SESJI} FROM sesje s LEFT JOIN dni_planu d ON d.id = s.dzien_id
+       WHERE s.status = 'zakonczona' AND s.data_lokalna BETWEEN ? AND ?
+       ORDER BY s.data_lokalna DESC, s.start_ts`,
+    )
+    .all(od, doDaty);
+}
+
+export function usunSesje(db: Baza, id: number): number {
+  // Serie znikają kaskadą ze schematu — patrz `serie.sesja_id … ON DELETE CASCADE`.
+  return db.prepare("DELETE FROM sesje WHERE id = ?").run(id).changes;
+}
+
 export function ostatnieSesje(db: Baza, limit: number): WierszSesji[] {
   return db
     .prepare<[number], WierszSesji>(
@@ -620,6 +636,21 @@ export function serieSesji(db: Baza, sesjaId: number): WierszSerii[] {
        WHERE se.sesja_id = ? ORDER BY se.ts, se.id`,
     )
     .all(sesjaId);
+}
+
+/**
+ * Serie wielu sesji naraz. Historia ruchu czyta dwa tygodnie sesji na jednym
+ * ekranie — pytanie per sesja dałoby kilkanaście zapytań zamiast jednego.
+ */
+export function serieDlaSesji(db: Baza, ids: number[]): WierszSerii[] {
+  if (ids.length === 0) return [];
+  const znaki = ids.map(() => "?").join(", ");
+  return db
+    .prepare<number[], WierszSerii>(
+      `SELECT ${KOLUMNY_SERII} FROM serie se JOIN cwiczenia c ON c.id = se.cwiczenie_id
+       WHERE se.sesja_id IN (${znaki}) ORDER BY se.ts, se.id`,
+    )
+    .all(...ids);
 }
 
 export function ileSerii(db: Baza, sesjaId: number, cwiczenieId: number): number {

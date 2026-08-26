@@ -1,5 +1,9 @@
 /**
- * Aktywności poza planem — zakładka z historią i wspólny renderer wpisu.
+ * Historia ruchu — zakładka z odbytymi treningami i aktywnościami poza planem.
+ *
+ * Zakładka scala DWA rodzaje wpisów. Rozdział bytów ma sens tam, gdzie coś
+ * rozstrzyga — w bazie i w ocenie tygodnia — ale użytkownik patrzący wstecz
+ * chce jednej listy „co robiłem", a nie dwóch ekranów do zestawiania w głowie.
  *
  * Czysty moduł na wzór dieta.js i posilek.js: bez DOM, bez sieci, bez ocen
  * domenowych. Renderuje liczby przysłane przez serwer (po nałożeniu kolejki
@@ -10,6 +14,8 @@
  * Dziś i tę zakładkę. Rozbicie na `aktywnosc.js` i `aktywnosci.js` dałoby dwie
  * nazwy różniące się jedną literą — pomyłka przy imporcie byłaby kwestią czasu.
  */
+
+import { serieZgrupowane } from "./seria.js";
 
 const esc = (tekst) =>
   String(tekst ?? "").replace(
@@ -113,18 +119,112 @@ export function wpisAktywnosci(a, edytowana) {
     </div>`;
 }
 
+/**
+ * Odbyty trening: nagłówek i wyniki ćwiczenie po ćwiczeniu.
+ *
+ * Bez przycisku poprawki — poprawianie serii wstecz to osobna sprawa. Jest za to
+ * usunięcie całego treningu, bo omyłkowo otwarta i odhaczona sesja nie ma
+ * dziś żadnej drogi wyjścia.
+ */
+export function wpisTreningu(t) {
+  const nazwa = t.dzien_kod ? `Trening ${esc(t.dzien_kod)}` : "Trening bez planu";
+  const opis = t.dzien_nazwa ? ` · ${esc(t.dzien_nazwa)}` : "";
+  // Poniżej minuty czas milczy: „0 min" wygląda na zepsutą liczbę, a nie na
+  // trening odhaczony w kilkanaście sekund po fakcie.
+  const trwanie = t.trwanie_s >= 60 ? ` · ${czasWysilku(t.trwanie_s)}` : "";
+
+  return `
+    <div class="wpis ${t.oczekujace_usuniecie ? "oczekuje" : ""}">
+      <div class="tresc">
+        <div class="naglowek">
+          <span class="godzina">${esc(t.godzina)}</span>
+          <span class="opis">${nazwa}</span>
+          ${t.oczekujace_usuniecie ? '<span class="znacznik">⏳ usuwanie</span>' : ""}
+        </div>
+        <div class="szczegoly">${t.serie_lacznie} ${odmianaSerii(t.serie_lacznie)}${opis}${trwanie}</div>
+        <ul class="pozycje">
+          ${t.cwiczenia
+            .map(
+              (c) => `
+            <li>
+              <span class="nazwa">${esc(c.nazwa)}</span>
+              <span class="kcal">${esc(serieZgrupowane(c.serie))}</span>
+            </li>`,
+            )
+            .join("")}
+        </ul>
+      </div>
+      ${
+        t.oczekujace_usuniecie
+          ? ""
+          : `<button class="przycisk cichy" data-usun-sesje="${t.id}" aria-label="Usuń trening">✕</button>`
+      }
+    </div>`;
+}
+
+/**
+ * Treningi i aktywności jednego dnia w jednej liście, po godzinie.
+ *
+ * Poranny rower ma stać nad wieczorną siłownią — inaczej „co robiłem we wtorek"
+ * czyta się w dwóch turach. Wpisy bez godziny (nie powinno ich być) lądują na
+ * końcu, zamiast wywracać sortowanie.
+ */
+export function wpisyDnia(d) {
+  const wpisy = [
+    ...(d.treningi ?? []).map((t) => ({ rodzaj: "trening", godzina: t.godzina ?? "99:99", dane: t })),
+    ...(d.aktywnosci ?? []).map((a) => ({ rodzaj: "aktywnosc", godzina: a.godzina ?? "99:99", dane: a })),
+  ];
+
+  return wpisy.sort((a, b) => (a.godzina < b.godzina ? -1 : a.godzina > b.godzina ? 1 : 0));
+}
+
+const odmianaSerii = (ile) => (ile === 1 ? "seria" : ile < 5 ? "serie" : "serii");
+
+/**
+ * Podsumowanie dnia na zwiniętej karcie: co to było, a nie ile tego było.
+ *
+ * „Trening A · rower 18,4 km" mówi więcej niż „2 wpisy" — a to jedyna treść,
+ * po której użytkownik wybiera, który dzień rozwinąć. Powtórzenia zwijają się
+ * w „×3", bo trzy razy ten sam napis pod rząd zajmuje miejsce i nic nie dodaje.
+ */
+function skrotDnia(d) {
+  const czesci = (d.treningi ?? []).map((t) =>
+    t.dzien_kod ? `Trening ${t.dzien_kod}` : "Trening",
+  );
+
+  for (const a of d.aktywnosci ?? []) {
+    const miara = a.dystans_m != null ? ` ${kilometry(a.dystans_m)} km` : ` ${czasWysilku(a.czas_s)}`;
+    czesci.push(`${a.dyscyplina}${miara}`);
+  }
+
+  const grupy = [];
+  for (const opis of czesci) {
+    const ostatnia = grupy.at(-1);
+    if (ostatnia && ostatnia.opis === opis) ostatnia.ile += 1;
+    else grupy.push({ opis, ile: 1 });
+  }
+
+  return grupy.map((g) => (g.ile > 1 ? `${g.opis} ×${g.ile}` : g.opis)).join(" · ");
+}
+
 function kartaDnia(d, rozwiniety, edytowana, dzisiaj) {
-  const dystans = d.dystans_m > 0 ? `${kilometry(d.dystans_m)} km` : "";
-  const czas = d.czas_s > 0 ? czasWysilku(d.czas_s) : "";
-  const liczby = [dystans, czas].filter(Boolean).join(" · ");
+  const wpisy = wpisyDnia(d);
 
   return `
     <section class="karta">
       <button class="dzien-diety ${rozwiniety ? "rozwiniety" : ""}" data-dzien-aktywnosci="${esc(d.data)}">
         <span class="data">${etykietaDnia(d.data, dzisiaj)}</span>
-        <span class="liczby-dnia">${d.aktywnosci.length} × ${liczby || "bez miary"}</span>
+        <span class="liczby-dnia">${esc(skrotDnia(d))}</span>
       </button>
-      ${rozwiniety ? d.aktywnosci.map((a) => wpisAktywnosci(a, edytowana)).join("") : ""}
+      ${
+        rozwiniety
+          ? wpisy
+              .map((w) =>
+                w.rodzaj === "trening" ? wpisTreningu(w.dane) : wpisAktywnosci(w.dane, edytowana),
+              )
+              .join("")
+          : ""
+      }
     </section>`;
 }
 
@@ -152,7 +252,7 @@ export function ekranAktywnosci(historia, rozwinietyDzien, edytowana, dzisiaj) {
     return `
       ${formularz}
       <section class="karta">
-        <div class="pusto">Żadnego wyjścia od ${esc(historia?.od ?? "")} — bieg, rower i spacer zapiszesz tutaj albo zdaniem do Claude'a.</div>
+        <div class="pusto">Żadnego ruchu od ${esc(historia?.od ?? "")} — odbyte treningi pojawią się tu same, a bieg, rower i spacer zapiszesz powyżej albo zdaniem do Claude'a.</div>
       </section>
       ${starsze}`;
   }

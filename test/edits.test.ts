@@ -7,8 +7,12 @@ import { zmienWpis } from "../src/domain/edits.js";
 import { ostatniaWaga, trendWagi, zapiszWage } from "../src/domain/metrics.js";
 import {
   dodajDzienPlanu,
+  historiaCwiczenia,
+  historiaSesji,
+  planTreningowy,
   rozpocznijTrening,
   stanTreningu,
+  zakonczTrening,
   zapiszSerie,
 } from "../src/domain/workouts.js";
 
@@ -495,6 +499,61 @@ describe("aktywności poza planem", () => {
 
   it("zgłasza brak wpisu o podanym id", () => {
     expect(() => zmienWpis(db, { typ: "aktywnosc", id: 999, akcja: "usun" })).toThrow(
+      /nie znaleziono/i,
+    );
+  });
+});
+
+describe("usuwanie całego treningu", () => {
+  function trening() {
+    dodajDzienPlanu(db, {
+      kod: "A",
+      nazwa: "Nogi",
+      cwiczenia: [{ nazwa: "przysiad", typ: "silowe", serie_cel: 3, powt_cel: "5" }],
+    });
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-25T09:00:00.000Z" });
+    for (let nr = 1; nr <= 3; nr += 1) {
+      zapiszSerie(db, {
+        cwiczenie: "przysiad",
+        powtorzenia: 5,
+        ciezar_kg: 100,
+        ts: "2026-08-25T09:05:00.000Z",
+      });
+    }
+    zakonczTrening(db, { ts: "2026-08-25T10:00:00.000Z" });
+    return historiaSesji(db, "2026-08-25", "2026-08-25")[0]!;
+  }
+
+  it("kasuje sesję razem z jej seriami", () => {
+    const sesja = trening();
+
+    const wynik = zmienWpis(db, { typ: "sesja", id: sesja.id, akcja: "usun" });
+
+    expect(wynik.opis).toMatch(/3 seriami/);
+    expect(historiaSesji(db, "2026-08-25", "2026-08-25")).toHaveLength(0);
+    // Serie znikają kaskadą ze schematu, nie ręcznym kasowaniem.
+    expect(historiaCwiczenia(db, "przysiad").serie).toHaveLength(0);
+  });
+
+  it("nie rusza ćwiczenia ani planu — znika tylko wykonanie", () => {
+    const sesja = trening();
+
+    zmienWpis(db, { typ: "sesja", id: sesja.id, akcja: "usun" });
+
+    expect(planTreningowy(db)[0]?.cwiczenia[0]?.nazwa).toBe("przysiad");
+    expect(historiaCwiczenia(db, "przysiad").nazwa).toBe("przysiad");
+  });
+
+  it("odmawia poprawiania sesji i mówi, czym poprawić wynik", () => {
+    const sesja = trening();
+
+    expect(() =>
+      zmienWpis(db, { typ: "sesja", id: sesja.id, akcja: "popraw", dane: {} as never }),
+    ).toThrow(/pojedyncze serie/i);
+  });
+
+  it("zgłasza brak sesji o podanym id", () => {
+    expect(() => zmienWpis(db, { typ: "sesja", id: 999, akcja: "usun" })).toThrow(
       /nie znaleziono/i,
     );
   });

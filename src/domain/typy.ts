@@ -229,6 +229,30 @@ export type PostepCwiczenia = {
   ukonczone: boolean;
 };
 
+export type CwiczenieWSesji = {
+  cwiczenie_id: number;
+  nazwa: string;
+  typ: TypCwiczenia;
+  serie: Seria[];
+};
+
+/**
+ * Odbyty trening z wynikami — kształt dla historii ruchu w aplikacji.
+ *
+ * Objętości w kilogramach tu nie ma świadomie: regułę „iloczyn tylko dla
+ * ćwiczeń siłowych" wyraża SQL `repo.agregatSerii` na potrzeby raportu, a drugie
+ * jej wyrażenie w TypeScripcie rozjechałoby się przy pierwszej zmianie. Liczba
+ * serii i czas trwania wystarczą do nagłówka, a wyniki widać wprost w seriach.
+ */
+export type SesjaZWynikami = Sesja & {
+  /** Godzina rozpoczęcia, HH:MM lokalnie. */
+  godzina: string;
+  /** null, gdy sesja nie ma `koniec_ts` — nie zgadujemy, ile trwała. */
+  trwanie_s: number | null;
+  serie_lacznie: number;
+  cwiczenia: CwiczenieWSesji[];
+};
+
 export type StanTreningu = {
   sesja: Sesja | null;
   wg_planu: PostepCwiczenia[];
@@ -273,18 +297,20 @@ export type NowaAktywnosc = {
   zrodlo?: Aktywnosc["zrodlo"];
 };
 
-export type DzienAktywnosci = {
+/** Doba w historii ruchu: odbyte treningi i aktywności poza planem razem. */
+export type DzienRuchu = {
   data: string;
-  /** Sumy dnia — liczone raz na serwerze, żeby apka i czat podawały to samo. */
+  /** Sumy dotyczą wyłącznie aktywności — trening siłowy nie ma kilometrów. */
   dystans_m: number;
   czas_s: number;
   aktywnosci: Aktywnosc[];
+  treningi: SesjaZWynikami[];
 };
 
-export type HistoriaAktywnosci = {
+export type HistoriaRuchu = {
   od: string;
   do: string;
-  dni: DzienAktywnosci[];
+  dni: DzienRuchu[];
 };
 
 // === POMIARY ============================================================

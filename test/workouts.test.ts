@@ -4,6 +4,7 @@ import { otworzBaze, type Baza } from "../src/db/index.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
+  historiaSesji,
   odhaczCwiczenie,
   planDomyslny,
   planTreningowy,
@@ -766,5 +767,66 @@ describe("historia ćwiczenia", () => {
 
   it("zgłasza brak ćwiczenia zamiast zwracać pustkę", () => {
     expect(() => historiaCwiczenia(db, "nieistniejące")).toThrow(/nie znaleziono|nieznane/i);
+  });
+});
+
+describe("historia odbytych sesji", () => {
+  it("zwraca zakończone treningi z seriami pogrupowanymi po ćwiczeniu", () => {
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-17T09:00:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: "2026-08-17T09:05:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "wyciskanie", powtorzenia: 8, ciezar_kg: 60, ts: "2026-08-17T09:20:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: "2026-08-17T09:10:00.000Z" });
+    zakonczTrening(db, { ts: "2026-08-17T10:15:00.000Z" });
+
+    const [sesja] = historiaSesji(db, "2026-08-10", "2026-08-20");
+
+    expect(sesja?.dzien_kod).toBe("A");
+    expect(sesja?.serie_lacznie).toBe(3);
+    expect(sesja?.godzina).toBe("11:00");
+    expect(sesja?.trwanie_s).toBe(75 * 60);
+
+    // Kolejność ćwiczeń wg pierwszej serii, nie wg planu.
+    expect(sesja?.cwiczenia.map((c) => c.nazwa)).toEqual(["przysiad", "wyciskanie"]);
+    expect(sesja?.cwiczenia[0]?.serie).toHaveLength(2);
+  });
+
+  it("pomija sesje bez ani jednej serii", () => {
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-17T09:00:00.000Z" });
+    zakonczTrening(db, { ts: "2026-08-17T09:02:00.000Z" });
+
+    expect(historiaSesji(db, "2026-08-10", "2026-08-20")).toHaveLength(0);
+  });
+
+  it("pomija sesję wciąż otwartą — to historia odbytych treningów", () => {
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-17T09:00:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: "2026-08-17T09:05:00.000Z" });
+
+    expect(historiaSesji(db, "2026-08-10", "2026-08-20")).toHaveLength(0);
+  });
+
+  it("nie wychodzi poza podany zakres i porządkuje od najnowszej", () => {
+    planA();
+    przeszlyTrening(90, "2026-08-10T09:00:00.000Z");
+    przeszlyTrening(100, "2026-08-17T09:00:00.000Z");
+
+    expect(historiaSesji(db, "2026-08-10", "2026-08-20").map((s) => s.data_lokalna)).toEqual([
+      "2026-08-17",
+      "2026-08-10",
+    ]);
+    expect(historiaSesji(db, "2026-08-15", "2026-08-20")).toHaveLength(1);
+  });
+
+  it("sesja bez dnia planu nie ma kodu, ale ma wyniki", () => {
+    rozpocznijTrening(db, { bez_planu: true, ts: "2026-08-17T09:00:00.000Z" });
+    zapiszSerie(db, { cwiczenie: "rower", typ: "cardio", czas_s: 1800, ts: "2026-08-17T09:05:00.000Z" });
+    zakonczTrening(db, { ts: "2026-08-17T09:40:00.000Z" });
+
+    const [sesja] = historiaSesji(db, "2026-08-17", "2026-08-17");
+
+    expect(sesja?.dzien_kod).toBeNull();
+    expect(sesja?.cwiczenia[0]).toMatchObject({ nazwa: "rower", typ: "cardio" });
   });
 });

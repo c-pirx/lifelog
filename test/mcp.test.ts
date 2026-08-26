@@ -463,3 +463,49 @@ describe("aktywności poza planem", () => {
     expect(opis).toMatch(/W TRAKCIE trwającej sesji/);
   });
 });
+
+describe("odbyte treningi w czacie", () => {
+  it("podsumowanie dnia wymienia trening z wynikami", async () => {
+    await wywolaj("zarzadzaj_planem", {
+      akcja: "zapisz_dzien",
+      kod: "R",
+      nazwa: "Ruch",
+      cwiczenia: [{ nazwa: "martwy ciąg", typ: "silowe", serie_cel: 2, powt_cel: "5" }],
+    });
+    await wywolaj("rozpocznij_trening", { kod: "R", czas: "2026-09-21 17:00" });
+    await wywolaj("zapisz_serie", {
+      cwiczenie: "martwy ciąg",
+      powtorzenia: 5,
+      ciezar_kg: 120,
+      czas: "2026-09-21 17:10",
+    });
+    await wywolaj("zakoncz_trening", { czas: "2026-09-21 18:15" });
+
+    const podsumowanie = await wywolaj("podsumowanie_dnia", { data: "2026-09-21" });
+
+    expect(podsumowanie).toMatch(/Treningi:/);
+    expect(podsumowanie).toMatch(/Trening R/);
+    expect(podsumowanie).toMatch(/martwy ciąg: 5×120 kg/);
+    expect(podsumowanie).toMatch(/1 h 15 min/);
+  });
+
+  it("usuwa cały trening przez zmien_wpis", async () => {
+    const podsumowanie = await wywolaj("podsumowanie_dnia", { data: "2026-09-21" });
+    const id = Number(/#(\d+) 17:00 Trening R/.exec(podsumowanie)?.[1]);
+
+    expect(await wywolaj("zmien_wpis", { typ: "sesja", id, akcja: "usun" })).toMatch(
+      /usunięto.*1 serią/i,
+    );
+    expect(await wywolaj("podsumowanie_dnia", { data: "2026-09-21" })).not.toMatch(/Treningi:/);
+  });
+
+  it("odmawia poprawiania sesji i kieruje do serii", async () => {
+    const wynik = await klient.callTool({
+      name: "zmien_wpis",
+      arguments: { typ: "sesja", id: 1, akcja: "popraw", dane: {} },
+    });
+
+    expect(wynik.isError).toBe(true);
+    expect(tresc(wynik)).toMatch(/pojedyncze serie/i);
+  });
+});

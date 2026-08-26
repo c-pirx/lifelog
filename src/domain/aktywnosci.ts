@@ -16,7 +16,14 @@ import type { Baza } from "../db/index.js";
 import * as repo from "../db/repo.js";
 import { dataLokalna, dzisiaj, godzinaLokalna, przesunDate, terazUtc, STREFA_DOMYSLNA } from "../lib/time.js";
 import { BladDomeny } from "./bledy.js";
-import type { Aktywnosc, DzienAktywnosci, HistoriaAktywnosci, NowaAktywnosc } from "./typy.js";
+import type {
+  Aktywnosc,
+  DzienRuchu,
+  HistoriaRuchu,
+  NowaAktywnosc,
+  SesjaZWynikami,
+} from "./typy.js";
+import { historiaSesji } from "./workouts.js";
 
 export type Opcje = { strefa?: string };
 
@@ -119,27 +126,41 @@ const sumujPole = (lista: Aktywnosc[], pole: "dystans_m" | "czas_s"): number =>
   lista.reduce((suma, a) => suma + (a[pole] ?? 0), 0);
 
 /**
- * Historia pogrupowana po dniach, najnowszy pierwszy.
+ * Historia ruchu pogrupowana po dniach, najnowszy pierwszy.
+ *
+ * Zwraca DWA rodzaje wpisów: odbyte treningi z wynikami i aktywności poza
+ * planem. Rozdział bytów zostaje tam, gdzie ma znaczenie — w bazie i w ocenie
+ * tygodnia — ale użytkownik patrzący wstecz chce jednej listy „co robiłem",
+ * a nie dwóch ekranów do zestawiania w głowie.
  *
  * Kształt i mechanika okna jak w `historiaDiety`: `przed` wskazuje dzień, PRZED
  * którym zaczyna się kolejna strona, żeby „Pokaż starsze" nie powtarzało
  * ostatniego dnia z poprzedniej porcji.
  */
-export function historiaAktywnosci(
+export function historiaRuchu(
   db: Baza,
   opcje: Opcje & { dni?: number; przed?: string } = {},
-): HistoriaAktywnosci {
+): HistoriaRuchu {
   const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
   const dni = opcje.dni ?? 14;
   const koniec = opcje.przed ? przesunDate(opcje.przed, -1) : dzisiaj(strefa);
   const od = przesunDate(koniec, -(dni - 1));
 
-  const poDniu = new Map<string, Aktywnosc[]>();
+  const poDniu = new Map<string, { aktywnosci: Aktywnosc[]; treningi: SesjaZWynikami[] }>();
+  const dzien = (data: string) => {
+    const istniejacy = poDniu.get(data);
+    if (istniejacy) return istniejacy;
+    const nowy = { aktywnosci: [], treningi: [] };
+    poDniu.set(data, nowy);
+    return nowy;
+  };
+
   for (const wiersz of repo.aktywnosciZZakresu(db, od, koniec)) {
-    const aktywnosc = zbuduj(wiersz, strefa);
-    const lista = poDniu.get(wiersz.data_lokalna);
-    if (lista) lista.push(aktywnosc);
-    else poDniu.set(wiersz.data_lokalna, [aktywnosc]);
+    dzien(wiersz.data_lokalna).aktywnosci.push(zbuduj(wiersz, strefa));
+  }
+
+  for (const sesja of historiaSesji(db, od, koniec, { strefa })) {
+    dzien(sesja.data_lokalna).treningi.push(sesja);
   }
 
   return {
@@ -147,11 +168,14 @@ export function historiaAktywnosci(
     do: koniec,
     dni: [...poDniu.entries()]
       .sort(([a], [b]) => (a < b ? 1 : -1))
-      .map(([data, lista]): DzienAktywnosci => ({
+      .map(([data, wpisy]): DzienRuchu => ({
         data,
-        dystans_m: sumujPole(lista, "dystans_m"),
-        czas_s: sumujPole(lista, "czas_s"),
-        aktywnosci: lista,
+        // Sumy dotyczą aktywności — kilometry z treningu siłowego nie istnieją,
+        // a doliczanie tam bieżni mieszałoby dwie różne rzeczy.
+        dystans_m: sumujPole(wpisy.aktywnosci, "dystans_m"),
+        czas_s: sumujPole(wpisy.aktywnosci, "czas_s"),
+        aktywnosci: wpisy.aktywnosci,
+        treningi: wpisy.treningi,
       })),
   };
 }
