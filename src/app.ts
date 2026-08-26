@@ -44,6 +44,19 @@ export function utworzApp(db: Baza, ustawienia: UstawieniaApp) {
 
   // Musi być ostatnie — przechwytuje wszystko, co nie trafiło wyżej.
   if (ustawienia.katalogStatykow) {
+    // Te same nagłówki, które na produkcji dokłada nginx. Bez jawnego
+    // Cache-Control przeglądarka stosuje własną heurystykę i potrafi serwować
+    // starą powłokę mimo zmienionego pliku — a service worker wciąga tę starą
+    // kopię do swojego cache i utrwala ją na dobre, bo dopasowuje adresy
+    // z pominięciem części zapytania. Efekt: „zmiany nie docierają",
+    // identyczny jak na telefonie, tylko trudniejszy do zauważenia lokalnie.
+    app.use("/*", async (c, nastepny) => {
+      await nastepny();
+      if (/\.(html|js|css|json|webmanifest)$/.test(new URL(c.req.url).pathname) || c.req.path === "/") {
+        c.header("Cache-Control", "no-cache");
+      }
+    });
+
     app.use("/*", serveStatic({ root: ustawienia.katalogStatykow }));
   }
 
