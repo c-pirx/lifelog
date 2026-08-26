@@ -874,6 +874,18 @@ label {
   flex: 1;
 }
 
+/* Powrót z widoku ćwiczenia to wiersz nawigacji, nie kolejny klawisz w karcie.
+   Odstęp należy się pod spodem — to on oddziela nawigację od treści — a nad
+   przyciskiem wystarcza padding widoku. Dotąd było odwrotnie: 12 px nad,
+   zero pod, przez co przycisk dotykał karty.
+
+   20 px zamiast 12 px spomiędzy kart: przerwa między poziomami hierarchii
+   musi się czytać jako większa niż przerwa wewnątrz jednego poziomu. */
+.przyciski.powrot {
+  margin-top: 0;
+  margin-bottom: 20px;
+}
+
 /* === Komunikaty ======================================================= */
 
 .pusto {

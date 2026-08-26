@@ -1016,7 +1016,7 @@ function ekranCwiczenie(cwiczenie, historia) {
       : null;
 
   return `
-    <div class="przyciski">
+    <div class="przyciski powrot">
       <button class="przycisk pelny" data-zamknij-cwiczenie>← Wróć do treningu</button>
     </div>
 
