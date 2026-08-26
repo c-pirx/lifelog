@@ -118,6 +118,55 @@ describe("nakładka na podsumowanie dnia", () => {
   });
 });
 
+describe("nakładka poprawki posiłku", () => {
+  const poprawka = (id: number, dane: Record<string, unknown>, idKolejki = 1) => ({
+    id: idKolejki,
+    sciezka: "/wpis",
+    dane: { typ: "posilek", id, akcja: "popraw", dane },
+    czas_lokalny: CZAS,
+  });
+
+  it("nakłada zmienione pola i przelicza sumy dnia", () => {
+    const dzien = nalozNaDzien(dzienZSerwera(), [poprawka(1, { kcal: 650, opis: "owsianka XL" })]);
+
+    const wpis = dzien.posilki[0];
+    expect(wpis.opis).toBe("owsianka XL");
+    expect(wpis.kcal).toBe(650);
+    expect(wpis.oczekujaca_zmiana).toBe(true);
+    expect(dzien.spozyte.kcal).toBe(650);
+    // Pola niepodane zostają.
+    expect(wpis.bialko_g).toBe(30);
+  });
+
+  it("nie wnioskuje z czasu ani pozycji — to robota domeny po wysyłce", () => {
+    const dzien = nalozNaDzien(dzienZSerwera(), [
+      poprawka(1, { czas: "2026-08-20 09:00", pozycje: [{ nazwa: "jajko" }] }),
+    ]);
+
+    const wpis = dzien.posilki[0];
+    // Wpis zostaje w swoim dniu pod starą godziną, bez zgadniętego rozbicia.
+    expect(wpis.godzina).toBe("08:15");
+    expect(wpis.pozycje).toBeUndefined();
+    expect(wpis.oczekujaca_zmiana).toBe(true);
+  });
+
+  it("dwie poprawki tego samego wpisu — wygrywa późniejsza, jak na serwerze", () => {
+    const dzien = nalozNaDzien(dzienZSerwera(), [
+      poprawka(1, { kcal: 600 }, 1),
+      poprawka(1, { kcal: 700 }, 2),
+    ]);
+
+    expect(dzien.posilki[0].kcal).toBe(700);
+  });
+
+  it("poprawka nieistniejącego wpisu zostawia dzień w spokoju", () => {
+    const dzien = nalozNaDzien(dzienZSerwera(), [poprawka(999, { kcal: 1 })]);
+
+    expect(dzien.posilki).toEqual(dzienZSerwera().posilki);
+    expect(dzien.spozyte).toEqual(dzienZSerwera().spozyte);
+  });
+});
+
 describe("nakładka na stan treningu", () => {
   it("bez kolejki zwraca stan nietknięty", () => {
     const trening = treningZSerwera();

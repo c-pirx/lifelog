@@ -55,10 +55,32 @@ export function nalozNaDzien(dzien, kolejka = []) {
       .filter((w) => w.dane?.typ === "posilek" && w.dane?.akcja === "usun")
       .map((w) => w.dane.id),
   );
+  const poprawki = kolejka
+    .filter((w) => dopasujSciezke(w, "/wpis"))
+    .filter((w) => w.dane?.typ === "posilek" && w.dane?.akcja === "popraw" && w.dane?.dane);
 
-  if (dodane.length === 0 && usuwane.size === 0) return dzien;
+  if (dodane.length === 0 && usuwane.size === 0 && poprawki.length === 0) return dzien;
 
-  const zostajace = dzien.posilki.filter((p) => !usuwane.has(p.id));
+  // Poprawka nakłada tylko pola widoczne na liście. `czas` zostaje serwerowi —
+  // przenoszenie wpisu między dniami to robota domeny, nie kosmetyka — więc do
+  // wysyłki wpis stoi pod starą godziną. `pozycje` z tego samego powodu.
+  const POLA_POPRAWKI = ["opis", "kcal", "bialko_g", "wegle_g", "tluszcz_g", "pora", "pewnosc"];
+  const zostajace = dzien.posilki
+    .filter((p) => !usuwane.has(p.id))
+    .map((p) => {
+      const moje = poprawki.filter((w) => w.dane.id === p.id);
+      if (moje.length === 0) return p;
+
+      const nalozony = { ...p, oczekujaca_zmiana: true };
+      // W kolejności kolejki — druga poprawka tego samego wpisu na pierwszej,
+      // dokładnie tak, jak zapisze je serwer.
+      for (const w of moje) {
+        for (const pole of POLA_POPRAWKI) {
+          if (w.dane.dane[pole] !== undefined) nalozony[pole] = w.dane.dane[pole];
+        }
+      }
+      return nalozony;
+    });
 
   const oczekujace = dodane.map((wpis) => ({
     id: `oczekuje-${wpis.id}`,

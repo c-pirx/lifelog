@@ -111,6 +111,7 @@ export function wpisPosilku(p, edytowanyPosilek) {
           ${p.pewnosc === "szacowane" ? '<span class="znacznik">szacunek</span>' : ""}
           ${p.pewnosc === "niepewne" ? '<span class="znacznik niepewne">niepewne</span>' : ""}
           ${p.oczekuje ? '<span class="znacznik">⏳ czeka</span>' : ""}
+          ${p.oczekujaca_zmiana ? '<span class="znacznik">⏳ zmiana</span>' : ""}
         </div>
         <div class="szczegoly">
           ${zaokr(p.kcal)} kcal · B ${zaokr(p.bialko_g)} · W ${zaokr(p.wegle_g)} · T ${zaokr(p.tluszcz_g)}
