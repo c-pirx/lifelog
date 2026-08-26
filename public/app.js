@@ -810,6 +810,25 @@ function celWTekscie(cwiczenie) {
 /** „2 serie", ale „5 serii" — napis na łączu zbiorczego odhaczenia. */
 const odmianaSerii = (ile) => (ile < 5 ? "serie" : "serii");
 
+/**
+ * „10 powt. ×12" zamiast dwunastu identycznych wpisów po kropce.
+ *
+ * Serie w ramach sesji są zwykle takie same, więc wypisywanie każdej z osobna
+ * robi z historii papkę — a to jedyna treść, po którą ten widok istnieje.
+ * Grupują się tylko sąsiadujące: 5×100 · 5×95 · 5×100 zostaje rozpisane,
+ * bo kolejność mówi o przebiegu treningu.
+ */
+function serieZgrupowane(serie) {
+  const grupy = [];
+  for (const s of serie) {
+    const opis = seriaWTekscie(s);
+    const ostatnia = grupy.at(-1);
+    if (ostatnia && ostatnia.opis === opis) ostatnia.ile += 1;
+    else grupy.push({ opis, ile: 1 });
+  }
+  return grupy.map((g) => (g.ile > 1 ? `${g.opis} ×${g.ile}` : g.opis)).join(" · ");
+}
+
 function serieWKarcie(cwiczenie) {
   if (!cwiczenie.serie.length) return "";
   const rekordy = cwiczenie.rekordy ?? [];
@@ -887,7 +906,7 @@ function kartaCwiczenia(cwiczenie) {
 
       ${
         cwiczenie.poprzednio.length
-          ? `<div class="poprzednio">Poprzednio: ${esc(cwiczenie.poprzednio.map(seriaWTekscie).join(" · "))}</div>`
+          ? `<div class="poprzednio">Poprzednio: ${esc(serieZgrupowane(cwiczenie.poprzednio))}</div>`
           : ""
       }
 
@@ -895,9 +914,14 @@ function kartaCwiczenia(cwiczenie) {
 
       <div class="przyciski">
         ${
+          // Po osiągnięciu celu licznik gubi mianownik („5/3" to absurd),
+          // a przycisk cichnie: wielki zielony klawisz namawiający na piątą
+          // serię przy celu trzech byłby narzucaniem progresji, której system
+          // świadomie nie narzuca.
           mozna
-            ? `<button class="przycisk glowny pelny duzy" data-odhacz-serie="${esc(cwiczenie.nazwa)}">
-                 Odhacz serię ${cwiczenie.serie_zrobione + 1}${cwiczenie.serie_cel ? `/${cwiczenie.serie_cel}` : ""} — ${esc(seriaWTekscie(propozycja))}
+            ? `<button class="przycisk ${zostalo === null || zostalo > 0 ? "glowny duzy" : ""} pelny"
+                 data-odhacz-serie="${esc(cwiczenie.nazwa)}">
+                 Odhacz serię ${cwiczenie.serie_zrobione + 1}${cwiczenie.serie_cel && zostalo > 0 ? `/${cwiczenie.serie_cel}` : ""} — ${esc(seriaWTekscie(propozycja))}
                  <small>${OPIS_ZRODLA[propozycja.zrodlo]}</small>
                </button>`
             : `<button class="przycisk pelny" data-pokaz="${idFormularza}">+ Seria</button>`
@@ -997,7 +1021,9 @@ function ekranCwiczenie(cwiczenie, historia) {
     </div>
 
     <section class="karta">
-      ${kartaCwiczenia({ ...cwiczenie, ukonczone: false })}
+      <!-- Bez linii „Poprzednio": sekcja Historia niżej zaczyna się od tej
+           samej sesji i karta powtarzałaby ją słowo w słowo. -->
+      ${kartaCwiczenia({ ...cwiczenie, ukonczone: false, poprzednio: [] })}
     </section>
 
     <section class="karta">
@@ -1010,7 +1036,7 @@ function ekranCwiczenie(cwiczenie, historia) {
                .map(
                  (s) => `<div class="wpis-historii">
                    <span class="data">${esc(s.data)}</span>
-                   <span class="wyniki">${esc(s.serie.map(seriaWTekscie).join(" · "))}</span>
+                   <span class="wyniki">${esc(serieZgrupowane(s.serie))}</span>
                  </div>`,
                )
                .join("")}</div>`
