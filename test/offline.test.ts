@@ -416,13 +416,18 @@ describe("wpis posiłku", () => {
     ],
   };
 
-  it("pokazuje rozbicie pod makro posiłku", () => {
+  it("nie pokazuje rozbicia w zwykłym widoku — składniki mieszkają w edycji", () => {
+    // Lista dnia ma nieść bilans, nie recepturę: rozbicie każdego posiłku
+    // wydłużało wpisy kilkukrotnie, a czyta się je dopiero przy poprawianiu.
     const html = wpisPosilku(posilek, null);
 
-    expect(html).toContain("jajko");
-    expect(html).toContain("bułka");
-    expect(html).toContain("80 g");
-    expect(html).toContain("200 kcal");
+    expect(html).not.toContain("jajko");
+    expect(html).not.toContain("bułka");
+
+    // W formularzu edycji składniki są — po wierszu na każdy.
+    const edycja = wpisPosilku(posilek, 5);
+    expect(edycja).toContain('value="jajko"');
+    expect(edycja).toContain('value="bułka"');
   });
 
   it("oznacza wpis z najniższą pewnością", () => {

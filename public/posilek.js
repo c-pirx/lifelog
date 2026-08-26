@@ -68,22 +68,6 @@ function wierszPozycji(p = {}) {
 /** Pusty wiersz dla przycisku „+ składnik". */
 export const szablonWiersza = () => wierszPozycji();
 
-/** Podgląd rozbicia: jedna linia na składnik — nazwa, ilość i kcal wystarczą na telefonie. */
-function listaPozycji(pozycje) {
-  if (!pozycje?.length) return "";
-
-  return `<ul class="pozycje">${pozycje
-    .map(
-      (p) => `
-      <li>
-        <span class="nazwa">${esc(p.nazwa)}</span>
-        ${p.ilosc_g != null ? `<span class="ilosc">${zaokr(p.ilosc_g)} g</span>` : ""}
-        ${p.kcal != null ? `<span class="kcal">${zaokr(p.kcal)} kcal</span>` : ""}
-      </li>`,
-    )
-    .join("")}</ul>`;
-}
-
 export function wpisPosilku(p, edytowanyPosilek) {
   if (p.id === edytowanyPosilek) {
     return `
@@ -117,7 +101,6 @@ export function wpisPosilku(p, edytowanyPosilek) {
         <div class="szczegoly">
           ${zaokr(p.kcal)} kcal · B ${zaokr(p.bialko_g)} · W ${zaokr(p.wegle_g)} · T ${zaokr(p.tluszcz_g)}
         </div>
-        ${listaPozycji(p.pozycje)}
       </div>
       ${
         // Wpis bez id z bazy nie ma czego poprawiać ani usuwać — obie akcje
