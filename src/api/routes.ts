@@ -324,7 +324,8 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
 
   api.post("/wpis", async (c) => {
     const dane = schematWpisu.parse(await c.req.json());
-    return c.json(zmienWpis(db, dane as never));
+    // Strefa jest potrzebna do przeliczenia pola `czas` względem dnia wpisu.
+    return c.json(zmienWpis(db, dane as never, { strefa: ustawienia.strefa }));
   });
 
   return api;

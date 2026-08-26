@@ -592,11 +592,15 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       description:
         "Poprawia albo usuwa wcześniejszy wpis. Identyfikatory znajdziesz w podsumowaniu dnia " +
         "(posiłki) i w stanie treningu (serie).\n" +
-        "• typ='posilek' — pola: opis, kcal, bialko_g, wegle_g, tluszcz_g, pora, pewnosc\n" +
+        "• typ='posilek' — pola: opis, kcal, bialko_g, wegle_g, tluszcz_g, pora, pewnosc, czas, pozycje\n" +
         "• typ='seria' — pola: powtorzenia, ciezar_kg, czas_s, dystans_m, rpe\n" +
         "• typ='waga' — pola: kg, notatka\n\n" +
         "Podawaj wyłącznie pola, które mają się zmienić — reszta zostaje nietknięta. " +
-        "Po poprawieniu szacunku na potwierdzoną wartość ustaw pewnosc='dokladne'.",
+        "Po poprawieniu szacunku na potwierdzoną wartość ustaw pewnosc='dokladne'.\n" +
+        "pozycje ZASTĘPUJĄ całe rozbicie posiłku — podawaj zawsze komplet składników; pusta " +
+        "lista je usuwa. Gdy każda pozycja ma dane pole makro, nagłówek posiłku zostaje " +
+        "przeliczony z ich sumy — chyba że pole podano jawnie w tej samej poprawce; następna " +
+        "poprawka pozycji znów przeliczy.",
       inputSchema: {
         typ: z.enum(["posilek", "seria", "waga"]),
         id: z.number().int().positive(),
@@ -610,6 +614,16 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
             tluszcz_g: z.number().optional(),
             pora: z.enum(PORY as unknown as [string, ...string[]]).optional(),
             pewnosc: z.enum(PEWNOSCI as unknown as [string, ...string[]]).optional(),
+            czas: z
+              .string()
+              .optional()
+              .describe(
+                'Nowy czas posiłku: "HH:MM" zostaje w dniu wpisu, "YYYY-MM-DD HH:MM" przenosi go do innego dnia.',
+              ),
+            pozycje: z
+              .array(schematPozycji)
+              .optional()
+              .describe("Nowa PEŁNA lista składników — zastępuje rozbicie w całości; [] usuwa."),
             powtorzenia: z.number().int().optional(),
             ciezar_kg: z.number().optional(),
             czas_s: z.number().int().optional(),
@@ -623,12 +637,18 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
     },
     async (args) =>
       zBezpiecznikiem(() => {
-        const wynik = zmienWpis(db, {
-          typ: args.typ,
-          id: args.id,
-          akcja: args.akcja,
-          dane: args.dane as never,
-        });
+        // Pole `czas` celowo NIE przechodzi przez adapterowy pomocnik czasu:
+        // gołą godzinę domena parsuje względem dnia WPISU, nie dzisiaj.
+        const wynik = zmienWpis(
+          db,
+          {
+            typ: args.typ,
+            id: args.id,
+            akcja: args.akcja,
+            dane: args.dane as never,
+          },
+          { strefa },
+        );
         return wynik.opis;
       }),
   );

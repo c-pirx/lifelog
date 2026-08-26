@@ -142,6 +142,53 @@ describe("dieta przez API", () => {
     expect((await wyslij("/api/posilki", { kcal: 100 })).status).toBe(400);
   });
 
+  it("poprawia pozycje i godzinę wpisu przez /wpis", async () => {
+    const utworzony = await wyslij("/api/posilki", {
+      opis: "śniadanie złożone",
+      kcal: 500,
+      czas: "2026-08-23 08:00",
+    });
+    const { id } = (await utworzony.json()) as { id: number };
+
+    const poprawka = await wyslij("/api/wpis", {
+      typ: "posilek",
+      id,
+      akcja: "popraw",
+      dane: {
+        czas: "9:15",
+        pozycje: [
+          { nazwa: "jajko", kcal: 150 },
+          { nazwa: "bułka", kcal: 200 },
+        ],
+      },
+    });
+    expect(poprawka.status).toBe(200);
+
+    const dzien = await pobierz<PodsumowanieDnia>("/api/dzien?data=2026-08-23");
+    const posilek = dzien.posilki.find((p) => p.id === id);
+    expect(posilek?.godzina).toBe("09:15");
+    expect(posilek?.pozycje.map((p) => p.nazwa)).toEqual(["jajko", "bułka"]);
+    // Auto-suma: każda pozycja zna kcal, więc nagłówek został przeliczony.
+    expect(posilek?.kcal).toBe(350);
+  });
+
+  it("odrzuca zniekształcone pozycje zamiast zapisać śmieci", async () => {
+    const utworzony = await wyslij("/api/posilki", {
+      opis: "obiad",
+      kcal: 700,
+      czas: "2026-08-23 14:00",
+    });
+    const { id } = (await utworzony.json()) as { id: number };
+
+    const odpowiedz = await wyslij("/api/wpis", {
+      typ: "posilek",
+      id,
+      akcja: "popraw",
+      dane: { pozycje: [{ kcal: 100 }] },
+    });
+    expect(odpowiedz.status).toBe(400);
+  });
+
   it("tłumaczy błąd domenowy zamiast zwracać awarię", async () => {
     const odpowiedz = await wyslij("/api/wpis", { typ: "posilek", id: 9999, akcja: "usun" });
 

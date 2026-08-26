@@ -8,8 +8,9 @@
 
 import type { Baza } from "../db/index.js";
 import * as repo from "../db/repo.js";
+import { dataLokalna, parsujCzas, STREFA_DOMYSLNA } from "../lib/time.js";
 import { BladDomeny } from "./bledy.js";
-import { PORY, type Pewnosc, type Pora } from "./typy.js";
+import { PEWNOSCI, PORY, type NowaPozycja, type Pewnosc, type Pora } from "./typy.js";
 
 export type TypWpisu = "posilek" | "seria" | "waga";
 export type AkcjaWpisu = "popraw" | "usun";
@@ -24,6 +25,10 @@ export type ZmianyPosilku = {
   tluszcz_g?: number;
   pora?: Pora;
   pewnosc?: Pewnosc;
+  /** "HH:MM" zostaje w dniu wpisu; "YYYY-MM-DD HH:MM" albo ISO przenosi między dniami. */
+  czas?: string;
+  /** Pełna nowa lista — zastępuje rozbicie w całości. [] czyści. Pominięte = nie ruszaj. */
+  pozycje?: NowaPozycja[];
 };
 
 export type ZmianySerii = {
@@ -66,15 +71,45 @@ function brakWpisu(typ: TypWpisu, id: number): never {
   throw new BladDomeny(`Nie znaleziono wpisu typu "${typ}" o id ${id}`, "nieznany_wpis");
 }
 
-function poprawPosilek(db: Baza, id: number, dane: ZmianyPosilku): string {
+const POLA_MAKRO = ["kcal", "bialko_g", "wegle_g", "tluszcz_g"] as const;
+
+/**
+ * Walidacja pozycji siedzi w domenie, bo trasa /wpis przepuszcza `dane`
+ * bez sprawdzania — dla aplikacji webowej to jedyna zapora przed śmieciami.
+ */
+function sprawdzPozycje(pozycje: unknown): asserts pozycje is NowaPozycja[] {
+  if (!Array.isArray(pozycje)) {
+    throw new BladDomeny("Pole pozycje musi być listą składników", "zla_pozycja");
+  }
+
+  for (const p of pozycje) {
+    if (typeof p !== "object" || p === null || typeof p.nazwa !== "string" || !p.nazwa.trim()) {
+      throw new BladDomeny("Każda pozycja posiłku musi mieć nazwę", "zla_pozycja");
+    }
+    for (const pole of ["ilosc_g", ...POLA_MAKRO] as const) {
+      const wartosc = (p as NowaPozycja)[pole];
+      if (wartosc != null && (typeof wartosc !== "number" || !Number.isFinite(wartosc) || wartosc < 0)) {
+        throw new BladDomeny(`Pozycja „${p.nazwa}”: pole ${pole} poza zakresem`, "zla_pozycja");
+      }
+    }
+  }
+}
+
+function poprawPosilek(db: Baza, id: number, dane: ZmianyPosilku, strefa: string): string {
   const istniejacy = repo.posilekPoId(db, id);
   if (!istniejacy) brakWpisu("posilek", id);
 
   if (dane.pora !== undefined && !PORY.includes(dane.pora)) {
     throw new BladDomeny(`Nieznana pora posiłku: "${dane.pora}"`, "zla_pora");
   }
+  if (dane.pewnosc !== undefined && !PEWNOSCI.includes(dane.pewnosc)) {
+    throw new BladDomeny(`Nieznana pewność: "${dane.pewnosc}"`, "zla_pewnosc");
+  }
 
-  const zmiany = tylkoPodane(dane, [
+  const pozycje = dane.pozycje;
+  if (pozycje !== undefined) sprawdzPozycje(pozycje);
+
+  const zmiany: Partial<Omit<repo.WierszPosilku, "id">> = tylkoPodane(dane, [
     "opis",
     "kcal",
     "bialko_g",
@@ -84,12 +119,65 @@ function poprawPosilek(db: Baza, id: number, dane: ZmianyPosilku): string {
     "pewnosc",
   ]);
 
-  if (Object.keys(zmiany).length === 0) {
+  // Parsowanie czasu względem dnia WPISU, nie dzisiaj — goła godzina puszczona
+  // przez parsujCzas przeniosłaby wczorajszy obiad na dzisiejszą dobę.
+  if (dane.czas !== undefined) {
+    if (typeof dane.czas !== "string") {
+      throw new BladDomeny(`Nie rozpoznano formatu czasu: "${String(dane.czas)}"`, "zly_czas");
+    }
+    const godzina = /^(\d{1,2}):(\d{2})$/.exec(dane.czas.trim());
+    try {
+      const ts = godzina
+        ? parsujCzas(`${istniejacy.data_lokalna} ${godzina[1]!.padStart(2, "0")}:${godzina[2]}`, strefa)
+        : parsujCzas(dane.czas, strefa);
+      zmiany.ts = ts;
+      zmiany.data_lokalna = dataLokalna(ts, strefa);
+    } catch {
+      throw new BladDomeny(`Nie rozpoznano formatu czasu: "${dane.czas}"`, "zly_czas");
+    }
+  }
+
+  // Edycja samych pozycji jest pełnoprawną zmianą.
+  if (Object.keys(zmiany).length === 0 && pozycje === undefined) {
     throw new BladDomeny("Nie podano żadnych zmian", "brak_zmian");
   }
 
-  repo.aktualizujPosilek(db, id, zmiany);
-  return `Poprawiono posiłek „${istniejacy.opis}"`;
+  let przeliczono = false;
+
+  db.transaction(() => {
+    if (pozycje !== undefined) {
+      repo.zastapPozycje(
+        db,
+        id,
+        pozycje.map((p) => ({
+          nazwa: p.nazwa,
+          ilosc_g: p.ilosc_g ?? null,
+          kcal: p.kcal ?? null,
+          bialko_g: p.bialko_g ?? null,
+          wegle_g: p.wegle_g ?? null,
+          tluszcz_g: p.tluszcz_g ?? null,
+        })),
+      );
+
+      // Auto-suma per pole: pole niepodane jawnie w tej poprawce, a znane
+      // w każdej pozycji, dostaje sumę z pozycji. Pola jawne wygrywają, ale
+      // tylko w obrębie tej jednej poprawki — następna edycja pozycji znów
+      // przeliczy. Pusta lista niczego nie sumuje i nie tyka nagłówka.
+      for (const pole of POLA_MAKRO) {
+        if (zmiany[pole] !== undefined || pozycje.length === 0) continue;
+        if (!pozycje.every((p) => p[pole] != null)) continue;
+        zmiany[pole] = pozycje.reduce((suma, p) => suma + (p[pole] ?? 0), 0);
+        przeliczono = true;
+      }
+    }
+
+    if (Object.keys(zmiany).length > 0) repo.aktualizujPosilek(db, id, zmiany);
+  })();
+
+  const dopisek = przeliczono
+    ? ` (nagłówek przeliczony z pozycji: ${zmiany.kcal ?? istniejacy.kcal} kcal)`
+    : "";
+  return `Poprawiono posiłek „${istniejacy.opis}"${dopisek}`;
 }
 
 function poprawSerie(db: Baza, id: number, dane: ZmianySerii): string {
@@ -148,7 +236,11 @@ function usun(db: Baza, typ: TypWpisu, id: number): string {
   }
 }
 
-export function zmienWpis(db: Baza, zadanie: ZadanieZmiany): WynikZmiany {
+export function zmienWpis(
+  db: Baza,
+  zadanie: ZadanieZmiany,
+  opcje: { strefa?: string } = {},
+): WynikZmiany {
   const { typ, id, akcja } = zadanie;
 
   if (!TYPY_WPISOW.includes(typ)) {
@@ -165,7 +257,7 @@ export function zmienWpis(db: Baza, zadanie: ZadanieZmiany): WynikZmiany {
   const dane = zadanie.dane ?? {};
   const opis =
     typ === "posilek"
-      ? poprawPosilek(db, id, dane as ZmianyPosilku)
+      ? poprawPosilek(db, id, dane as ZmianyPosilku, opcje.strefa ?? STREFA_DOMYSLNA)
       : typ === "seria"
         ? poprawSerie(db, id, dane as ZmianySerii)
         : poprawWage(db, id, dane as ZmianyWagi);

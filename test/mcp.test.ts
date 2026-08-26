@@ -177,6 +177,37 @@ describe("przepływ dietetyczny", () => {
 
     expect(await wywolaj("podsumowanie_dnia", { data: "2026-08-27" })).toMatch(/900 kcal/);
   });
+
+  it("poprawia pozycje i godzinę posiłku", async () => {
+    await wywolaj("zapisz_posilek", {
+      opis: "śniadanie złożone",
+      kcal: 500,
+      czas: "2026-08-28 08:00",
+      pozycje: [{ nazwa: "jajko", kcal: 150 }],
+    });
+
+    const dzien = await wywolaj("podsumowanie_dnia", { data: "2026-08-28" });
+    const id = Number(/#(\d+)/.exec(dzien)?.[1]);
+    expect(id).toBeGreaterThan(0);
+
+    const wynik = await wywolaj("zmien_wpis", {
+      typ: "posilek",
+      id,
+      akcja: "popraw",
+      dane: {
+        czas: "09:15",
+        pozycje: [
+          { nazwa: "jajko", kcal: 150 },
+          { nazwa: "bułka", kcal: 200 },
+        ],
+      },
+    });
+    expect(wynik).toMatch(/przeliczony z pozycji: 350 kcal/);
+
+    const po = await wywolaj("podsumowanie_dnia", { data: "2026-08-28" });
+    expect(po).toMatch(/09:15/);
+    expect(po).toMatch(/350 kcal/);
+  });
 });
 
 describe("przepływ treningowy", () => {

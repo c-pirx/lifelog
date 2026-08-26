@@ -138,6 +138,187 @@ describe("poprawianie posiłku", () => {
   });
 });
 
+describe("edycja pozycji posiłku", () => {
+  const zapiszZlozony = () =>
+    zapiszPosilek(db, {
+      opis: "śniadanie",
+      kcal: 500,
+      bialko_g: 30,
+      ts: "2026-08-25T06:00:00.000Z",
+      pozycje: [
+        { nazwa: "jajko", kcal: 150, bialko_g: 13 },
+        { nazwa: "bułka", kcal: 200, bialko_g: 7 },
+      ],
+    });
+
+  it("zastępuje całe rozbicie nową listą", () => {
+    const posilek = zapiszZlozony();
+
+    zmienWpis(db, {
+      typ: "posilek",
+      id: posilek.id,
+      akcja: "popraw",
+      dane: { pozycje: [{ nazwa: "owsianka" }] },
+    });
+
+    const po = podsumowanieDnia(db, "2026-08-25").posilki[0];
+    expect(po?.pozycje.map((p) => p.nazwa)).toEqual(["owsianka"]);
+  });
+
+  it("przelicza nagłówek z sumy pozycji, gdy każda zna dane pole", () => {
+    const posilek = zapiszZlozony();
+
+    zmienWpis(db, {
+      typ: "posilek",
+      id: posilek.id,
+      akcja: "popraw",
+      dane: {
+        pozycje: [
+          { nazwa: "jajko", kcal: 150, bialko_g: 13 },
+          { nazwa: "bułka", kcal: 200, bialko_g: 7 },
+          { nazwa: "ser cheddar", kcal: 120, bialko_g: 8 },
+        ],
+      },
+    });
+
+    const po = podsumowanieDnia(db, "2026-08-25").posilki[0];
+    expect(po?.kcal).toBe(470);
+    expect(po?.bialko_g).toBe(28);
+  });
+
+  it("pole podane jawnie wygrywa z auto-sumą", () => {
+    const posilek = zapiszZlozony();
+
+    zmienWpis(db, {
+      typ: "posilek",
+      id: posilek.id,
+      akcja: "popraw",
+      dane: {
+        kcal: 600,
+        pozycje: [
+          { nazwa: "jajko", kcal: 150, bialko_g: 13 },
+          { nazwa: "bułka", kcal: 200, bialko_g: 7 },
+        ],
+      },
+    });
+
+    const po = podsumowanieDnia(db, "2026-08-25").posilki[0];
+    expect(po?.kcal).toBe(600);
+    expect(po?.bialko_g).toBe(20);
+  });
+
+  it("liczy per pole — pozycja bez białka zostawia białko nagłówka w spokoju", () => {
+    const posilek = zapiszZlozony();
+
+    zmienWpis(db, {
+      typ: "posilek",
+      id: posilek.id,
+      akcja: "popraw",
+      dane: {
+        pozycje: [
+          { nazwa: "jajko", kcal: 150 },
+          { nazwa: "bułka", kcal: 200, bialko_g: 7 },
+        ],
+      },
+    });
+
+    const po = podsumowanieDnia(db, "2026-08-25").posilki[0];
+    expect(po?.kcal).toBe(350);
+    expect(po?.bialko_g).toBe(30);
+  });
+
+  it("pusta lista czyści rozbicie i nie tyka nagłówka", () => {
+    const posilek = zapiszZlozony();
+
+    zmienWpis(db, { typ: "posilek", id: posilek.id, akcja: "popraw", dane: { pozycje: [] } });
+
+    const po = podsumowanieDnia(db, "2026-08-25").posilki[0];
+    expect(po?.pozycje).toEqual([]);
+    expect(po?.kcal).toBe(500);
+  });
+
+  it("przeliczenie nie zmienia pewności — to arytmetyka, nie nowa wiedza", () => {
+    const posilek = zapiszZlozony();
+    expect(posilek.pewnosc).toBe("szacowane");
+
+    zmienWpis(db, {
+      typ: "posilek",
+      id: posilek.id,
+      akcja: "popraw",
+      dane: { pozycje: [{ nazwa: "jajko", kcal: 150, bialko_g: 13, wegle_g: 1, tluszcz_g: 10 }] },
+    });
+
+    expect(podsumowanieDnia(db, "2026-08-25").posilki[0]?.pewnosc).toBe("szacowane");
+  });
+
+  it("odrzuca pozycję bez nazwy i z ujemnym makro", () => {
+    const posilek = zapiszZlozony();
+
+    expect(() =>
+      zmienWpis(db, {
+        typ: "posilek",
+        id: posilek.id,
+        akcja: "popraw",
+        dane: { pozycje: [{ nazwa: "" }] },
+      }),
+    ).toThrow(/nazw/i);
+
+    expect(() =>
+      zmienWpis(db, {
+        typ: "posilek",
+        id: posilek.id,
+        akcja: "popraw",
+        dane: { pozycje: [{ nazwa: "jajko", kcal: -150 }] },
+      }),
+    ).toThrow(/zakres/i);
+  });
+});
+
+describe("poprawianie godziny posiłku", () => {
+  it("goła godzina zostaje w dniu wpisu, nie przeskakuje na dzisiaj", () => {
+    const posilek = zapiszPosilek(db, { opis: "obiad", kcal: 700, ts: "2026-08-20T12:00:00.000Z" });
+
+    zmienWpis(db, { typ: "posilek", id: posilek.id, akcja: "popraw", dane: { czas: "14:30" } });
+
+    const po = podsumowanieDnia(db, "2026-08-20").posilki[0];
+    expect(po?.godzina).toBe("14:30");
+    expect(po?.data_lokalna).toBe("2026-08-20");
+  });
+
+  it("pełna data przenosi wpis do innego dnia", () => {
+    const posilek = zapiszPosilek(db, { opis: "obiad", kcal: 700, ts: "2026-08-20T12:00:00.000Z" });
+
+    zmienWpis(db, {
+      typ: "posilek",
+      id: posilek.id,
+      akcja: "popraw",
+      dane: { czas: "2026-08-21 09:00" },
+    });
+
+    expect(podsumowanieDnia(db, "2026-08-20").posilki).toEqual([]);
+    expect(podsumowanieDnia(db, "2026-08-21").posilki[0]?.godzina).toBe("09:00");
+  });
+
+  it("wieczorna godzina przy granicy doby nie zmienia dnia lokalnego", () => {
+    // 23:30 czasu polskiego to 21:30 UTC — data lokalna musi zostać sierpniowa 20-go.
+    const posilek = zapiszPosilek(db, { opis: "kolacja", kcal: 400, ts: "2026-08-20T17:00:00.000Z" });
+
+    zmienWpis(db, { typ: "posilek", id: posilek.id, akcja: "popraw", dane: { czas: "23:30" } });
+
+    const po = podsumowanieDnia(db, "2026-08-20").posilki[0];
+    expect(po?.data_lokalna).toBe("2026-08-20");
+    expect(po?.godzina).toBe("23:30");
+  });
+
+  it("odrzuca nierozpoznawalny czas", () => {
+    const posilek = zapiszPosilek(db, { opis: "obiad", kcal: 700, ts: "2026-08-20T12:00:00.000Z" });
+
+    expect(() =>
+      zmienWpis(db, { typ: "posilek", id: posilek.id, akcja: "popraw", dane: { czas: "wczoraj" } }),
+    ).toThrow(/czas/i);
+  });
+});
+
 describe("usuwanie posiłku", () => {
   it("znika z podsumowania dnia", () => {
     const posilek = zapiszPosilek(db, { opis: "obiad", kcal: 700, ts: "2026-08-25T12:00:00.000Z" });

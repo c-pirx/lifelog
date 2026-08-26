@@ -181,6 +181,16 @@ export function wstawPozycje(
   }
 }
 
+/** Zastępuje całe rozbicie posiłku nową listą. Pusta lista czyści rozbicie. */
+export function zastapPozycje(
+  db: Baza,
+  posilekId: number,
+  pozycje: Omit<WierszPozycji, "id" | "posilek_id">[],
+): void {
+  db.prepare("DELETE FROM pozycje_posilku WHERE posilek_id = ?").run(posilekId);
+  wstawPozycje(db, posilekId, pozycje);
+}
+
 const KOLUMNY_POSILKU = `id, ts, data_lokalna, pora, opis, kcal, bialko_g, wegle_g, tluszcz_g,
                          zrodlo, pewnosc, surowe_wejscie`;
 
