@@ -389,6 +389,56 @@ nav button[aria-current="page"] {
   color: var(--ostrzezenie);
 }
 
+/* Rozbicie posiłku na składniki: drobne, przygaszone linie pod makro —
+   informacja drugorzędna, suma z nagłówka i tak rządzi podsumowaniem. */
+.pozycje {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0 0 0 10px;
+  border-left: 2px solid var(--obramowanie);
+}
+
+.pozycje li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  color: var(--tekst-cichy);
+  font-size: 0.8rem;
+}
+
+.pozycje .nazwa {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pozycje .ilosc,
+.pozycje .kcal {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Edytor składników w formularzu poprawki: nazwa szeroka, liczby wąskie,
+   ✕ na końcu. Pola dotykowe nie schodzą poniżej 44 px wysokości. */
+.pozycje-edycja {
+  display: grid;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.pozycja-wiersz {
+  display: grid;
+  grid-template-columns: minmax(72px, 2fr) repeat(5, minmax(0, 1fr)) auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.pozycja-wiersz input {
+  min-width: 0;
+  padding: 10px 6px;
+  font-size: 0.85rem;
+}
+
 /* Licznik czasu sesji tuż nad „Zakończ trening": etykieta z lewej, liczba
    z prawej, żeby dało się ją odczytać kątem oka bez czytania podpisu. */
 .czas-treningu {

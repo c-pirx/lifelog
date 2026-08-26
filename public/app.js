@@ -8,6 +8,7 @@
 
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "./nakladka.js";
+import { polaPosilku, szablonWiersza, wpisPosilku } from "./posilek.js";
 import { czasWTekscie, stanPrzerwy, trwanieWTekscie } from "./przerwa.js";
 import { ekranRaporty, panelTygodnia } from "./raporty.js";
 
@@ -487,6 +488,55 @@ function czasPosilku(formularz) {
   return `${dzien} ${dopasowanie[1].padStart(2, "0")}:${dopasowanie[2]}`;
 }
 
+/**
+ * Godzina z formularza edycji posiłku — wysyłana tylko wtedy, gdy użytkownik
+ * ją ZMIENIŁ; inaczej każda poprawka makro zerowałaby sekundy znacznika czasu.
+ * Zawsze z jawną datą dnia wpisu, żeby edycja wczorajszego obiadu nie
+ * przeniosła go po cichu na dzisiaj.
+ */
+function czasEdycji(formularz) {
+  const godzina = formularz.elements.godzina?.value?.trim();
+  if (!godzina) return undefined;
+
+  const dopasowanie = /^(\d{1,2})[:.]?(\d{2})$/.exec(godzina);
+  if (!dopasowanie) return undefined;
+
+  const znormalizowana = `${dopasowanie[1].padStart(2, "0")}:${dopasowanie[2]}`;
+  if (znormalizowana === formularz.dataset.godzina) return undefined;
+
+  return `${formularz.dataset.dzien} ${znormalizowana}`;
+}
+
+/**
+ * Pozycje z wierszy formularza edycji. Granica „wyczyść vs nie ruszaj" leży
+ * na obecności klucza w żądaniu: undefined = rozbicia nie tykamy, [] = posiłek
+ * miał pozycje i użytkownik skasował wszystkie wiersze.
+ */
+function pozycjeZFormularza(formularz) {
+  const liczba = (pole) => {
+    const wartosc = pole?.value?.replace(",", ".").trim();
+    return wartosc ? Number(wartosc) : undefined;
+  };
+
+  const pozycje = [];
+  for (const wiersz of formularz.querySelectorAll("[data-wiersz]")) {
+    const nazwa = wiersz.querySelector('[name="poz-nazwa"]')?.value?.trim();
+    // Wiersz bez nazwy to niedokończony dodatek, nie składnik.
+    if (!nazwa) continue;
+    pozycje.push({
+      nazwa,
+      ilosc_g: liczba(wiersz.querySelector('[name="poz-ilosc"]')),
+      kcal: liczba(wiersz.querySelector('[name="poz-kcal"]')),
+      bialko_g: liczba(wiersz.querySelector('[name="poz-bialko"]')),
+      wegle_g: liczba(wiersz.querySelector('[name="poz-wegle"]')),
+      tluszcz_g: liczba(wiersz.querySelector('[name="poz-tluszcz"]')),
+    });
+  }
+
+  if (pozycje.length === 0 && formularz.dataset.mialPozycje !== "1") return undefined;
+  return pozycje;
+}
+
 /** Wynik serii z formularza. Pola nieobecne dla danego typu wychodzą jako
     undefined i nie trafiają do żądania. */
 const wynikZFormularza = (formularz) => ({
@@ -571,79 +621,14 @@ function polaSerii(typ, wartosci) {
 
 // === Ekran: Dziś ========================================================
 
-/** Pola posiłku — wspólne dla dopisywania i poprawiania. */
-function polaPosilku(p = {}, idPrzedrostek = "") {
-  const id = (nazwa) => `${idPrzedrostek}${nazwa}`;
-
-  return `
-    <div class="szeroko">
-      <label for="${id("opis")}">Co zjadłeś</label>
-      <input id="${id("opis")}" name="opis" required autocomplete="off" value="${esc(p.opis ?? "")}" />
-    </div>
-    <div>
-      <label for="${id("kcal")}">Kalorie</label>
-      <input id="${id("kcal")}" name="kcal" inputmode="decimal" required value="${p.kcal ?? ""}" />
-    </div>
-    <div>
-      <label for="${id("godzina")}">Godzina</label>
-      <input id="${id("godzina")}" name="godzina" inputmode="numeric" placeholder="teraz" value="${esc(p.godzina ?? "")}" />
-    </div>
-    <div>
-      <label for="${id("bialko")}">Białko (g)</label>
-      <input id="${id("bialko")}" name="bialko_g" inputmode="decimal" value="${p.bialko_g ?? ""}" />
-    </div>
-    <div>
-      <label for="${id("wegle")}">Węgle (g)</label>
-      <input id="${id("wegle")}" name="wegle_g" inputmode="decimal" value="${p.wegle_g ?? ""}" />
-    </div>
-    <div>
-      <label for="${id("tluszcz")}">Tłuszcz (g)</label>
-      <input id="${id("tluszcz")}" name="tluszcz_g" inputmode="decimal" value="${p.tluszcz_g ?? ""}" />
-    </div>`;
-}
-
-function wpisPosilku(p) {
-  if (p.id === edytowanyPosilek) {
-    return `
-      <form id="edycja-posilku-${p.id}" data-posilek="${p.id}" class="wpis-edycja">
-        <div class="pola">${polaPosilku(p, `e${p.id}-`)}</div>
-        <div class="przyciski">
-          <button class="przycisk glowny" type="submit">Popraw</button>
-          <button class="przycisk" type="button" data-anuluj-posilku>Anuluj</button>
-        </div>
-      </form>`;
-  }
-
-  return `
-    <div class="wpis ${p.oczekuje ? "oczekuje" : ""}">
-      <div class="tresc">
-        <div class="naglowek">
-          <span class="godzina">${esc(p.godzina)}</span>
-          <span class="opis">${esc(p.opis)}</span>
-          ${p.pewnosc === "szacowane" ? '<span class="znacznik">szacunek</span>' : ""}
-          ${p.pewnosc === "niepewne" ? '<span class="znacznik niepewne">niepewne</span>' : ""}
-          ${p.oczekuje ? '<span class="znacznik">⏳ czeka</span>' : ""}
-        </div>
-        <div class="szczegoly">
-          ${zaokr(p.kcal)} kcal · B ${zaokr(p.bialko_g)} · W ${zaokr(p.wegle_g)} · T ${zaokr(p.tluszcz_g)}
-        </div>
-      </div>
-      ${
-        // Wpis bez id z bazy nie ma czego poprawiać ani usuwać — obie akcje
-        // wrócą, gdy kolejka go wyśle.
-        p.oczekuje
-          ? ""
-          : `<button class="przycisk cichy" data-edytuj-posilek="${p.id}" aria-label="Popraw">✎</button>
-             <button class="przycisk cichy" data-usun-posilek="${p.id}" aria-label="Usuń">✕</button>`
-      }
-    </div>`;
-}
+// Renderer wpisu i pól posiłku mieszka w posilek.js — wspólny z zakładką
+// Dieta, żeby edycja działała identycznie na obu ekranach.
 
 function ekranDzis(dzien, czeste = []) {
   const cele = dzien.cele;
 
   const posilki = dzien.posilki.length
-    ? dzien.posilki.map(wpisPosilku).join("")
+    ? dzien.posilki.map((p) => wpisPosilku(p, edytowanyPosilek)).join("")
     : '<div class="pusto">Nic jeszcze nie zapisano.</div>';
 
   // Podpowiedzi wypełniają formularz, a nie zapisują od razu: ta sama kanapka
@@ -1621,6 +1606,20 @@ widok.addEventListener("click", (zdarzenie) => {
     return;
   }
 
+  // Edytor składników: wiersze dodaje i usuwa się lokalnie, bez wysyłki —
+  // zapis idzie dopiero z całym formularzem poprawki.
+  const dodajWiersz = cel.closest("[data-dodaj-wiersz]");
+  if (dodajWiersz) {
+    dodajWiersz.insertAdjacentHTML("beforebegin", szablonWiersza());
+    return;
+  }
+
+  const usunWiersz = cel.closest("[data-usun-wiersz]");
+  if (usunWiersz) {
+    usunWiersz.closest("[data-wiersz]")?.remove();
+    return;
+  }
+
   const pokaz = cel.closest("[data-pokaz]");
   if (pokaz) {
     const formularz = document.getElementById(pokaz.dataset.pokaz);
@@ -1882,12 +1881,18 @@ widok.addEventListener("submit", (zdarzenie) => {
 
   if (formularz.id.startsWith("edycja-posilku-")) {
     const id = Number(formularz.dataset.posilek);
+    const dane = makroZFormularza(formularz);
+    const czas = czasEdycji(formularz);
+    if (czas) dane.czas = czas;
+    const pozycje = pozycjeZFormularza(formularz);
+    if (pozycje !== undefined) dane.pozycje = pozycje;
+
     edytowanyPosilek = null;
     akcja(
       () =>
         api("/wpis", {
           method: "POST",
-          dane: { typ: "posilek", id, akcja: "popraw", dane: makroZFormularza(formularz) },
+          dane: { typ: "posilek", id, akcja: "popraw", dane },
         }),
       "Poprawiono posiłek",
       formularz,

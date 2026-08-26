@@ -12,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { decyzjaKolejki } from "../public/kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "../public/nakladka.js";
+import { wpisPosilku } from "../public/posilek.js";
 import { ekranRaporty, panelTygodnia } from "../public/raporty.js";
 
 /** Południe UTC: ta sama data lokalna w każdej strefie, w której test może biec. */
@@ -333,5 +334,69 @@ describe("widok tygodnia", () => {
 
     expect(html).toContain("Nowszy");
     expect(html).not.toContain("Starszy");
+  });
+});
+
+describe("wpis posiłku", () => {
+  const posilek = {
+    id: 5,
+    data_lokalna: "2026-08-25",
+    godzina: "08:15",
+    opis: "śniadanie",
+    kcal: 470,
+    bialko_g: 28,
+    wegle_g: 40,
+    tluszcz_g: 20,
+    pewnosc: "szacowane",
+    pozycje: [
+      { id: 1, nazwa: "jajko", ilosc_g: null, kcal: 150, bialko_g: 13, wegle_g: null, tluszcz_g: null },
+      { id: 2, nazwa: "bułka", ilosc_g: 80, kcal: 200, bialko_g: null, wegle_g: null, tluszcz_g: null },
+    ],
+  };
+
+  it("pokazuje rozbicie pod makro posiłku", () => {
+    const html = wpisPosilku(posilek, null);
+
+    expect(html).toContain("jajko");
+    expect(html).toContain("bułka");
+    expect(html).toContain("80 g");
+    expect(html).toContain("200 kcal");
+  });
+
+  it("oznacza wpis z najniższą pewnością", () => {
+    const html = wpisPosilku({ ...posilek, pewnosc: "niepewne" }, null);
+
+    expect(html).toContain("niepewne");
+    expect(html).not.toContain("szacunek");
+  });
+
+  it("formularz edycji niesie dane do poprawki czasu i pozycji", () => {
+    const html = wpisPosilku(posilek, 5);
+
+    // Data dnia i wyjściowa godzina — bez nich app.js nie odróżni „godzina
+    // zmieniona" od „godzina nietknięta" i nie zakotwiczy edycji w dniu wpisu.
+    expect(html).toContain('data-dzien="2026-08-25"');
+    expect(html).toContain('data-godzina="08:15"');
+    expect(html).toContain('data-mial-pozycje="1"');
+    // Po wierszu na każdą pozycję plus przycisk dokładania.
+    expect(html.match(/data-wiersz/g)).toHaveLength(2);
+    expect(html).toContain("data-dodaj-wiersz");
+    expect(html).toContain('value="jajko"');
+  });
+
+  it("posiłek bez rozbicia deklaruje to w formularzu", () => {
+    const html = wpisPosilku({ ...posilek, pozycje: [] }, 5);
+
+    // Granica „wyczyść vs nie ruszaj" to obecność klucza w żądaniu — formularz
+    // bez tej flagi wysyłałby [] i „czyścił" rozbicie, którego nigdy nie było.
+    expect(html).toContain('data-mial-pozycje="0"');
+  });
+
+  it("wpis z kolejki nie dostaje przycisków edycji", () => {
+    const html = wpisPosilku({ ...posilek, id: "oczekuje-1", oczekuje: true }, null);
+
+    expect(html).not.toContain("data-edytuj-posilek");
+    expect(html).not.toContain("data-usun-posilek");
+    expect(html).toContain("⏳ czeka");
   });
 });
