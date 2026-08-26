@@ -691,6 +691,12 @@ function ekranDzis(dzien, czeste = []) {
 
 // === Ekran: Trening =====================================================
 
+/** Księżyc — dzień wolny to odpoczynek, a nie dziura w planie. */
+const ZNAK_ODPOCZYNKU = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
+  </svg>`;
+
 const przyciskDnia = (dzien, klasy = "przycisk pelny") =>
   `<div class="przyciski"><button class="${klasy}" data-start-dzien="${dzien.id}">
      ${esc(dzien.kod)} — ${esc(dzien.nazwa)}
@@ -730,12 +736,19 @@ function kartaBezSesji(plany, dzisiajDzienTygodnia) {
     <section class="karta">
       <h2>Zacznij trening</h2>
       ${
+        // Jedno miejsce, dwa stany: albo dzień do zrobienia, albo dzień wolny.
+        // Wolny ma ten sam ciężar w układzie co przycisk, bo to równoprawna
+        // odpowiedź na pytanie „co dziś", a nie brak odpowiedzi.
         naDzis
           ? `<button class="przycisk glowny pelny duzy" data-start-dzien="${naDzis.id}">
                ${esc(naDzis.kod)} — ${esc(naDzis.nazwa)}
              </button>
              <div class="pusto">Dzisiejszy dzień wg planu „${esc(domyslny.nazwa)}".</div>`
-          : '<div class="pusto">Dziś nie ma zaplanowanego treningu.</div>'
+          : `<div class="dzien-wolny">
+               <span class="znak" aria-hidden="true">${ZNAK_ODPOCZYNKU}</span>
+               Dziś rest day, bro :)
+             </div>
+             <div class="pusto">Plan nie przewiduje na dziś treningu.</div>`
       }
       ${resztaPlanu.map((d) => przyciskDnia(d)).join("")}
 

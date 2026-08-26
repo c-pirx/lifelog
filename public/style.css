@@ -403,6 +403,33 @@ nav button[aria-current="page"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Dzień wolny zajmuje to samo miejsce i tę samą wysokość co przycisk dnia
+   treningowego — oba odpowiadają na pytanie „co dziś", więc muszą ważyć tyle
+   samo. Wyróżnia się barwą akcentu, ale nie udaje przycisku: bez cienia,
+   bez kursora, bez reakcji na dotyk. Nie ma w co stukać. */
+.dzien-wolny {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 14px 18px;
+  border: 1px solid var(--akcent-ciemny);
+  border-radius: var(--promien);
+  background: color-mix(in srgb, var(--akcent) 8%, transparent);
+  color: var(--akcent);
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.dzien-wolny .znak {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  opacity: 0.85;
+}
+
 /* Kreska z podpisem oddzielająca plan bieżący od szablonów. Dni pod nią są
    przygaszone, ale nadal klikalne — to nadal pełnoprawna droga do treningu,
    tylko nie ta, po którą sięga się codziennie. */
