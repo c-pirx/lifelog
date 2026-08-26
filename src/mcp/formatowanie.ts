@@ -14,6 +14,7 @@ import type {
   PodsumowanieDnia,
   Posilek,
   PostepCwiczenia,
+  PozycjaPosilku,
   Seria,
   StanTreningu,
 } from "../domain/typy.js";
@@ -25,10 +26,27 @@ export function makroWTekscie(m: Makro): string {
   return `${liczba(m.kcal)} kcal · B ${liczba(m.bialko_g)} g · W ${liczba(m.wegle_g)} g · T ${liczba(m.tluszcz_g)} g`;
 }
 
+/** Tylko pola, które pozycja zna — rozbicie bywa czysto opisowe, bez liczb. */
+function pozycjaWTekscie(p: PozycjaPosilku): string {
+  const nazwa = p.ilosc_g != null ? `${p.nazwa} ${liczba(p.ilosc_g)} g` : p.nazwa;
+
+  const makra: string[] = [];
+  if (p.kcal != null) makra.push(`${liczba(p.kcal)} kcal`);
+  if (p.bialko_g != null) makra.push(`B ${liczba(p.bialko_g)} g`);
+  if (p.wegle_g != null) makra.push(`W ${liczba(p.wegle_g)} g`);
+  if (p.tluszcz_g != null) makra.push(`T ${liczba(p.tluszcz_g)} g`);
+
+  return `· ${nazwa}${makra.length > 0 ? ` — ${makra.join(" · ")}` : ""}`;
+}
+
 export function posilekWTekscie(p: Posilek): string {
   const znacznik =
     p.pewnosc === "szacowane" ? " (szacunek)" : p.pewnosc === "niepewne" ? " (niepewne)" : "";
-  return `#${p.id} ${p.godzina} ${p.pora}: ${p.opis} — ${makroWTekscie(p)}${znacznik}`;
+  const naglowek = `#${p.id} ${p.godzina} ${p.pora}: ${p.opis} — ${makroWTekscie(p)}${znacznik}`;
+
+  // Pozycje bez własnych id — poprawia się je kompletem przez zmien_wpis.
+  if (p.pozycje.length === 0) return naglowek;
+  return [naglowek, ...p.pozycje.map((poz) => `    ${pozycjaWTekscie(poz)}`)].join("\n");
 }
 
 export function podsumowanieWTekscie(d: PodsumowanieDnia): string {

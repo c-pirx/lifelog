@@ -207,6 +207,10 @@ describe("przepływ dietetyczny", () => {
     const po = await wywolaj("podsumowanie_dnia", { data: "2026-08-28" });
     expect(po).toMatch(/09:15/);
     expect(po).toMatch(/350 kcal/);
+    // Claude musi widzieć rozbicie, które sam zapisał — inaczej nie ma jak
+    // poprawić pojedynczego składnika.
+    expect(po).toMatch(/· jajko — 150 kcal/);
+    expect(po).toMatch(/· bułka — 200 kcal/);
   });
 });
 
