@@ -393,3 +393,73 @@ describe("raport tygodniowy przez MCP", () => {
     expect(Object.keys(podsumowanie?.inputSchema.properties ?? {})).toContain("okres");
   });
 });
+
+describe("aktywności poza planem", () => {
+  it("zapisuje aktywność bez otwartej sesji i nie tworzy sesji", async () => {
+    const wynik = await wywolaj("zapisz_serie", {
+      cwiczenie: "rower",
+      aktywnosc: true,
+      dystans_m: 20_000,
+      czas_s: 3600,
+      notatka: "wokół jeziora",
+      czas: "2026-09-20 17:30",
+    });
+
+    expect(wynik).toMatch(/rower/);
+    expect(wynik).toMatch(/20 km/);
+    expect(wynik).toMatch(/1 h 00 min/);
+    expect(wynik).toMatch(/wokół jeziora/);
+
+    // Zapis aktywności nie może dotknąć sesji — inaczej zablokowałby trening.
+    expect(await wywolaj("stan_treningu")).toMatch(/nie ma otwartej sesji/i);
+  });
+
+  it("odrzuca pola siłowe zmieszane z aktywnością", async () => {
+    const wynik = await klient.callTool({
+      name: "zapisz_serie",
+      arguments: { cwiczenie: "rower", aktywnosc: true, dystans_m: 5000, powtorzenia: 10 },
+    });
+
+    expect(wynik.isError).toBe(true);
+    expect(tresc(wynik)).toMatch(/powtorzenia/);
+  });
+
+  it("odrzuca aktywność bez dystansu i bez czasu", async () => {
+    const wynik = await klient.callTool({
+      name: "zapisz_serie",
+      arguments: { cwiczenie: "spacer", aktywnosc: true },
+    });
+
+    expect(wynik.isError).toBe(true);
+    expect(tresc(wynik)).toMatch(/dystans/i);
+  });
+
+  it("podsumowanie dnia pokazuje aktywności z identyfikatorami", async () => {
+    const podsumowanie = await wywolaj("podsumowanie_dnia", { data: "2026-09-20" });
+
+    expect(podsumowanie).toMatch(/Aktywności poza planem/);
+    expect(podsumowanie).toMatch(/#\d+ 17:30 rower/);
+  });
+
+  it("poprawia aktywność przez zmien_wpis", async () => {
+    const podsumowanie = await wywolaj("podsumowanie_dnia", { data: "2026-09-20" });
+    const id = Number(/#(\d+) 17:30 rower/.exec(podsumowanie)?.[1]);
+
+    expect(await wywolaj("zmien_wpis", {
+      typ: "aktywnosc",
+      id,
+      akcja: "popraw",
+      dane: { dystans_m: 25_000 },
+    })).toMatch(/poprawiono/i);
+
+    expect(await wywolaj("podsumowanie_dnia", { data: "2026-09-20" })).toMatch(/25 km/);
+  });
+
+  it("opis zapisz_serie rozstrzyga, kiedy to seria, a kiedy aktywność", async () => {
+    const { tools } = await klient.listTools();
+    const opis = tools.find((t) => t.name === "zapisz_serie")?.description ?? "";
+
+    expect(opis).toMatch(/SAMODZIELNĄ AKTYWNOŚĆ/);
+    expect(opis).toMatch(/W TRAKCIE trwającej sesji/);
+  });
+});

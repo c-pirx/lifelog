@@ -24,6 +24,7 @@ import {
   zakresDat,
   STREFA_DOMYSLNA,
 } from "../lib/time.js";
+import { statAktywnosci, BRAK_AKTYWNOSCI, type StatAktywnosci } from "./aktywnosci.js";
 import { BladDomeny } from "./bledy.js";
 import { celeNaDzien } from "./diet.js";
 import { trendWagi } from "./metrics.js";
@@ -88,6 +89,8 @@ export type WycinekTygodnia = {
   dieta: StatDiety;
   waga: StatWagi;
   trening: StatTreningu;
+  /** Wysiłek poza planem. Osobno od treningu — patrz `ocenZmiane`. */
+  aktywnosci: StatAktywnosci;
 };
 
 export type Zmiana = {
@@ -107,6 +110,7 @@ export type RaportTygodniowy = {
   dieta: StatDiety;
   waga: StatWagi;
   trening: StatTreningu;
+  aktywnosci: StatAktywnosci;
   zmiana: Zmiana | null;
   komentarz: string | null;
   komentarz_ts: string | null;
@@ -129,6 +133,7 @@ export type PostepTygodnia = {
   dieta: StatDiety;
   waga: StatWagi;
   trening: StatTreningu;
+  aktywnosci: StatAktywnosci;
   prognoza: Prognoza | null;
   zmiana: Zmiana | null;
 };
@@ -168,7 +173,12 @@ const tylkoMakro = (m: Makro): Makro => ({
 
 /** Wycinek bez jednego wpisu — nie ma go po co z niczym porównywać. */
 function czyPusty(w: WycinekTygodnia): boolean {
-  return w.dieta.dni_z_zapisem === 0 && w.trening.serie === 0 && w.waga.koniec === null;
+  return (
+    w.dieta.dni_z_zapisem === 0 &&
+    w.trening.serie === 0 &&
+    w.waga.koniec === null &&
+    w.aktywnosci.ile === 0
+  );
 }
 
 /** Suma celów dzień po dniu — cele mają datę wejścia i mogą zmienić się w środku tygodnia. */
@@ -263,6 +273,7 @@ export function policzWycinek(db: Baza, od: string, doDaty: string): WycinekTygo
     dieta: statDiety(db, od, doDaty),
     waga: statWagi(db, od, doDaty),
     trening: statTreningu(db, od, doDaty),
+    aktywnosci: statAktywnosci(db, od, doDaty),
   };
 }
 
@@ -274,6 +285,11 @@ export function policzWycinek(db: Baza, od: string, doDaty: string): WycinekTygo
  * i waga nie — przy redukcji zjedzenie mniej jest dobre, przy budowaniu masy
  * złe, a system nie zna zamiaru użytkownika. Dlatego wchodzą do raportu jako
  * liczby ze znakiem, ale nie do oceny.
+ *
+ * Aktywności poza planem też nie wchodzą, i to decyzja, nie przeoczenie:
+ * ocena mierzy realizację planu treningowego, a niedzielny spacer podbiłby ją
+ * dokładnie tak, jak opuszczony trening ją obniża. Raport pokazuje je osobną
+ * linijką — użytkownik sam widzi, czy tydzień był ruchliwy.
  */
 function ocenZmiane(dniWCelu: number, serie: number): Zmiana["ocena"] {
   const punkty = Math.sign(dniWCelu) + Math.sign(serie);
@@ -308,6 +324,7 @@ function zbudujRaport(wiersz: repo.WierszRaportu): RaportTygodniowy {
     dieta: StatDiety;
     waga: StatWagi;
     trening: StatTreningu;
+    aktywnosci?: StatAktywnosci;
     zmiana: Zmiana | null;
   };
 
@@ -318,6 +335,10 @@ function zbudujRaport(wiersz: repo.WierszRaportu): RaportTygodniowy {
     dieta: dane.dieta,
     waga: dane.waga,
     trening: dane.trening,
+    // Migawki sprzed tej funkcji klucza `aktywnosci` nie mają i mieć nie będą —
+    // raportu raz zapisanego nigdy nie przeliczamy. Zero zamiast wywrotki
+    // przy pierwszym otwarciu archiwum po wdrożeniu.
+    aktywnosci: dane.aktywnosci ?? BRAK_AKTYWNOSCI,
     zmiana: dane.zmiana,
     komentarz: wiersz.komentarz,
     komentarz_ts: wiersz.komentarz_ts,
@@ -370,6 +391,7 @@ export function zapewnijRaporty(db: Baza, opcje: Opcje = {}): RaportTygodniowy[]
         dieta: wycinek.dieta,
         waga: wycinek.waga,
         trening: wycinek.trening,
+        aktywnosci: wycinek.aktywnosci,
         zmiana: czyPusty(poprzedni) ? null : policzZmiane(wycinek, poprzedni),
       }),
       utworzono: teraz,
@@ -507,6 +529,9 @@ export function tydzienWToku(db: Baza, opcje: Opcje = {}): PostepTygodnia {
     dieta: dietaDniZamknietych,
     waga: biezacy.waga,
     trening: biezacy.trening,
+    // Jak trening: dzisiejszy wyjazd to fakt dokonany i ma być widoczny zaraz
+    // po powrocie, a nie dopiero jutro.
+    aktywnosci: biezacy.aktywnosci,
     // Bez ani jednego zapisu z dni zamkniętych prognoza wyszłaby zerowa i
     // ogłosiła, że celu nie dowieziesz — a to nie brak tempa, tylko brak danych.
     prognoza:

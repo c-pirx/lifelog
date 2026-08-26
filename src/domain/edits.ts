@@ -9,13 +9,14 @@
 import type { Baza } from "../db/index.js";
 import * as repo from "../db/repo.js";
 import { dataLokalna, parsujCzas, STREFA_DOMYSLNA } from "../lib/time.js";
+import { sprawdzWartosci } from "./aktywnosci.js";
 import { BladDomeny } from "./bledy.js";
 import { PEWNOSCI, PORY, type NowaPozycja, type Pewnosc, type Pora } from "./typy.js";
 
-export type TypWpisu = "posilek" | "seria" | "waga";
+export type TypWpisu = "posilek" | "seria" | "waga" | "aktywnosc";
 export type AkcjaWpisu = "popraw" | "usun";
 
-export const TYPY_WPISOW: readonly TypWpisu[] = ["posilek", "seria", "waga"];
+export const TYPY_WPISOW: readonly TypWpisu[] = ["posilek", "seria", "waga", "aktywnosc"];
 
 export type ZmianyPosilku = {
   opis?: string;
@@ -44,11 +45,21 @@ export type ZmianyWagi = {
   notatka?: string | null;
 };
 
+export type ZmianyAktywnosci = {
+  dyscyplina?: string;
+  dystans_m?: number | null;
+  czas_s?: number | null;
+  rpe?: number | null;
+  notatka?: string | null;
+  /** Jak przy posiłku: "HH:MM" zostaje w dniu wpisu, pełna data go przenosi. */
+  czas?: string;
+};
+
 export type ZadanieZmiany = {
   typ: TypWpisu;
   id: number;
   akcja: AkcjaWpisu;
-  dane?: ZmianyPosilku | ZmianySerii | ZmianyWagi;
+  dane?: ZmianyPosilku | ZmianySerii | ZmianyWagi | ZmianyAktywnosci;
 };
 
 export type WynikZmiany = {
@@ -72,6 +83,33 @@ function brakWpisu(typ: TypWpisu, id: number): never {
 }
 
 const POLA_MAKRO = ["kcal", "bialko_g", "wegle_g", "tluszcz_g"] as const;
+
+/**
+ * Nowy znacznik czasu wpisu wraz z datą lokalną.
+ *
+ * Parsowanie względem dnia WPISU, nie dzisiaj — goła godzina puszczona przez
+ * `parsujCzas` przeniosłaby wczorajszy obiad na dzisiejszą dobę. Pełna data
+ * przenosi wpis świadomie i to jest jedyny sposób, żeby go przełożyć.
+ */
+function nowyCzasWpisu(
+  czas: unknown,
+  dzienWpisu: string,
+  strefa: string,
+): { ts: string; data_lokalna: string } {
+  if (typeof czas !== "string") {
+    throw new BladDomeny(`Nie rozpoznano formatu czasu: "${String(czas)}"`, "zly_czas");
+  }
+
+  const godzina = /^(\d{1,2}):(\d{2})$/.exec(czas.trim());
+  try {
+    const ts = godzina
+      ? parsujCzas(`${dzienWpisu} ${godzina[1]!.padStart(2, "0")}:${godzina[2]}`, strefa)
+      : parsujCzas(czas, strefa);
+    return { ts, data_lokalna: dataLokalna(ts, strefa) };
+  } catch {
+    throw new BladDomeny(`Nie rozpoznano formatu czasu: "${czas}"`, "zly_czas");
+  }
+}
 
 /**
  * Walidacja pozycji siedzi w domenie, bo trasa /wpis przepuszcza `dane`
@@ -119,22 +157,8 @@ function poprawPosilek(db: Baza, id: number, dane: ZmianyPosilku, strefa: string
     "pewnosc",
   ]);
 
-  // Parsowanie czasu względem dnia WPISU, nie dzisiaj — goła godzina puszczona
-  // przez parsujCzas przeniosłaby wczorajszy obiad na dzisiejszą dobę.
   if (dane.czas !== undefined) {
-    if (typeof dane.czas !== "string") {
-      throw new BladDomeny(`Nie rozpoznano formatu czasu: "${String(dane.czas)}"`, "zly_czas");
-    }
-    const godzina = /^(\d{1,2}):(\d{2})$/.exec(dane.czas.trim());
-    try {
-      const ts = godzina
-        ? parsujCzas(`${istniejacy.data_lokalna} ${godzina[1]!.padStart(2, "0")}:${godzina[2]}`, strefa)
-        : parsujCzas(dane.czas, strefa);
-      zmiany.ts = ts;
-      zmiany.data_lokalna = dataLokalna(ts, strefa);
-    } catch {
-      throw new BladDomeny(`Nie rozpoznano formatu czasu: "${dane.czas}"`, "zly_czas");
-    }
+    Object.assign(zmiany, nowyCzasWpisu(dane.czas, istniejacy.data_lokalna, strefa));
   }
 
   // Edycja samych pozycji jest pełnoprawną zmianą.
@@ -212,6 +236,48 @@ function poprawWage(db: Baza, id: number, dane: ZmianyWagi): string {
   return `Poprawiono pomiar wagi z ${istniejaca.data_lokalna}`;
 }
 
+function poprawAktywnosc(db: Baza, id: number, dane: ZmianyAktywnosci, strefa: string): string {
+  const istniejaca = repo.aktywnoscPoId(db, id);
+  if (!istniejaca) brakWpisu("aktywnosc", id);
+
+  if (dane.dyscyplina !== undefined && dane.dyscyplina.trim() === "") {
+    throw new BladDomeny("Nazwa aktywności nie może być pusta", "pusta_dyscyplina");
+  }
+  sprawdzWartosci(dane);
+
+  const zmiany: Partial<Omit<repo.WierszAktywnosci, "id" | "zrodlo">> = tylkoPodane(dane, [
+    "dyscyplina",
+    "dystans_m",
+    "czas_s",
+    "rpe",
+    "notatka",
+  ]);
+
+  if (zmiany.dyscyplina !== undefined) zmiany.dyscyplina = zmiany.dyscyplina.trim();
+
+  if (dane.czas !== undefined) {
+    Object.assign(zmiany, nowyCzasWpisu(dane.czas, istniejaca.data_lokalna, strefa));
+  }
+
+  if (Object.keys(zmiany).length === 0) {
+    throw new BladDomeny("Nie podano żadnych zmian", "brak_zmian");
+  }
+
+  // Wyzerowanie obu miar zostawiłoby wpis, z którego nic nie wynika — tę samą
+  // zaporę stawia zapis, więc poprawka nie może jej obejść.
+  const dystans = zmiany.dystans_m !== undefined ? zmiany.dystans_m : istniejaca.dystans_m;
+  const czas = zmiany.czas_s !== undefined ? zmiany.czas_s : istniejaca.czas_s;
+  if (dystans == null && czas == null) {
+    throw new BladDomeny(
+      "Aktywność musi zachować dystans albo czas — inaczej nic z niej nie wynika",
+      "brak_czasu_i_dystansu",
+    );
+  }
+
+  repo.aktualizujAktywnosc(db, id, zmiany);
+  return `Poprawiono aktywność „${zmiany.dyscyplina ?? istniejaca.dyscyplina}" z ${zmiany.data_lokalna ?? istniejaca.data_lokalna}`;
+}
+
 function usun(db: Baza, typ: TypWpisu, id: number): string {
   switch (typ) {
     case "posilek": {
@@ -232,6 +298,12 @@ function usun(db: Baza, typ: TypWpisu, id: number): string {
       if (!wpis) brakWpisu(typ, id);
       repo.usunWage(db, id);
       return `Usunięto pomiar wagi z ${wpis.data_lokalna}`;
+    }
+    case "aktywnosc": {
+      const wpis = repo.aktywnoscPoId(db, id);
+      if (!wpis) brakWpisu(typ, id);
+      repo.usunAktywnosc(db, id);
+      return `Usunięto aktywność „${wpis.dyscyplina}" z ${wpis.data_lokalna}`;
     }
   }
 }
@@ -255,12 +327,15 @@ export function zmienWpis(
   }
 
   const dane = zadanie.dane ?? {};
+  const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
   const opis =
     typ === "posilek"
-      ? poprawPosilek(db, id, dane as ZmianyPosilku, opcje.strefa ?? STREFA_DOMYSLNA)
+      ? poprawPosilek(db, id, dane as ZmianyPosilku, strefa)
       : typ === "seria"
         ? poprawSerie(db, id, dane as ZmianySerii)
-        : poprawWage(db, id, dane as ZmianyWagi);
+        : typ === "aktywnosc"
+          ? poprawAktywnosc(db, id, dane as ZmianyAktywnosci, strefa)
+          : poprawWage(db, id, dane as ZmianyWagi);
 
   return { typ, id, akcja, opis };
 }

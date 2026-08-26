@@ -88,6 +88,9 @@ const dzien = await (await wyslij(`/api/dzien?data=${DZIS}`, undefined, "GET")).
 for (const posilek of dzien.posilki) {
   await wyslij("/api/wpis", { typ: "posilek", id: posilek.id, akcja: "usun" });
 }
+for (const aktywnosc of dzien.aktywnosci ?? []) {
+  await wyslij("/api/wpis", { typ: "aktywnosc", id: aktywnosc.id, akcja: "usun" });
+}
 
 await wyslij("/api/cele", {
   kcal: 2600,
@@ -144,6 +147,22 @@ for (const [ileDniTemu, kg] of [
   [0, 81.4],
 ]) {
   await wyslij("/api/waga", { kg, czas: `${przedDniami(DZIS, ileDniTemu)} 07:00` });
+}
+
+// Aktywności poza planem — żeby zakładka miała co pokazać przy pracy nad
+// wyglądem. Czyszczone wyżej jest tylko dzisiaj; starsze zostają jak waga.
+for (const [ileDniTemu, dyscyplina, dystans_m, czas_s, godzina, notatka] of [
+  [0, "rower", 18_400, 3900, "17:20", "wokół jeziora"],
+  [3, "bieg", 5200, 1680, "07:10", null],
+  [5, "spacer", 4100, 3300, "19:00", null],
+]) {
+  await wyslij("/api/aktywnosci", {
+    dyscyplina,
+    dystans_m,
+    czas_s,
+    ...(notatka ? { notatka } : {}),
+    czas: `${przedDniami(DZIS, ileDniTemu)} ${godzina}`,
+  });
 }
 
 console.log(`Dane poglądowe wprowadzone (dzień ${DZIS}).`);

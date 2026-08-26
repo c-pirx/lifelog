@@ -397,3 +397,83 @@ describe("tydzień i raporty", () => {
     expect(odpowiedz.status).toBe(401);
   });
 });
+
+describe("aktywności poza planem", () => {
+  it("zapisuje aktywność i pokazuje ją w historii", async () => {
+    const odpowiedz = await wyslij("/api/aktywnosci", {
+      dyscyplina: "rower",
+      dystans_m: 18_000,
+      czas_s: 3600,
+      notatka: "wokół jeziora",
+    });
+    expect(odpowiedz.status).toBe(201);
+
+    const zapisana = (await odpowiedz.json()) as { id: number; zrodlo: string; godzina: string };
+    expect(zapisana.zrodlo).toBe("apka");
+    expect(zapisana.godzina).toMatch(/^\d{2}:\d{2}$/);
+
+    const historia = await pobierz<{ dni: { data: string; dystans_m: number }[] }>(
+      "/api/aktywnosci?dni=7",
+    );
+    expect(historia.dni[0]?.dystans_m).toBe(18_000);
+  });
+
+  it("dzień niesie aktywności obok posiłków — jedno żądanie, nie dwa", async () => {
+    const dzien = await pobierz<PodsumowanieDnia & { aktywnosci: { dyscyplina: string }[] }>(
+      "/api/dzien",
+    );
+
+    expect(dzien.aktywnosci.map((a) => a.dyscyplina)).toContain("rower");
+  });
+
+  it("odczyt pojedynczego dnia wskazanego datą", async () => {
+    const dzien = await pobierz<{ data: string }>("/api/dzien");
+    const lista = await pobierz<{ dyscyplina: string }[]>(`/api/aktywnosci?data=${dzien.data}`);
+
+    expect(Array.isArray(lista)).toBe(true);
+    expect(lista.map((a) => a.dyscyplina)).toContain("rower");
+  });
+
+  it("wpis odłożony w kolejce trafia pod swoją godzinę, nie pod godzinę wysyłki", async () => {
+    const odpowiedz = await wyslij("/api/aktywnosci", {
+      dyscyplina: "bieg",
+      czas_s: 1800,
+      czas: "2026-08-23 07:15",
+    });
+
+    const zapisana = (await odpowiedz.json()) as { data_lokalna: string; godzina: string };
+    expect(zapisana.data_lokalna).toBe("2026-08-23");
+    expect(zapisana.godzina).toBe("07:15");
+  });
+
+  it("odrzuca aktywność bez dystansu i bez czasu", async () => {
+    const odpowiedz = await wyslij("/api/aktywnosci", { dyscyplina: "rower" });
+    expect(odpowiedz.status).toBe(400);
+  });
+
+  it("poprawia i usuwa aktywność tą samą trasą co pozostałe wpisy", async () => {
+    const utworzona = (await (
+      await wyslij("/api/aktywnosci", { dyscyplina: "spacer", czas_s: 900 })
+    ).json()) as { id: number };
+
+    const poprawka = await wyslij("/api/wpis", {
+      typ: "aktywnosc",
+      id: utworzona.id,
+      akcja: "popraw",
+      dane: { czas_s: 1200 },
+    });
+    expect(poprawka.status).toBe(200);
+
+    const usuniecie = await wyslij("/api/wpis", {
+      typ: "aktywnosc",
+      id: utworzona.id,
+      akcja: "usun",
+    });
+    expect(usuniecie.status).toBe(200);
+  });
+
+  it("wymaga zalogowania", async () => {
+    const odpowiedz = await fetch(`${adres}/api/aktywnosci`);
+    expect(odpowiedz.status).toBe(401);
+  });
+});

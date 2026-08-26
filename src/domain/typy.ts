@@ -239,6 +239,54 @@ export type StanTreningu = {
   pozostalo: string[];
 };
 
+// === AKTYWNOŚCI =========================================================
+
+/**
+ * Wysiłek poza planem treningowym: bieg, rower, spacer, basen.
+ *
+ * Nie jest sesją ani serią — nie ma numeru, nie ma celu, nie liczy się do
+ * realizacji planu. System go zapisuje i pokazuje, ale niczego z niego nie
+ * wnioskuje: żadnego „słabiej niż poprzednio", żadnych rekordów.
+ */
+export type Aktywnosc = {
+  id: number;
+  ts: string;
+  data_lokalna: string;
+  godzina: string;
+  dyscyplina: string;
+  dystans_m: number | null;
+  czas_s: number | null;
+  rpe: number | null;
+  notatka: string | null;
+  /** Zdjęcia tu nie ma — nie ma czego analizować. */
+  zrodlo: "czat" | "apka";
+};
+
+export type NowaAktywnosc = {
+  dyscyplina: string;
+  dystans_m?: number;
+  czas_s?: number;
+  rpe?: number;
+  notatka?: string;
+  /** Chwila wysiłku w UTC ISO. Domyślnie teraz. */
+  ts?: string;
+  zrodlo?: Aktywnosc["zrodlo"];
+};
+
+export type DzienAktywnosci = {
+  data: string;
+  /** Sumy dnia — liczone raz na serwerze, żeby apka i czat podawały to samo. */
+  dystans_m: number;
+  czas_s: number;
+  aktywnosci: Aktywnosc[];
+};
+
+export type HistoriaAktywnosci = {
+  od: string;
+  do: string;
+  dni: DzienAktywnosci[];
+};
+
 // === POMIARY ============================================================
 
 export type Waga = {

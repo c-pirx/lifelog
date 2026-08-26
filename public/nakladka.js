@@ -259,3 +259,65 @@ export function nalozNaTrening(trening, kolejka = [], dni = []) {
     pozostalo: gotowePlan.filter((c) => !c.ukonczone).map((c) => c.nazwa),
   };
 }
+
+/**
+ * Aktywności jednego dnia z doliczonymi wpisami z kolejki.
+ *
+ * Ta sama polityka co przy posiłkach: dodania, usunięcia i poprawki widać od
+ * razu, ale `czas` z poprawki zostaje serwerowi — przeniesienie wpisu między
+ * dniami to robota domeny, nie kosmetyka na liście.
+ */
+export function nalozNaAktywnosci(aktywnosci = [], kolejka = [], data) {
+  const dodane = kolejka
+    .filter((w) => dopasujSciezke(w, "/aktywnosci"))
+    .filter((w) => dataWpisu(w) === data);
+
+  const wpisy = kolejka.filter((w) => dopasujSciezke(w, "/wpis") && w.dane?.typ === "aktywnosc");
+  const usuwane = new Set(
+    wpisy.filter((w) => w.dane?.akcja === "usun").map((w) => w.dane.id),
+  );
+  const poprawki = wpisy.filter((w) => w.dane?.akcja === "popraw" && w.dane?.dane);
+
+  if (dodane.length === 0 && usuwane.size === 0 && poprawki.length === 0) return aktywnosci;
+
+  const POLA_POPRAWKI = ["dyscyplina", "dystans_m", "czas_s", "rpe", "notatka"];
+  const zostajace = aktywnosci
+    .filter((a) => !usuwane.has(a.id))
+    .map((a) => {
+      const moje = poprawki.filter((w) => w.dane.id === a.id);
+      if (moje.length === 0) return a;
+
+      const nalozony = { ...a, oczekujaca_zmiana: true };
+      // W kolejności kolejki — druga poprawka tego samego wpisu na pierwszej,
+      // dokładnie tak, jak zapisze je serwer.
+      for (const w of moje) {
+        for (const pole of POLA_POPRAWKI) {
+          if (w.dane.dane[pole] !== undefined) nalozony[pole] = w.dane.dane[pole];
+        }
+      }
+      return nalozony;
+    });
+
+  const oczekujace = dodane.map((wpis) => ({
+    id: `oczekuje-${wpis.id}`,
+    oczekuje: true,
+    godzina: godzina(wpis.dane.czas ?? wpis.czas_lokalny),
+    data_lokalna: data,
+    dyscyplina: wpis.dane.dyscyplina,
+    dystans_m: wpis.dane.dystans_m ?? null,
+    czas_s: wpis.dane.czas_s ?? null,
+    rpe: wpis.dane.rpe ?? null,
+    notatka: wpis.dane.notatka ?? null,
+  }));
+
+  return [...zostajace, ...oczekujace];
+}
+
+/** To samo dla dnia z zakładki Aktywności — sumy trzeba przeliczyć po nałożeniu. */
+export function nalozNaDzienAktywnosci(dzien, kolejka = []) {
+  const aktywnosci = nalozNaAktywnosci(dzien.aktywnosci, kolejka, dzien.data);
+  if (aktywnosci === dzien.aktywnosci) return dzien;
+
+  const suma = (pole) => aktywnosci.reduce((s, a) => s + (Number(a[pole]) || 0), 0);
+  return { ...dzien, aktywnosci, dystans_m: suma("dystans_m"), czas_s: suma("czas_s") };
+}

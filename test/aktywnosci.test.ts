@@ -1,0 +1,198 @@
+import { beforeEach, describe, expect, it } from "vitest";
+
+import { otworzBaze, type Baza } from "../src/db/index.js";
+import {
+  aktywnosciZDnia,
+  historiaAktywnosci,
+  statAktywnosci,
+  zapiszAktywnosc,
+} from "../src/domain/aktywnosci.js";
+import { czyBladDomeny } from "../src/domain/bledy.js";
+import { rozpocznijTrening, stanTreningu } from "../src/domain/workouts.js";
+
+let db: Baza;
+
+beforeEach(() => {
+  db = otworzBaze({ sciezka: ":memory:" });
+});
+
+const kod = (uruchom: () => unknown): string => {
+  try {
+    uruchom();
+  } catch (blad) {
+    return czyBladDomeny(blad) ? blad.kod : `nie-domenowy: ${String(blad)}`;
+  }
+  return "brak-bledu";
+};
+
+describe("zapis aktywności", () => {
+  it("zapisuje dystans i czas, licząc dobę w strefie użytkownika", () => {
+    const aktywnosc = zapiszAktywnosc(db, {
+      dyscyplina: "rower",
+      dystans_m: 5000,
+      czas_s: 1500,
+      ts: "2026-08-25T21:30:00.000Z",
+    });
+
+    expect(aktywnosc.id).toBeGreaterThan(0);
+    expect(aktywnosc.dystans_m).toBe(5000);
+    expect(aktywnosc.czas_s).toBe(1500);
+    // 21:30 UTC to 23:30 w Warszawie — wpis należy jeszcze do 25.
+    expect(aktywnosc.data_lokalna).toBe("2026-08-25");
+    expect(aktywnosc.godzina).toBe("23:30");
+    expect(aktywnosc.zrodlo).toBe("czat");
+  });
+
+  it("przyjmuje sam czas — bieg bez zmierzonego dystansu to nadal bieg", () => {
+    const aktywnosc = zapiszAktywnosc(db, { dyscyplina: "bieg", czas_s: 1800 });
+
+    expect(aktywnosc.dystans_m).toBeNull();
+    expect(aktywnosc.czas_s).toBe(1800);
+  });
+
+  it("odrzuca wpis bez dystansu i bez czasu", () => {
+    expect(kod(() => zapiszAktywnosc(db, { dyscyplina: "rower" }))).toBe(
+      "brak_czasu_i_dystansu",
+    );
+  });
+
+  it("odrzuca pustą nazwę dyscypliny", () => {
+    expect(kod(() => zapiszAktywnosc(db, { dyscyplina: "   ", czas_s: 600 }))).toBe(
+      "pusta_dyscyplina",
+    );
+  });
+
+  it("odrzuca liczby poza sensownym zakresem", () => {
+    expect(kod(() => zapiszAktywnosc(db, { dyscyplina: "rower", dystans_m: 500_000 }))).toBe(
+      "zly_dystans",
+    );
+    expect(kod(() => zapiszAktywnosc(db, { dyscyplina: "rower", czas_s: 200_000 }))).toBe(
+      "zly_czas",
+    );
+    expect(kod(() => zapiszAktywnosc(db, { dyscyplina: "rower", czas_s: 600, rpe: 12 }))).toBe(
+      "zle_rpe",
+    );
+  });
+
+  it("przycina nazwę i zamienia pustą notatkę na brak", () => {
+    const aktywnosc = zapiszAktywnosc(db, {
+      dyscyplina: "  spacer  ",
+      czas_s: 900,
+      notatka: "   ",
+    });
+
+    expect(aktywnosc.dyscyplina).toBe("spacer");
+    expect(aktywnosc.notatka).toBeNull();
+  });
+});
+
+describe("aktywności a trening", () => {
+  /**
+   * Cała racja bytu osobnej tabeli: aktywność nie może zająć jedynego miejsca
+   * na otwartą sesję ani wmieszać się w stan treningu.
+   */
+  it("nie blokuje rozpoczęcia treningu i nie pojawia się w jego stanie", () => {
+    zapiszAktywnosc(db, { dyscyplina: "rower", dystans_m: 12_000, czas_s: 2400 });
+
+    expect(() => rozpocznijTrening(db, { bez_planu: true })).not.toThrow();
+
+    const stan = stanTreningu(db);
+    expect(stan.sesja).not.toBeNull();
+    expect(stan.wg_planu).toHaveLength(0);
+    expect(stan.poza_planem).toHaveLength(0);
+  });
+});
+
+describe("dzień i historia", () => {
+  beforeEach(() => {
+    zapiszAktywnosc(db, {
+      dyscyplina: "rower",
+      dystans_m: 8000,
+      czas_s: 1800,
+      ts: "2026-08-25T06:00:00.000Z",
+    });
+    zapiszAktywnosc(db, {
+      dyscyplina: "spacer",
+      czas_s: 1200,
+      ts: "2026-08-25T16:00:00.000Z",
+    });
+    zapiszAktywnosc(db, {
+      dyscyplina: "bieg",
+      dystans_m: 5000,
+      czas_s: 1500,
+      ts: "2026-08-23T06:00:00.000Z",
+    });
+  });
+
+  it("zwraca aktywności wskazanego dnia w kolejności zapisu", () => {
+    const dzien = aktywnosciZDnia(db, "2026-08-25");
+
+    expect(dzien.map((a) => a.dyscyplina)).toEqual(["rower", "spacer"]);
+  });
+
+  it("grupuje historię po dniach, od najnowszego, z sumami dnia", () => {
+    const historia = historiaAktywnosci(db, { dni: 14, przed: "2026-08-26" });
+
+    expect(historia.do).toBe("2026-08-25");
+    expect(historia.dni.map((d) => d.data)).toEqual(["2026-08-25", "2026-08-23"]);
+
+    const [pierwszy] = historia.dni;
+    expect(pierwszy?.dystans_m).toBe(8000);
+    expect(pierwszy?.czas_s).toBe(3000);
+    expect(pierwszy?.aktywnosci).toHaveLength(2);
+  });
+
+  it("okno „przed” zaczyna się dzień wcześniej — strony się nie zazębiają", () => {
+    const historia = historiaAktywnosci(db, { dni: 1, przed: "2026-08-25" });
+
+    expect(historia.od).toBe("2026-08-24");
+    expect(historia.do).toBe("2026-08-24");
+    expect(historia.dni).toHaveLength(0);
+  });
+});
+
+describe("statystyka tygodnia", () => {
+  it("sumuje wpisy i rozbija je na dyscypliny", () => {
+    zapiszAktywnosc(db, {
+      dyscyplina: "rower",
+      dystans_m: 8000,
+      czas_s: 1800,
+      ts: "2026-08-25T06:00:00.000Z",
+    });
+    zapiszAktywnosc(db, {
+      dyscyplina: "rower",
+      dystans_m: 12_000,
+      czas_s: 2400,
+      ts: "2026-08-26T06:00:00.000Z",
+    });
+    zapiszAktywnosc(db, {
+      dyscyplina: "bieg",
+      dystans_m: 5000,
+      czas_s: 1500,
+      ts: "2026-08-27T06:00:00.000Z",
+    });
+
+    const stat = statAktywnosci(db, "2026-08-23", "2026-08-29");
+
+    expect(stat.ile).toBe(3);
+    expect(stat.dystans_m).toBe(25_000);
+    expect(stat.czas_s).toBe(5700);
+    expect(stat.dyscypliny[0]).toMatchObject({ nazwa: "rower", ile: 2, dystans_m: 20_000 });
+  });
+
+  it("łączy dyscypliny pisane różną wielkością liter", () => {
+    zapiszAktywnosc(db, { dyscyplina: "Rower", czas_s: 600, ts: "2026-08-25T06:00:00.000Z" });
+    zapiszAktywnosc(db, { dyscyplina: "rower", czas_s: 600, ts: "2026-08-26T06:00:00.000Z" });
+
+    const stat = statAktywnosci(db, "2026-08-23", "2026-08-29");
+
+    expect(stat.dyscypliny).toHaveLength(1);
+    expect(stat.dyscypliny[0]?.ile).toBe(2);
+  });
+
+  it("pusty zakres daje zera, a nie brak pola", () => {
+    const stat = statAktywnosci(db, "2026-08-23", "2026-08-29");
+
+    expect(stat).toEqual({ ile: 0, czas_s: 0, dystans_m: 0, dyscypliny: [] });
+  });
+});

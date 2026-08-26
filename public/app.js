@@ -6,9 +6,10 @@
  * ciężaru. Dlatego formularz serii jest wstępnie wypełniony poprzednim wynikiem.
  */
 
+import { ekranAktywnosci, polaAktywnosci, wpisAktywnosci } from "./aktywnosci.js";
 import { ekranDieta } from "./dieta.js";
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
-import { nalozNaDzien, nalozNaTrening } from "./nakladka.js";
+import { nalozNaAktywnosci, nalozNaDzien, nalozNaDzienAktywnosci, nalozNaTrening } from "./nakladka.js";
 import { polaPosilku, szablonWiersza, wpisPosilku } from "./posilek.js";
 import { czasWTekscie, stanPrzerwy, trwanieWTekscie } from "./przerwa.js";
 import { ekranRaporty, panelTygodnia } from "./raporty.js";
@@ -46,6 +47,18 @@ let rozwinietyDzien = null;
 
 /** Ile 14-dniowych okien historii diety pobrać. Rośnie od „Pokaż starsze". */
 let stronDiety = 1;
+
+/** Rozwinięty dzień na zakładce Aktywności; null znaczy „wszystkie zwinięte". */
+let rozwinietyDzienAktywnosci = null;
+
+/** Id aktywności otwartej do poprawki — wspólne dla ekranu Dziś i zakładki. */
+let edytowanaAktywnosc = null;
+
+/** Ile 14-dniowych okien historii aktywności pobrać. */
+let stronAktywnosci = 1;
+
+/** Ostatnio usunięta aktywność — materiał na „Cofnij" w komunikacie. */
+let ostatnioUsunietaAktywnosc = null;
 
 /**
  * Propozycje wyniku z ostatniego odczytu, po nazwie ćwiczenia.
@@ -517,6 +530,61 @@ function czasEdycji(formularz) {
 }
 
 /**
+ * Aktywność z formularza. Kilometry i minuty są jednostkami człowieka, metry
+ * i sekundy jednostkami bazy — przeliczenie siedzi w jednym miejscu, żeby
+ * dodawanie i poprawka nie umiały zrobić tego inaczej.
+ */
+function daneAktywnosci(formularz) {
+  const km = liczbaZPola(formularz, "dystans_km");
+  const minuty = liczbaZPola(formularz, "czas_min");
+  const notatka = formularz.elements.notatka?.value?.trim();
+
+  return {
+    dyscyplina: formularz.elements.dyscyplina.value.trim(),
+    dystans_m: km ? Math.round(km * 1000) : undefined,
+    czas_s: minuty ? Math.round(minuty * 60) : undefined,
+    ...(notatka ? { notatka } : {}),
+  };
+}
+
+/**
+ * Moment aktywności. Pusta godzina przy dzisiaj znaczy „teraz" i zostaje
+ * serwerowi; przy innym dniu data musi jechać wprost, inaczej wpis wylądowałby
+ * pod dzisiejszą dobą.
+ */
+function czasAktywnosci(formularz, dzien, wymuszDate) {
+  const godzina = formularz.elements.godzina?.value?.trim();
+  const dopasowanie = godzina ? /^(\d{1,2})[:.]?(\d{2})$/.exec(godzina) : null;
+
+  if (!dopasowanie || !dzien) return wymuszDate && dzien ? `${dzien} 12:00` : undefined;
+  return `${dzien} ${dopasowanie[1].padStart(2, "0")}:${dopasowanie[2]}`;
+}
+
+/**
+ * Pola aktywności, które użytkownik faktycznie ZMIENIŁ. Ten sam powód co przy
+ * posiłku: formularz prefillowany obecnymi wartościami wysyłałby przy każdej
+ * poprawce komplet, a wtedy nietknięta godzina przepisywałaby znacznik czasu.
+ */
+function zmienioneAktywnosci(formularz) {
+  const dane = {};
+  const zmienione = (nazwa) => {
+    const pole = formularz.elements[nazwa];
+    return pole && pole.value !== pole.defaultValue;
+  };
+
+  const wszystko = daneAktywnosci(formularz);
+  if (zmienione("dyscyplina")) dane.dyscyplina = wszystko.dyscyplina;
+  if (zmienione("dystans_km")) dane.dystans_m = wszystko.dystans_m ?? null;
+  if (zmienione("czas_min")) dane.czas_s = wszystko.czas_s ?? null;
+  if (zmienione("notatka")) dane.notatka = wszystko.notatka ?? null;
+
+  const czas = czasEdycji(formularz);
+  if (czas) dane.czas = czas;
+
+  return dane;
+}
+
+/**
  * Pola posiłku, które użytkownik faktycznie ZMIENIŁ (porównanie
  * z defaultValue). Formularz edycji nie może wysyłać pól nietkniętych:
  * jawnie podane kcal wygrywa z auto-sumą pozycji po stronie serwera,
@@ -716,6 +784,35 @@ function ekranDzis(dzien, czeste = []) {
       </form>
       <div class="przyciski" id="dodaj-posilek-wrapper">
         <button class="przycisk pelny" data-pokaz="formularz-posilku">+ Dodaj posiłek</button>
+      </div>
+    </section>
+
+    ${sekcjaAktywnosci(dzien.aktywnosci ?? [])}`;
+}
+
+/**
+ * Aktywności dnia na ekranie Dziś — po to, żeby wyjazd podyktowany Claude'owi
+ * było widać tam, gdzie użytkownik i tak patrzy. Pełna historia mieszka
+ * w zakładce; tutaj jest tylko dzisiaj.
+ */
+function sekcjaAktywnosci(aktywnosci) {
+  const lista = aktywnosci.length
+    ? aktywnosci.map((a) => wpisAktywnosci(a, edytowanaAktywnosc)).join("")
+    : '<div class="pusto">Nic poza planem treningowym.</div>';
+
+  return `
+    <section class="karta">
+      <h2>Aktywności</h2>
+      ${lista}
+      <form id="formularz-aktywnosci" hidden>
+        <div class="pola">${polaAktywnosci()}</div>
+        <div class="przyciski">
+          <button class="przycisk glowny" type="submit">Zapisz</button>
+          <button class="przycisk" type="button" data-anuluj="formularz-aktywnosci">Anuluj</button>
+        </div>
+      </form>
+      <div class="przyciski" id="dodaj-aktywnosc-wrapper">
+        <button class="przycisk pelny" data-pokaz="formularz-aktywnosci">+ Dodaj aktywność</button>
       </div>
     </section>`;
 }
@@ -1388,6 +1485,7 @@ const TYTULY = {
   raporty: "Raporty",
   plany: "Plany",
   dieta: "Dieta",
+  aktywnosci: "Aktywności",
 };
 
 async function odswiez() {
@@ -1406,6 +1504,9 @@ async function odswiez() {
     if (!wybranaData) dzisiajData = dzien.data;
 
     stan.dzien = nalozNaDzien(dzien, kolejka);
+    // Aktywności przyszły razem z dniem jedną odpowiedzią, ale nakładka jest
+    // osobna — sumy makro i sumy kilometrów nie mają ze sobą nic wspólnego.
+    stan.dzien.aktywnosci = nalozNaAktywnosci(dzien.aktywnosci ?? [], kolejka, dzien.data);
     stan.czeste = czeste;
     dataEkranu.textContent = stan.dzien.data;
     widok.innerHTML = ekranDzis(stan.dzien, czeste);
@@ -1487,6 +1588,24 @@ async function odswiez() {
     return;
   }
 
+  if (ekran === "aktywnosci") {
+    // Rosnące okno jak przy diecie — doklejane strony przepadałyby przy każdym
+    // odswiez(), a poprawka wpisu sprzed miesiąca zwijałaby listę do początku.
+    const historia = await api(`/aktywnosci?dni=${14 * stronAktywnosci}`);
+    stan.aktywnosci = {
+      ...historia,
+      dni: historia.dni.map((d) => nalozNaDzienAktywnosci(d, kolejka)),
+    };
+    dataEkranu.textContent = `${14 * stronAktywnosci} dni`;
+    widok.innerHTML = ekranAktywnosci(
+      stan.aktywnosci,
+      rozwinietyDzienAktywnosci,
+      edytowanaAktywnosc,
+      dzisiajData,
+    );
+    return;
+  }
+
   const [postepy, waga] = await Promise.all([api("/postepy?dni=30"), api("/waga?dni=30")]);
   dataEkranu.textContent = "30 dni";
   widok.innerHTML = ekranPostepy(postepy, waga);
@@ -1544,6 +1663,9 @@ menu?.addEventListener("click", async (zdarzenie) => {
     rozwinietyDzien = null;
     stronDiety = 1;
     edytowanyPosilek = null;
+    rozwinietyDzienAktywnosci = null;
+    stronAktywnosci = 1;
+    edytowanaAktywnosc = null;
     przejdzDo(przycisk.dataset.ekran);
     return;
   }
@@ -1686,6 +1808,80 @@ widok.addEventListener("click", (zdarzenie) => {
   if (starszeDiety) {
     stronDiety += 1;
     odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  // Atrybut nazywa się dzien-aktywnosci, nie dzien — goły data-dzien wpadałby
+  // w handler paska dat z ekranu Dziś i sypał RangeError z przesunDate.
+  const naglowekAktywnosci = cel.closest("[data-dzien-aktywnosci]");
+  if (naglowekAktywnosci) {
+    const data = naglowekAktywnosci.dataset.dzienAktywnosci;
+    rozwinietyDzienAktywnosci = rozwinietyDzienAktywnosci === data ? null : data;
+    edytowanaAktywnosc = null;
+    widok.innerHTML = ekranAktywnosci(
+      stan.aktywnosci,
+      rozwinietyDzienAktywnosci,
+      edytowanaAktywnosc,
+      dzisiajData,
+    );
+    return;
+  }
+
+  const starszeAktywnosci = cel.closest("[data-starsze-aktywnosci]");
+  if (starszeAktywnosci) {
+    stronAktywnosci += 1;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  const edytujAktywnosc = cel.closest("[data-edytuj-aktywnosc]");
+  if (edytujAktywnosc) {
+    const id = Number(edytujAktywnosc.dataset.edytujAktywnosc);
+    edytowanaAktywnosc = edytowanaAktywnosc === id ? null : id;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  if (cel.closest("[data-anuluj-aktywnosci]")) {
+    edytowanaAktywnosc = null;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  const usunAktywnosc = cel.closest("[data-usun-aktywnosc]");
+  if (usunAktywnosc) {
+    const id = Number(usunAktywnosc.dataset.usunAktywnosc);
+    // Treść zapamiętana przed skasowaniem — inaczej „Cofnij" nie miałoby czego
+    // przywrócić. Wpis wraca z nowym id, jak przy posiłku.
+    ostatnioUsunietaAktywnosc =
+      stan.dzien?.aktywnosci?.find((a) => a.id === id) ??
+      stan.aktywnosci?.dni.flatMap((d) => d.aktywnosci).find((a) => a.id === id) ??
+      null;
+    edytowanaAktywnosc = null;
+
+    akcja(async () => {
+      await api("/wpis", { method: "POST", dane: { typ: "aktywnosc", id, akcja: "usun" } });
+      const wrocDo = ostatnioUsunietaAktywnosc;
+      if (!wrocDo) return;
+
+      komunikat(`Usunięto „${wrocDo.dyscyplina}”`, false, () =>
+        akcja(
+          () =>
+            api("/aktywnosci", {
+              method: "POST",
+              dane: {
+                dyscyplina: wrocDo.dyscyplina,
+                dystans_m: wrocDo.dystans_m ?? undefined,
+                czas_s: wrocDo.czas_s ?? undefined,
+                rpe: wrocDo.rpe ?? undefined,
+                notatka: wrocDo.notatka ?? undefined,
+                czas: `${wrocDo.data_lokalna} ${wrocDo.godzina}`,
+              },
+            }),
+          "Przywrócono",
+        ),
+      );
+    });
     return;
   }
 
@@ -1961,6 +2157,56 @@ widok.addEventListener("submit", (zdarzenie) => {
           dane: { ...makroZFormularza(formularz), czas: czasPosilku(formularz) },
         }),
       "Zapisano posiłek",
+      formularz,
+    );
+    return;
+  }
+
+  if (formularz.id === "formularz-aktywnosci") {
+    const dane = daneAktywnosci(formularz);
+    if (!dane.dyscyplina) return komunikat("Podaj, co robiłeś", true);
+    if (dane.dystans_m === undefined && dane.czas_s === undefined) {
+      return komunikat("Podaj dystans albo czas", true);
+    }
+
+    // Na ekranie Dziś wpis należy do oglądanego dnia — także wtedy, gdy
+    // użytkownik cofnął się paskiem dat. W zakładce zawsze do dzisiaj, a datę
+    // bierzemy z serwera, nie z zegara telefonu.
+    const zZakladki = ekran === "aktywnosci";
+    const dzien = zZakladki ? (stan.aktywnosci?.do ?? dzisiajData) : stan.dzien?.data;
+    const wymuszDate = !zZakladki && Boolean(wybranaData);
+
+    akcja(
+      () =>
+        api("/aktywnosci", {
+          method: "POST",
+          dane: { ...dane, czas: czasAktywnosci(formularz, dzien, wymuszDate) },
+        }),
+      "Zapisano aktywność",
+      formularz,
+    );
+    return;
+  }
+
+  if (formularz.id.startsWith("edycja-aktywnosci-")) {
+    const id = Number(formularz.dataset.aktywnosc);
+    const dane = zmienioneAktywnosci(formularz);
+    edytowanaAktywnosc = null;
+
+    // Nic nie zmieniono — zamykamy formularz bez żądania, zamiast łapać
+    // od serwera błąd „brak zmian".
+    if (Object.keys(dane).length === 0) {
+      odswiez().catch((blad) => komunikat(blad.message, true));
+      return;
+    }
+
+    akcja(
+      () =>
+        api("/wpis", {
+          method: "POST",
+          dane: { typ: "aktywnosc", id, akcja: "popraw", dane },
+        }),
+      "Poprawiono aktywność",
       formularz,
     );
     return;

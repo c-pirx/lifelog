@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { hasloPoprawne, tokenWazny, utworzToken, WAZNOSC_SESJI_DNI } from "../auth.js";
 import type { Baza } from "../db/index.js";
+import { aktywnosciZDnia, historiaAktywnosci, zapiszAktywnosc } from "../domain/aktywnosci.js";
 import { czyBladDomeny } from "../domain/bledy.js";
 import {
   celeNaDzien,
@@ -80,8 +81,17 @@ const schematCelow = z.object({
   opis: z.string().optional(),
 });
 
+const schematAktywnosci = z.object({
+  dyscyplina: z.string().min(1),
+  dystans_m: z.number().positive().optional(),
+  czas_s: z.number().int().positive().optional(),
+  rpe: z.number().min(1).max(10).optional(),
+  notatka: z.string().optional(),
+  czas: z.string().optional(),
+});
+
 const schematWpisu = z.object({
-  typ: z.enum(["posilek", "seria", "waga"]),
+  typ: z.enum(["posilek", "seria", "waga", "aktywnosc"]),
   id: z.number().int().positive(),
   akcja: z.enum(["popraw", "usun"]),
   dane: z.record(z.string(), z.unknown()).optional(),
@@ -162,9 +172,16 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
 
   // === Dieta ============================================================
 
-  api.get("/dzien", (c) =>
-    c.json(podsumowanieDnia(db, c.req.query("data"), { strefa: ustawienia.strefa })),
-  );
+  // Aktywności dokładane do podsumowania w trasie, a nie w domenie: dieta i ruch
+  // to osobne byty i mają takie zostać. Ten sam chwyt co przy `/postepy`, które
+  // dokłada tydzień — drugie żądanie to drugie czekanie na telefonie.
+  api.get("/dzien", (c) => {
+    const dzien = podsumowanieDnia(db, c.req.query("data"), { strefa: ustawienia.strefa });
+    return c.json({
+      ...dzien,
+      aktywnosci: aktywnosciZDnia(db, dzien.data, { strefa: ustawienia.strefa }),
+    });
+  });
 
   api.post("/posilki", async (c) => {
     const dane = schematPosilku.parse(await c.req.json());
@@ -197,6 +214,36 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
       }),
     ),
   );
+
+  // === Aktywności poza planem ==========================================
+
+  // Jedna trasa, dwa odczyty: `data` daje pojedynczy dzień (ekran Dziś),
+  // `dni`/`przed` rosnące okno historii (zakładka Aktywności) — tak samo jak
+  // `/dzien` i `/dieta` dzielą się rolami po stronie diety.
+  api.get("/aktywnosci", (c) => {
+    const data = c.req.query("data");
+    if (data) return c.json(aktywnosciZDnia(db, data, { strefa: ustawienia.strefa }));
+
+    return c.json(
+      historiaAktywnosci(db, {
+        dni: Math.min(Number(c.req.query("dni") ?? 14), 92),
+        przed: c.req.query("przed"),
+        strefa: ustawienia.strefa,
+      }),
+    );
+  });
+
+  api.post("/aktywnosci", async (c) => {
+    const { czas: kiedy, ...dane } = schematAktywnosci.parse(await c.req.json());
+    return c.json(
+      zapiszAktywnosc(
+        db,
+        { ...dane, ts: czas(kiedy), zrodlo: "apka" },
+        { strefa: ustawienia.strefa },
+      ),
+      201,
+    );
+  });
 
   api.get("/cele", (c) =>
     c.json(celeNaDzien(db, c.req.query("data") ?? dzisiaj(ustawienia.strefa))),

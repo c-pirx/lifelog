@@ -10,9 +10,15 @@
 
 import { describe, expect, it } from "vitest";
 
+import { czasWysilku, ekranAktywnosci, wpisAktywnosci } from "../public/aktywnosci.js";
 import { ekranDieta } from "../public/dieta.js";
 import { decyzjaKolejki } from "../public/kolejka.js";
-import { nalozNaDzien, nalozNaTrening } from "../public/nakladka.js";
+import {
+  nalozNaAktywnosci,
+  nalozNaDzien,
+  nalozNaDzienAktywnosci,
+  nalozNaTrening,
+} from "../public/nakladka.js";
 import { wpisPosilku } from "../public/posilek.js";
 import { ekranRaporty, panelTygodnia } from "../public/raporty.js";
 
@@ -535,5 +541,214 @@ describe("widok diety", () => {
     const html = ekranDieta(historia, "2026-08-25", null, "2026-08-25");
 
     expect(html).not.toMatch(/lepiej|gorzej|na kursie/);
+  });
+});
+
+describe("nakładka na aktywności", () => {
+  const zSerwera = () => [
+    {
+      id: 1,
+      godzina: "17:20",
+      data_lokalna: "2026-08-25",
+      dyscyplina: "rower",
+      dystans_m: 18_000,
+      czas_s: 3600,
+      rpe: null,
+      notatka: null,
+    },
+  ];
+
+  it("bez kolejki zwraca listę nietkniętą", () => {
+    const lista = zSerwera();
+
+    expect(nalozNaAktywnosci(lista, [], "2026-08-25")).toBe(lista);
+  });
+
+  it("dokłada wpis z kolejki ze znacznikiem oczekiwania", () => {
+    const wynik = nalozNaAktywnosci(
+      zSerwera(),
+      [
+        {
+          id: 4,
+          sciezka: "/aktywnosci",
+          czas_lokalny: CZAS,
+          // Godzina podana bez strefy — inaczej wynik zależałby od zegara
+          // maszyny, na której biegnie test.
+          dane: { dyscyplina: "bieg", dystans_m: 5000, czas_s: 1500, czas: "2026-08-25 17:20" },
+        },
+      ],
+      "2026-08-25",
+    );
+
+    expect(wynik).toHaveLength(2);
+    expect(wynik[1]).toMatchObject({ dyscyplina: "bieg", oczekuje: true, godzina: "17:20" });
+  });
+
+  it("pomija wpisy z innego dnia niż oglądany", () => {
+    const wynik = nalozNaAktywnosci(
+      zSerwera(),
+      [
+        {
+          id: 5,
+          sciezka: "/aktywnosci",
+          czas_lokalny: "2026-08-26T12:00:00.000Z",
+          dane: { dyscyplina: "spacer", czas_s: 900 },
+        },
+      ],
+      "2026-08-25",
+    );
+
+    expect(wynik).toHaveLength(1);
+  });
+
+  it("ukrywa wpis, którego usunięcie czeka w kolejce", () => {
+    const wynik = nalozNaAktywnosci(
+      zSerwera(),
+      [{ id: 6, sciezka: "/wpis", dane: { typ: "aktywnosc", id: 1, akcja: "usun" } }],
+      "2026-08-25",
+    );
+
+    expect(wynik).toHaveLength(0);
+  });
+
+  it("nakłada poprawkę i oznacza wpis jako zmieniony", () => {
+    const wynik = nalozNaAktywnosci(
+      zSerwera(),
+      [
+        {
+          id: 7,
+          sciezka: "/wpis",
+          dane: { typ: "aktywnosc", id: 1, akcja: "popraw", dane: { dystans_m: 22_000 } },
+        },
+      ],
+      "2026-08-25",
+    );
+
+    expect(wynik[0]).toMatchObject({ dystans_m: 22_000, oczekujaca_zmiana: true });
+  });
+
+  it("czas z poprawki zostaje serwerowi — przenoszenie dni to robota domeny", () => {
+    const wynik = nalozNaAktywnosci(
+      zSerwera(),
+      [
+        {
+          id: 8,
+          sciezka: "/wpis",
+          dane: { typ: "aktywnosc", id: 1, akcja: "popraw", dane: { czas: "2026-08-23 07:00" } },
+        },
+      ],
+      "2026-08-25",
+    );
+
+    expect(wynik[0]?.godzina).toBe("17:20");
+    expect(wynik[0]).toMatchObject({ oczekujaca_zmiana: true });
+  });
+
+  it("nie miesza się z kolejką posiłków", () => {
+    const wynik = nalozNaAktywnosci(
+      zSerwera(),
+      [{ id: 9, sciezka: "/posilki", czas_lokalny: CZAS, dane: { opis: "baton", kcal: 250 } }],
+      "2026-08-25",
+    );
+
+    expect(wynik).toHaveLength(1);
+  });
+
+  it("dzień z zakładki przelicza sumy po nałożeniu", () => {
+    const dzien = {
+      data: "2026-08-25",
+      dystans_m: 18_000,
+      czas_s: 3600,
+      aktywnosci: zSerwera(),
+    };
+
+    const wynik = nalozNaDzienAktywnosci(dzien, [
+      {
+        id: 10,
+        sciezka: "/aktywnosci",
+        czas_lokalny: CZAS,
+        dane: { dyscyplina: "bieg", dystans_m: 5000, czas_s: 1500 },
+      },
+    ]);
+
+    expect(wynik.dystans_m).toBe(23_000);
+    expect(wynik.czas_s).toBe(5100);
+  });
+});
+
+describe("widok aktywności", () => {
+  const dzien = (data: string) => ({
+    data,
+    dystans_m: 18_000,
+    czas_s: 3600,
+    aktywnosci: [
+      {
+        id: 1,
+        godzina: "17:20",
+        data_lokalna: data,
+        dyscyplina: "rower",
+        dystans_m: 18_000,
+        czas_s: 3600,
+        rpe: null,
+        notatka: "wokół jeziora",
+      },
+    ],
+  });
+
+  it("pusta historia mówi, od kiedy patrzy, i nadal pozwala dodać wpis", () => {
+    const html = ekranAktywnosci({ od: "2026-08-12", do: "2026-08-25", dni: [] }, null, null, "2026-08-25");
+
+    expect(html).toContain("2026-08-12");
+    expect(html).toContain("Dodaj aktywność");
+  });
+
+  it("zwinięty dzień pokazuje sumy, rozwinięty także wpisy", () => {
+    const historia = { od: "2026-08-12", do: "2026-08-25", dni: [dzien("2026-08-25")] };
+
+    const zwiniety = ekranAktywnosci(historia, null, null, "2026-08-25");
+    expect(zwiniety).toContain("18.0 km");
+    expect(zwiniety).not.toContain("wokół jeziora");
+
+    const rozwiniety = ekranAktywnosci(historia, "2026-08-25", null, "2026-08-25");
+    expect(rozwiniety).toContain("wokół jeziora");
+  });
+
+  it("atrybut dnia nie koliduje z paskiem dat na ekranie Dziś", () => {
+    const html = ekranAktywnosci(
+      { od: "2026-08-12", do: "2026-08-25", dni: [dzien("2026-08-25")] },
+      null,
+      null,
+      "2026-08-25",
+    );
+
+    // Goły data-dzien łapałby delegowany handler paska dat i sypał RangeError.
+    expect(html).toContain("data-dzien-aktywnosci=");
+    expect(html).not.toMatch(/data-dzien="/);
+  });
+
+  it("wpis oczekujący nie ma przycisków poprawki ani usunięcia", () => {
+    const czekajacy = {
+      id: "oczekuje-4",
+      oczekuje: true,
+      godzina: "17:20",
+      dyscyplina: "bieg",
+      dystans_m: 5000,
+      czas_s: 1500,
+    };
+
+    expect(wpisAktywnosci(czekajacy, null)).not.toContain("data-usun-aktywnosc");
+    expect(wpisAktywnosci(czekajacy, null)).toContain("⏳ czeka");
+  });
+
+  it("wpis w edycji podaje dzień i godzinę, żeby poprawka nie przeniosła go na dzisiaj", () => {
+    const html = wpisAktywnosci(dzien("2026-08-23").aktywnosci[0], 1);
+
+    expect(html).toContain('data-dzien-wpisu="2026-08-23"');
+    expect(html).toContain('data-godzina="17:20"');
+  });
+
+  it("czas wysiłku podaje minuty, a od godziny w górę godziny", () => {
+    expect(czasWysilku(1500)).toBe("25 min");
+    expect(czasWysilku(3900)).toBe("1 h 05 min");
   });
 });

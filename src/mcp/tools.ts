@@ -10,6 +10,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import type { Baza } from "../db/index.js";
+import { aktywnosciZDnia, zapiszAktywnosc } from "../domain/aktywnosci.js";
 import { BladDomeny, czyBladDomeny } from "../domain/bledy.js";
 import { podsumowanieDnia, ustawCele, zapiszPosilek } from "../domain/diet.js";
 import { zmienWpis } from "../domain/edits.js";
@@ -33,6 +34,7 @@ import {
 } from "../domain/workouts.js";
 import { parsujCzas, STREFA_DOMYSLNA } from "../lib/time.js";
 import {
+  aktywnoscWTekscie,
   historiaWTekscie,
   planWTekscie,
   planyWTekscie,
@@ -184,8 +186,9 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
     {
       title: "Podsumowanie dnia lub tygodnia",
       description:
-        "Bez argumentów: bilans dzisiejszego dnia — zjedzone makro, cele, ile zostało oraz lista " +
-        "posiłków z identyfikatorami (przydatne do poprawek).\n" +
+        "Bez argumentów: bilans dzisiejszego dnia — zjedzone makro, cele, ile zostało, lista " +
+        "posiłków z identyfikatorami (przydatne do poprawek) oraz aktywności poza planem, " +
+        "jeśli tego dnia jakieś były.\n" +
         'Z okres="tydzien": raport zamkniętego tygodnia (niedziela–sobota) z dietą, wagą, treningiem ' +
         "i porównaniem do tygodnia wcześniej. Raporty powstają same w niedzielę o 9:00; bez podanej " +
         "daty zwracany jest najnowszy.\n" +
@@ -219,7 +222,8 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
               "komentarz_bez_tygodnia",
             );
           }
-          return podsumowanieWTekscie(podsumowanieDnia(db, args.data, { strefa }));
+          const dzien = podsumowanieDnia(db, args.data, { strefa });
+          return podsumowanieWTekscie(dzien, aktywnosciZDnia(db, dzien.data, { strefa }));
         }
 
         // Odczyt dogenerowuje zaległości — raport jest gotowy w chwili, gdy
@@ -417,9 +421,25 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "lub ćwiczeniu izometrycznym podaj typ. Ćwiczenie już znane zachowuje swój typ.\n\n" +
         "ile_serii odhacza całe ćwiczenie naraz — „zrobiłem wszystkie serie z założonym " +
         "obciążeniem”. Wynik bierze się wtedy z planu albo z poprzedniego treningu, " +
-        "a pozostałe pola wyniku są pomijane.",
+        "a pozostałe pola wyniku są pomijane.\n\n" +
+        "aktywnosc=true zapisuje SAMODZIELNĄ AKTYWNOŚĆ poza planem — bieg, rower, spacer, " +
+        "basen. Nie wymaga otwartej sesji, nie tworzy jej i nie liczy się do realizacji planu " +
+        "treningowego. Pole cwiczenie niesie wtedy nazwę dyscypliny („rower”), a wynik podaje " +
+        "się w dystans_m lub czas_s — przynajmniej jedno z nich. Pola siłowe (powtorzenia, " +
+        "ciezar_kg, nr_serii, ile_serii, typ) nie mają tu zastosowania.\n" +
+        "Rozstrzygnięcie: bieżnia albo rowerek W TRAKCIE trwającej sesji to zwykła SERIA — " +
+        "jest częścią treningu. Aktywność to wysiłek sam w sobie, o którym użytkownik mówi " +
+        "poza treningiem („przejechałem 20 km”, „byłem biegać”).",
       inputSchema: {
         cwiczenie: z.string().describe("Nazwa ćwiczenia, wielkość liter bez znaczenia"),
+        aktywnosc: z
+          .boolean()
+          .optional()
+          .describe(
+            "Zapisuje samodzielną aktywność poza planem zamiast serii w sesji. " +
+              "cwiczenie niesie wtedy nazwę dyscypliny.",
+          ),
+        notatka: z.string().optional().describe("Tylko przy aktywnosc=true, np. „wokół jeziora”"),
         ile_serii: z
           .number()
           .int()
@@ -442,6 +462,36 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
     },
     async (args) =>
       zBezpiecznikiem(() => {
+        if (args.aktywnosc) {
+          // Pola siłowe zmieszane z aktywnością znaczą, że model wybrał złą
+          // ścieżkę. Cicha akceptacja zgubiłaby połowę tego, co podał.
+          const nieswoje = (["powtorzenia", "ciezar_kg", "nr_serii", "ile_serii", "typ"] as const)
+            .filter((pole) => args[pole] != null);
+
+          if (nieswoje.length > 0) {
+            throw new BladDomeny(
+              `Aktywność poza planem nie ma pól: ${nieswoje.join(", ")}. ` +
+                "Jeśli to była część treningu, zapisz zwykłą serię (bez aktywnosc).",
+              "pola_nie_dla_aktywnosci",
+            );
+          }
+
+          const zapisana = zapiszAktywnosc(
+            db,
+            {
+              dyscyplina: args.cwiczenie,
+              dystans_m: args.dystans_m,
+              czas_s: args.czas_s,
+              rpe: args.rpe,
+              notatka: args.notatka,
+              ts: czas(args.czas),
+            },
+            { strefa },
+          );
+
+          return `Zapisano aktywność (${zapisana.data_lokalna}): ${aktywnoscWTekscie(zapisana)}`;
+        }
+
         if (args.ile_serii != null) {
           const stan = odhaczCwiczenie(
             db,
@@ -594,7 +644,9 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "(posiłki) i w stanie treningu (serie).\n" +
         "• typ='posilek' — pola: opis, kcal, bialko_g, wegle_g, tluszcz_g, pora, pewnosc, czas, pozycje\n" +
         "• typ='seria' — pola: powtorzenia, ciezar_kg, czas_s, dystans_m, rpe\n" +
-        "• typ='waga' — pola: kg, notatka\n\n" +
+        "• typ='waga' — pola: kg, notatka\n" +
+        "• typ='aktywnosc' — pola: dyscyplina, dystans_m, czas_s, rpe, notatka, czas " +
+        "(identyfikatory aktywności są w podsumowaniu dnia)\n\n" +
         "Podawaj wyłącznie pola, które mają się zmienić — reszta zostaje nietknięta. " +
         "Po poprawieniu szacunku na potwierdzoną wartość ustaw pewnosc='dokladne'.\n" +
         "pozycje ZASTĘPUJĄ całe rozbicie posiłku — podawaj zawsze komplet składników; pusta " +
@@ -602,12 +654,13 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "przeliczony z ich sumy — chyba że pole podano jawnie w tej samej poprawce; następna " +
         "poprawka pozycji znów przeliczy.",
       inputSchema: {
-        typ: z.enum(["posilek", "seria", "waga"]),
+        typ: z.enum(["posilek", "seria", "waga", "aktywnosc"]),
         id: z.number().int().positive(),
         akcja: z.enum(["popraw", "usun"]),
         dane: z
           .object({
             opis: z.string().optional(),
+            dyscyplina: z.string().optional(),
             kcal: z.number().optional(),
             bialko_g: z.number().optional(),
             wegle_g: z.number().optional(),
@@ -618,7 +671,8 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
               .string()
               .optional()
               .describe(
-                'Nowy czas posiłku: "HH:MM" zostaje w dniu wpisu, "YYYY-MM-DD HH:MM" przenosi go do innego dnia.',
+                'Nowy czas wpisu (posiłek albo aktywność): "HH:MM" zostaje w dniu wpisu, ' +
+                  '"YYYY-MM-DD HH:MM" przenosi go do innego dnia.',
               ),
             pozycje: z
               .array(schematPozycji)

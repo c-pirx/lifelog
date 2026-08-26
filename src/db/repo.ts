@@ -119,6 +119,18 @@ export type WierszWagi = {
   notatka: string | null;
 };
 
+export type WierszAktywnosci = {
+  id: number;
+  ts: string;
+  data_lokalna: string;
+  dyscyplina: string;
+  dystans_m: number | null;
+  czas_s: number | null;
+  rpe: number | null;
+  notatka: string | null;
+  zrodlo: "czat" | "apka";
+};
+
 // === CELE ===============================================================
 
 export function wstawCele(
@@ -793,6 +805,100 @@ export function usunWage(db: Baza, id: number): number {
   return db.prepare("DELETE FROM waga_ciala WHERE id = ?").run(id).changes;
 }
 
+// === AKTYWNOŚCI =========================================================
+
+const KOLUMNY_AKTYWNOSCI = `id, ts, data_lokalna, dyscyplina, dystans_m, czas_s, rpe, notatka, zrodlo`;
+
+export function wstawAktywnosc(
+  db: Baza,
+  dane: {
+    ts: string;
+    data_lokalna: string;
+    dyscyplina: string;
+    dystans_m: number | null;
+    czas_s: number | null;
+    rpe: number | null;
+    notatka: string | null;
+    zrodlo: "czat" | "apka";
+    utworzono: string;
+  },
+): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO aktywnosci (ts, data_lokalna, dyscyplina, dystans_m, czas_s, rpe, notatka, zrodlo, utworzono)
+       VALUES (@ts, @data_lokalna, @dyscyplina, @dystans_m, @czas_s, @rpe, @notatka, @zrodlo, @utworzono)`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function aktywnosciZDnia(db: Baza, data: string): WierszAktywnosci[] {
+  return db
+    .prepare<[string], WierszAktywnosci>(
+      `SELECT ${KOLUMNY_AKTYWNOSCI} FROM aktywnosci WHERE data_lokalna = ? ORDER BY ts`,
+    )
+    .all(data);
+}
+
+export function aktywnosciZZakresu(db: Baza, od: string, doDaty: string): WierszAktywnosci[] {
+  return db
+    .prepare<[string, string], WierszAktywnosci>(
+      `SELECT ${KOLUMNY_AKTYWNOSCI} FROM aktywnosci
+       WHERE data_lokalna BETWEEN ? AND ? ORDER BY data_lokalna DESC, ts`,
+    )
+    .all(od, doDaty);
+}
+
+export function aktywnoscPoId(db: Baza, id: number): WierszAktywnosci | undefined {
+  return db
+    .prepare<[number], WierszAktywnosci>(
+      `SELECT ${KOLUMNY_AKTYWNOSCI} FROM aktywnosci WHERE id = ?`,
+    )
+    .get(id);
+}
+
+export function aktualizujAktywnosc(
+  db: Baza,
+  id: number,
+  pola: Partial<Omit<WierszAktywnosci, "id" | "zrodlo">>,
+): number {
+  const klucze = Object.keys(pola);
+  if (klucze.length === 0) return 0;
+  const przypisania = klucze.map((k) => `${k} = @${k}`).join(", ");
+  return db.prepare(`UPDATE aktywnosci SET ${przypisania} WHERE id = @id`).run({ ...pola, id })
+    .changes;
+}
+
+export function usunAktywnosc(db: Baza, id: number): number {
+  return db.prepare("DELETE FROM aktywnosci WHERE id = ?").run(id).changes;
+}
+
+/**
+ * Aktywności z zakresu zsumowane per dyscyplina.
+ *
+ * Grupowanie idzie `COLLATE NOCASE`, tak jak wyszukiwanie ćwiczeń: „Rower"
+ * podyktowane Claude'owi i „rower" wpisane w aplikacji to jedna pozycja.
+ * Do pokazania wybierana jest pisownia pierwsza alfabetycznie — dowolna, ale
+ * ta sama przy każdym odczycie, więc raport nie zmienia się między wejściami.
+ */
+export function agregatAktywnosci(
+  db: Baza,
+  od: string,
+  doDaty: string,
+): { nazwa: string; ile: number; czas_s: number; dystans_m: number }[] {
+  return db
+    .prepare<[string, string], { nazwa: string; ile: number; czas_s: number; dystans_m: number }>(
+      `SELECT MIN(dyscyplina) AS nazwa, COUNT(*) AS ile,
+              COALESCE(SUM(czas_s), 0) AS czas_s,
+              COALESCE(SUM(dystans_m), 0) AS dystans_m
+       FROM aktywnosci
+       WHERE data_lokalna BETWEEN ? AND ?
+       GROUP BY dyscyplina COLLATE NOCASE
+       ORDER BY ile DESC, czas_s DESC, nazwa`,
+    )
+    .all(od, doDaty);
+}
+
 // === RAPORTY TYGODNIOWE =================================================
 
 export type WierszRaportu = {
@@ -866,6 +972,7 @@ export function najwczesniejszaData(db: Baza): string | undefined {
            SELECT MIN(data_lokalna) AS data FROM posilki
            UNION ALL SELECT MIN(data_lokalna) FROM sesje
            UNION ALL SELECT MIN(data_lokalna) FROM waga_ciala
+           UNION ALL SELECT MIN(data_lokalna) FROM aktywnosci
          )`,
       )
       .get()?.data ?? undefined
@@ -876,12 +983,13 @@ export function najwczesniejszaData(db: Baza): string | undefined {
 export function ileWpisow(db: Baza, od: string, doDaty: string): number {
   return (
     db
-      .prepare<[string, string, string, string, string, string], { ile: number }>(
+      .prepare<[string, string, string, string, string, string, string, string], { ile: number }>(
         `SELECT (SELECT COUNT(*) FROM posilki WHERE data_lokalna BETWEEN ? AND ?)
               + (SELECT COUNT(*) FROM sesje WHERE data_lokalna BETWEEN ? AND ?)
-              + (SELECT COUNT(*) FROM waga_ciala WHERE data_lokalna BETWEEN ? AND ?) AS ile`,
+              + (SELECT COUNT(*) FROM waga_ciala WHERE data_lokalna BETWEEN ? AND ?)
+              + (SELECT COUNT(*) FROM aktywnosci WHERE data_lokalna BETWEEN ? AND ?) AS ile`,
       )
-      .get(od, doDaty, od, doDaty, od, doDaty)?.ile ?? 0
+      .get(od, doDaty, od, doDaty, od, doDaty, od, doDaty)?.ile ?? 0
   );
 }
 

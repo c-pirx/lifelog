@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { otworzBaze, type Baza } from "../src/db/index.js";
+import { aktywnosciZDnia, zapiszAktywnosc } from "../src/domain/aktywnosci.js";
 import { podsumowanieDnia, ustawCele, zapiszPosilek } from "../src/domain/diet.js";
 import { zmienWpis } from "../src/domain/edits.js";
 import { ostatniaWaga, trendWagi, zapiszWage } from "../src/domain/metrics.js";
@@ -410,6 +411,91 @@ describe("odporność na złe wejście", () => {
   it("zgłasza nieznany typ wpisu", () => {
     expect(() => zmienWpis(db, { typ: "trening" as never, id: 1, akcja: "usun" })).toThrow(
       /nieznany typ/i,
+    );
+  });
+});
+
+describe("aktywności poza planem", () => {
+  const rower = () =>
+    zapiszAktywnosc(db, {
+      dyscyplina: "rower",
+      dystans_m: 5000,
+      czas_s: 1500,
+      ts: "2026-08-25T15:00:00.000Z",
+    });
+
+  it("poprawia tylko podane pola", () => {
+    const przed = rower();
+
+    zmienWpis(db, {
+      typ: "aktywnosc",
+      id: przed.id,
+      akcja: "popraw",
+      dane: { dystans_m: 7000 },
+    });
+
+    const [po] = aktywnosciZDnia(db, "2026-08-25");
+    expect(po?.dystans_m).toBe(7000);
+    expect(po?.czas_s).toBe(1500);
+    expect(po?.dyscyplina).toBe("rower");
+  });
+
+  it("goła godzina zostaje w dniu wpisu, pełna data go przenosi", () => {
+    const wpis = rower();
+
+    zmienWpis(db, { typ: "aktywnosc", id: wpis.id, akcja: "popraw", dane: { czas: "07:30" } });
+    expect(aktywnosciZDnia(db, "2026-08-25")[0]?.godzina).toBe("07:30");
+
+    zmienWpis(db, {
+      typ: "aktywnosc",
+      id: wpis.id,
+      akcja: "popraw",
+      dane: { czas: "2026-08-23 18:00" },
+    });
+    expect(aktywnosciZDnia(db, "2026-08-25")).toHaveLength(0);
+    expect(aktywnosciZDnia(db, "2026-08-23")[0]?.godzina).toBe("18:00");
+  });
+
+  it("nie pozwala wyzerować obu miar naraz", () => {
+    const wpis = rower();
+
+    expect(() =>
+      zmienWpis(db, {
+        typ: "aktywnosc",
+        id: wpis.id,
+        akcja: "popraw",
+        dane: { dystans_m: null, czas_s: null },
+      }),
+    ).toThrow(/dystans albo czas/i);
+  });
+
+  it("dopuszcza wyzerowanie jednej miary, gdy druga zostaje", () => {
+    const wpis = rower();
+
+    zmienWpis(db, {
+      typ: "aktywnosc",
+      id: wpis.id,
+      akcja: "popraw",
+      dane: { dystans_m: null },
+    });
+
+    const [po] = aktywnosciZDnia(db, "2026-08-25");
+    expect(po?.dystans_m).toBeNull();
+    expect(po?.czas_s).toBe(1500);
+  });
+
+  it("usuwa wpis", () => {
+    const wpis = rower();
+
+    const wynik = zmienWpis(db, { typ: "aktywnosc", id: wpis.id, akcja: "usun" });
+
+    expect(wynik.opis).toMatch(/rower/);
+    expect(aktywnosciZDnia(db, "2026-08-25")).toHaveLength(0);
+  });
+
+  it("zgłasza brak wpisu o podanym id", () => {
+    expect(() => zmienWpis(db, { typ: "aktywnosc", id: 999, akcja: "usun" })).toThrow(
+      /nie znaleziono/i,
     );
   });
 });

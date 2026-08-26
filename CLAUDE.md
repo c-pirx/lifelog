@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 302 testy
+npm test             # 355 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -176,6 +176,13 @@ dzisiejsza seria sama ustanawiałaby rekord, a każda następna już tylko
 wyrównywała — oznaczenie traciłoby sens dokładnie w dniu, w którym ma działać.
 Stąd `repo.serieCwiczeniaPrzedSesja`, a nie zwykła historia ćwiczenia.
 
+**Migawka raportu nie ma pól dodanych po jej zapisaniu.** Raportu raz zapisanego
+nigdy nie przeliczamy, więc tygodnie sprzed wdrożenia aktywności mają w kolumnie
+`dane` JSON bez klucza `aktywnosci` — i będą go mieć zawsze. `zbudujRaport`
+czyta go przez `?? BRAK_AKTYWNOSCI`; bez tego archiwum wywróciłoby się przy
+pierwszym otwarciu po wdrożeniu. Ten sam chwyt stoi już przy `ile_niepewnych`.
+Każde następne pole w migawce musi być opcjonalne z domyślną wartością.
+
 **Certyfikat pobierany przez `--webroot`, nie wtyczką `--nginx`**, żeby
 certbot nie przepisywał naszej konfiguracji. Ustawienia TLS są wpisane wprost.
 Port 80 musi zostać otwarty na stałe — odnowienia idą co 60 dni.
@@ -199,6 +206,8 @@ Cele: jeden zestaw dzienny z datą wejścia w życie (zmiana nie fałszuje histo
 Trening: stały plan tworzony przez Claude w rozmowie, harmonogram tygodniowy,
 trzy typy ćwiczeń (siłowe / cardio / na czas). System **pokazuje** poprzednie
 wyniki i oznacza słabsze serie, ale **nie narzuca** progresji.
+Aktywności poza planem: bieg, rower, spacer — dystans i czas, bez kalorii,
+poza realizacją planu.
 Poprawki wpisów: dostępne i w czacie, i w aplikacji.
 
 Poza zakresem: nawodnienie, suplementy, sen, samopoczucie.
@@ -225,9 +234,11 @@ z zamkniętą aplikacją. Trzy pliki, każdy z osobnym zadaniem:
   oceniają słabszej serii, nie wnioskują pory posiłku. To jedyny kawałek
   offline'u objęty testami (`test/offline.test.ts`) — reszta wymaga przeglądarki.
 
-Tą samą zasadą rządzą się `public/raporty.js` (panel tygodnia i archiwum)
-oraz `public/dieta.js` i `public/posilek.js` (zakładka Dieta i wspólny
-renderer wpisu posiłku): renderują, ale nie oceniają — werdykty „na kursie"
+Tą samą zasadą rządzą się `public/raporty.js` (panel tygodnia i archiwum),
+`public/dieta.js` i `public/posilek.js` (zakładka Dieta i wspólny renderer wpisu
+posiłku) oraz `public/aktywnosci.js` (zakładka Aktywności razem z rendererem
+wpisu — jeden plik, bo `aktywnosc.js` obok `aktywnosci.js` prosiłoby się
+o pomyłkę przy imporcie): renderują, ale nie oceniają — werdykty „na kursie"
 i „idzie lepiej" przychodzą gotowe z serwera. Testy leżą obok,
 w `test/offline.test.ts`.
 
@@ -265,6 +276,39 @@ ten sam trening co innego. Nakładka offline pokazuje wtedy **jeden znacznik**
 
 W czacie to samo robi parametr `ile_serii` narzędzia `zapisz_serie` — nowe
 możliwości idą przez parametry, nie przez kolejne pozycje w limicie 12.
+
+## Aktywności poza planem
+
+Bieg, rower, spacer, basen — wysiłek, o którym użytkownik mówi po fakcie
+(„przejechałem 5 km"). Zapis jest **jednostrzałowy**: nic się nie otwiera i nic
+nie zamyka. W czacie robi to `zapisz_serie` z `aktywnosc: true` (nazwa dyscypliny
+idzie w polu `cwiczenie`), w aplikacji zakładka **Aktywności** w szufladzie oraz
+sekcja na ekranie Dziś. Poprawki i usuwanie jak wszędzie — `zmien_wpis`
+z `typ='aktywnosc'` i trasa `POST /wpis`.
+
+**Osobna tabela `aktywnosci`, a nie sesja z jedną serią.** Trzy powody, każdy
+sam w sobie wystarczający: `idx_sesja_aktywna` dopuszcza jedną otwartą sesję,
+więc niedomknięta przejażdżka zablokowałaby wieczorny trening; raport zestawia
+`sesje` z `sesje_w_planie` i liczy serie, więc spacer podbiłby realizację planu
+siłowego; „słabsza niż poprzednio" i „rekord" nie mają sensu dla losowego wyjazdu.
+
+**Parametr, nie dwunaste narzędzie.** Limit MCP to 12, stoimy na 11 i to miejsce
+zostaje wolne. Opis `zapisz_serie` rozstrzyga jedyną realną pomyłkę: bieżnia
+**w trakcie** trwającej sesji to seria, samodzielny wyjazd to aktywność.
+Pola siłowe podane razem z `aktywnosc` są błędem, a nie czymś do zignorowania —
+cicha akceptacja zgubiłaby połowę tego, co model podał.
+
+**Spalonych kalorii świadomie nie ma.** Szacowanie wydatku jest niedokładne,
+a liczba raz pokazana zaczyna żyć własnym życiem — tym bardziej gdyby miała
+podnosić dzienny limit jedzenia.
+
+**Do oceny tygodnia nie wchodzą.** Werdykt „lepiej / gorzej" mierzy realizację
+planu treningowego; niedzielny spacer podbijałby go tak samo, jak opuszczony
+trening go obniża. Raport pokazuje aktywności osobną linijką — użytkownik sam
+widzi, czy tydzień był ruchliwy.
+
+Dyscyplina to wolny tekst; grupowanie w statystyce idzie `COLLATE NOCASE`,
+więc „Rower" z czatu i „rower" z aplikacji to jedna pozycja.
 
 ## Tydzień: raport i tempo
 
@@ -311,8 +355,9 @@ wypełniają formularz, ale go nie wysyłają — tygodniowy raport z podglądem
 tempa na ekranie Postępy, odhaczanie serii wraz z widokiem pojedynczego
 ćwiczenia, a także zakładka Dieta (historia dni pod `GET /dieta`,
 `historiaDiety`), edycja pozycji składowych posiłku i godziny wpisu
-(`zmien_wpis` / `POST /wpis`, auto-suma nagłówka per pole) oraz trzeci
-poziom pewności estymacji (`niepewne`).
+(`zmien_wpis` / `POST /wpis`, auto-suma nagłówka per pole), trzeci
+poziom pewności estymacji (`niepewne`) oraz aktywności poza planem
+(zakładka Aktywności, `GET/POST /aktywnosci`, `zapisz_serie` z `aktywnosc`).
 
 Odłożone świadomie przy odhaczaniu: podsumowanie po zakończeniu treningu,
 lista ostatnich sesji z poprawianiem serii wstecz, edycja planu w aplikacji,

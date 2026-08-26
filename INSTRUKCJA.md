@@ -292,6 +292,34 @@ chcesz opinii, zapytaj:
 
 > jak szedł mi przysiad przez ostatni miesiąc? powinienem dołożyć?
 
+## Aktywności poza planem
+
+Bieg, rower, spacer, basen — wysiłek, który nie jest częścią Twojego planu
+treningowego. Wystarczy powiedzieć po fakcie:
+
+> przejechałem jakieś 5 km na rowerze
+
+> byłem biegać, 40 minut
+
+> godzinny spacer wieczorem
+
+Nie trzeba niczego zaczynać ani kończyć — to jeden wpis. Jeśli podasz i dystans,
+i czas, zapiszą się oba; wystarczy jedno z nich.
+
+W aplikacji: zakładka **Aktywności** w bocznym menu (☰), a dzisiejsze wpisy widać
+też na ekranie **Dziś**, pod posiłkami. Poprawiasz i usuwasz tak samo jak posiłek
+— ołówkiem i krzyżykiem albo zdaniem:
+
+> ta przejażdżka to było raczej 7 km
+
+**Czego tu nie ma: spalonych kalorii.** Każde ich oszacowanie byłoby zgadywaniem,
+a liczba raz pokazana zaczyna wyglądać na prawdę — i kusić, żeby „odrobić" ją
+przy kolacji. Aktywności nie zmieniają też Twojego dziennego limitu.
+
+**Nie liczą się do realizacji planu treningowego.** W raporcie tygodnia stoją
+osobną linijką, ale ocena „idzie lepiej / gorzej" ich nie obejmuje — mierzy ona
+plan, a nie to, czy pogoda sprzyjała rowerowi.
+
 ## Waga
 
 > zważyłem się, 81,4

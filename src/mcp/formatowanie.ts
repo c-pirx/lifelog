@@ -8,6 +8,7 @@
 import type { RaportTygodniowy } from "../domain/raporty.js";
 import type { HistoriaCwiczenia } from "../domain/workouts.js";
 import type {
+  Aktywnosc,
   DzienPlanu,
   Makro,
   Plan,
@@ -49,7 +50,29 @@ export function posilekWTekscie(p: Posilek): string {
   return [naglowek, ...p.pozycje.map((poz) => `    ${pozycjaWTekscie(poz)}`)].join("\n");
 }
 
-export function podsumowanieWTekscie(d: PodsumowanieDnia): string {
+/**
+ * Czas wysiłku w minutach, nie sekundach.
+ *
+ * Seria trwa czterdzieści sekund i tak się ją zapisuje; przejażdżka trwa
+ * półtorej godziny i „5400 s" byłoby liczbą do przeliczania w głowie.
+ */
+function trwanieWTekscie(sekundy: number): string {
+  const minuty = Math.round(sekundy / 60);
+  if (minuty < 60) return `${minuty} min`;
+  return `${Math.floor(minuty / 60)} h ${String(minuty % 60).padStart(2, "0")} min`;
+}
+
+export function aktywnoscWTekscie(a: Aktywnosc): string {
+  const czesci: string[] = [];
+  if (a.dystans_m != null) czesci.push(`${liczba(a.dystans_m / 1000)} km`);
+  if (a.czas_s != null) czesci.push(trwanieWTekscie(a.czas_s));
+  if (a.rpe != null) czesci.push(`RPE ${liczba(a.rpe)}`);
+
+  const notatka = a.notatka ? ` — ${a.notatka}` : "";
+  return `#${a.id} ${a.godzina} ${a.dyscyplina}: ${czesci.join(", ")}${notatka}`;
+}
+
+export function podsumowanieWTekscie(d: PodsumowanieDnia, aktywnosci: Aktywnosc[] = []): string {
   const linie = [`Podsumowanie ${d.data}`, `Zjedzone: ${makroWTekscie(d.spozyte)}`];
 
   if (d.cele && d.pozostalo) {
@@ -80,6 +103,13 @@ export function podsumowanieWTekscie(d: PodsumowanieDnia): string {
   if (d.ile_szacowanych > 0) {
     const niepewne = d.ile_niepewnych > 0 ? `, w tym niepewnych: ${d.ile_niepewnych}` : "";
     linie.push("", `Wpisów opartych na szacunku: ${d.ile_szacowanych}${niepewne}.`);
+  }
+
+  // Dzień milczy o aktywnościach tylko wtedy, gdy żadnej nie było — pusta
+  // sekcja przy każdym podsumowaniu byłaby szumem w każdej rozmowie.
+  if (aktywnosci.length > 0) {
+    linie.push("", "Aktywności poza planem:");
+    linie.push(...aktywnosci.map((a) => `  ${aktywnoscWTekscie(a)}`));
   }
 
   return linie.join("\n");
@@ -267,6 +297,17 @@ export function raportWTekscie(r: RaportTygodniowy): string {
         .slice(0, 5)
         .map((c) => `  ${c.nazwa}: ${c.serie} serii, ${liczba(c.objetosc_kg)} kg`),
     );
+  }
+
+  // Osobna linijka, celowo pod treningiem i celowo poza oceną — patrz
+  // `ocenZmiane`. Starsze migawki mają tu zero, bo ich nie przeliczamy.
+  if (r.aktywnosci.ile > 0) {
+    const rozbicie = r.aktywnosci.dyscypliny
+      .map((d) => `${d.nazwa} ×${d.ile}`)
+      .join(", ");
+    const dystans = r.aktywnosci.dystans_m > 0 ? ` · ${liczba(r.aktywnosci.dystans_m / 1000)} km` : "";
+    const czas = r.aktywnosci.czas_s > 0 ? ` · ${trwanieWTekscie(r.aktywnosci.czas_s)}` : "";
+    linie.push(`Poza planem: ${r.aktywnosci.ile} aktywności${dystans}${czas} (${rozbicie})`);
   }
 
   if (r.zmiana) {

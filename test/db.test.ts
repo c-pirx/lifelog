@@ -47,6 +47,7 @@ describe("migracje", () => {
       "sesje",
       "serie",
       "waga_ciala",
+      "aktywnosci",
     ]) {
       expect(tabele).toContain(oczekiwana);
     }
@@ -289,5 +290,55 @@ describe("więzy schematu", () => {
 
     wstaw.run("2026-08-25T06:00:00.000Z", "2026-08-25", 81.4);
     expect(() => wstaw.run("2026-08-25T18:00:00.000Z", "2026-08-25", 82.1)).toThrow();
+  });
+});
+
+describe("migracja 0006 — aktywności", () => {
+  /** Baza sprzed migracji, z posiłkiem i rozegraną sesją — jest co osierocić. */
+  function bazaZDanymi() {
+    const db = bazaPrzedMigracja("0006");
+
+    db.prepare(
+      `INSERT INTO posilki (ts, data_lokalna, pora, opis, kcal, bialko_g, wegle_g, tluszcz_g,
+                            zrodlo, pewnosc, utworzono)
+       VALUES ('2026-08-25T10:00:00.000Z', '2026-08-25', 'obiad', 'ryż z kurczakiem',
+               700, 50, 80, 15, 'czat', 'szacowane', '2026-08-25T10:00:00.000Z')`,
+    ).run();
+
+    db.prepare("INSERT INTO plany (id, nazwa, domyslny) VALUES (1, 'Mój plan', 1)").run();
+    const dzien = db
+      .prepare("INSERT INTO dni_planu (plan_id, kod, nazwa) VALUES (1, 'A', 'Nogi')")
+      .run();
+    db.prepare(
+      `INSERT INTO sesje (dzien_id, start_ts, data_lokalna, status)
+       VALUES (?, '2026-08-24T09:00:00.000Z', '2026-08-24', 'zakonczona')`,
+    ).run(dzien.lastInsertRowid);
+
+    return db;
+  }
+
+  it("dokłada tabelę do bazy z danymi, nie ruszając istniejących wpisów", () => {
+    const db = bazaZDanymi();
+
+    expect(uruchomMigracje(db)).toContain("0006_aktywnosci.sql");
+
+    const posilki = db
+      .prepare<[], { ile: number }>("SELECT COUNT(*) AS ile FROM posilki")
+      .get();
+    expect(posilki?.ile).toBe(1);
+    expect(db.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("odrzuca źródło spoza listy — apka i czat, nic więcej", () => {
+    const db = otworzBaze({ sciezka: ":memory:" });
+
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO aktywnosci (ts, data_lokalna, dyscyplina, czas_s, zrodlo, utworzono)
+           VALUES ('2026-08-25T10:00:00.000Z', '2026-08-25', 'rower', 600, 'zdjecie', ?)`,
+        )
+        .run("2026-08-25T10:00:00.000Z"),
+    ).toThrow();
   });
 });

@@ -11,6 +11,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { otworzBaze, type Baza } from "../src/db/index.js";
+import { wstawRaport } from "../src/db/repo.js";
+import { zapiszAktywnosc } from "../src/domain/aktywnosci.js";
 import { ustawCele, zapiszPosilek } from "../src/domain/diet.js";
 import { zapiszWage } from "../src/domain/metrics.js";
 import {
@@ -426,5 +428,79 @@ describe("komentarz Claude", () => {
     expect(() => dopiszKomentarz(db, "2026-01-04", "Nie ma takiego raportu.")).toThrow(
       /Nie ma raportu/,
     );
+  });
+});
+
+describe("aktywności poza planem w raporcie", () => {
+  function rower(data: string, dystans_m: number, czas_s: number) {
+    return zapiszAktywnosc(db, { dyscyplina: "rower", dystans_m, czas_s, ts: wPoludnie(data) });
+  }
+
+  it("wchodzą do migawki osobną statystyką", () => {
+    posilek(TYDZIEN_3, 2000);
+    rower("2026-08-17", 20_000, 3600);
+    rower("2026-08-19", 15_000, 2700);
+
+    zapewnijRaporty(db, { teraz: WTOREK });
+
+    const zapisany = raport(db, TYDZIEN_3);
+    expect(zapisany?.aktywnosci.ile).toBe(2);
+    expect(zapisany?.aktywnosci.dystans_m).toBe(35_000);
+    expect(zapisany?.aktywnosci.dyscypliny[0]?.nazwa).toBe("rower");
+  });
+
+  it("nie zmieniają werdyktu tygodnia — ocena mierzy realizację planu", () => {
+    // Dwa tygodnie identyczne pod względem diety i treningu; w nowszym dochodzą
+    // trzy wyjazdy rowerowe. Werdykt ma zostać ten sam.
+    cele(2000);
+    for (const dzien of ["2026-08-09", "2026-08-16"]) {
+      posilek(dzien, 2000);
+      trening(dzien, [{ cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100 }]);
+    }
+    for (const dzien of ["2026-08-17", "2026-08-18", "2026-08-19"]) rower(dzien, 20_000, 3600);
+
+    zapewnijRaporty(db, { teraz: WTOREK });
+
+    expect(raport(db, TYDZIEN_3)?.zmiana?.ocena).toBe("podobnie");
+  });
+
+  it("tydzień z samym wyjazdem nie jest pusty i doczekuje się raportu", () => {
+    rower("2026-08-18", 30_000, 5400);
+
+    zapewnijRaporty(db, { teraz: WTOREK });
+
+    expect(raporty(db).map((r) => r.tydzien_od)).toContain(TYDZIEN_3);
+  });
+
+  it("podgląd tygodnia w toku liczy dzisiejszy wyjazd od razu", () => {
+    rower("2026-08-25", 12_000, 2400);
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).aktywnosci.ile).toBe(1);
+  });
+
+  it("stara migawka bez klucza `aktywnosci` czyta się jako zero, a nie wywrotka", () => {
+    // Raport zapisany przed tą funkcją. Migawek nie przeliczamy, więc taki
+    // wiersz zostaje w bazie na zawsze i musi dać się otworzyć.
+    wstawRaport(db, {
+      tydzien_od: TYDZIEN_2,
+      tydzien_do: "2026-08-15",
+      dane: JSON.stringify({
+        dieta: {
+          dni_z_zapisem: 3,
+          srednie: { kcal: 2000, bialko_g: 150, wegle_g: 200, tluszcz_g: 70 },
+          cel_dzienny: null,
+          dni_w_celu: 0,
+          ile_szacowanych: 0,
+        },
+        waga: { start: null, koniec: null, zmiana_kg: null },
+        trening: { sesje: 1, sesje_w_planie: 2, serie: 4, objetosc_kg: 1200, cwiczenia: [] },
+        zmiana: null,
+      }),
+      utworzono: wPoludnie(TYDZIEN_3),
+    });
+
+    const stary = raport(db, TYDZIEN_2);
+    expect(stary?.aktywnosci).toEqual({ ile: 0, czas_s: 0, dystans_m: 0, dyscypliny: [] });
+    expect(stary?.trening.serie).toBe(4);
   });
 });
