@@ -1271,6 +1271,43 @@ header h1 {
   color: var(--tekst-cichy);
 }
 
+/* === Zakładka Dieta ==================================================== */
+
+/* Nagłówek dnia jest przyciskiem na pełną szerokość karty — jak nagłówek
+   raportu w archiwum: data z lewej, sumy pod spodem, stuknięcie rozwija. */
+.dzien-diety {
+  appearance: none;
+  border: 0;
+  background: none;
+  color: var(--tekst);
+  font: inherit;
+  width: calc(100% + 2 * var(--odstep));
+  min-height: 56px;
+  margin: calc(-1 * var(--odstep));
+  padding: 12px var(--odstep);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dzien-diety .data {
+  font-weight: 550;
+}
+
+.dzien-diety .liczby-dnia {
+  color: var(--tekst-cichy);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.dzien-diety.rozwiniety {
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--obramowanie);
+}
+
 /* === Tydzień w toku i raporty ========================================== */
 
 .tydzien .cel,

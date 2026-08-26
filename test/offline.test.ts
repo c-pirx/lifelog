@@ -10,6 +10,7 @@
 
 import { describe, expect, it } from "vitest";
 
+import { ekranDieta } from "../public/dieta.js";
 import { decyzjaKolejki } from "../public/kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "../public/nakladka.js";
 import { wpisPosilku } from "../public/posilek.js";
@@ -398,5 +399,88 @@ describe("wpis posiłku", () => {
     expect(html).not.toContain("data-edytuj-posilek");
     expect(html).not.toContain("data-usun-posilek");
     expect(html).toContain("⏳ czeka");
+  });
+});
+
+describe("widok diety", () => {
+  const posilek = (id: number, opis: string) => ({
+    id,
+    data_lokalna: "2026-08-25",
+    godzina: "08:15",
+    opis,
+    kcal: 500,
+    bialko_g: 30,
+    wegle_g: 50,
+    tluszcz_g: 20,
+    pewnosc: "dokladne",
+    pozycje: [],
+  });
+
+  const historia = {
+    od: "2026-08-12",
+    do: "2026-08-25",
+    dni: [
+      {
+        data: "2026-08-25",
+        spozyte: { kcal: 1800, bialko_g: 120, wegle_g: 200, tluszcz_g: 60 },
+        cel_kcal: 2400,
+        ile_szacowanych: 1,
+        ile_niepewnych: 0,
+        posilki: [posilek(1, "owsianka")],
+      },
+      {
+        data: "2026-08-24",
+        spozyte: { kcal: 2100, bialko_g: 140, wegle_g: 220, tluszcz_g: 70 },
+        cel_kcal: null,
+        ile_szacowanych: 0,
+        ile_niepewnych: 0,
+        posilki: [posilek(2, "obiad wczorajszy")],
+      },
+    ],
+  };
+
+  it("pokazuje nagłówki dni z sumami; zwinięty dzień nie zdradza posiłków", () => {
+    const html = ekranDieta(historia, null, null, "2026-08-25");
+
+    expect(html).toContain("wt 25.08 · dziś");
+    expect(html).toContain("pn 24.08");
+    expect(html).toContain("1800 / 2400 kcal");
+    expect(html).not.toContain("owsianka");
+  });
+
+  it("rozwija wskazany dzień, resztę zostawia zwiniętą", () => {
+    const html = ekranDieta(historia, "2026-08-25", null, "2026-08-25");
+
+    expect(html).toContain("owsianka");
+    expect(html).not.toContain("obiad wczorajszy");
+  });
+
+  it("dzień bez celu nie zmyśla mianownika", () => {
+    const html = ekranDieta(historia, null, null, "2026-08-25");
+
+    expect(html).toContain("2100 kcal");
+    expect(html).not.toContain("2100 / ");
+  });
+
+  it("zawsze proponuje sięgnięcie po starsze dni", () => {
+    expect(ekranDieta(historia, null, null, "2026-08-25")).toContain("data-starsze-diety");
+    expect(
+      ekranDieta({ od: "2026-08-12", do: "2026-08-25", dni: [] }, null, null, "2026-08-25"),
+    ).toContain("data-starsze-diety");
+  });
+
+  it("pusta historia tłumaczy się zamiast świecić gołym brakiem danych", () => {
+    const html = ekranDieta({ od: "2026-08-12", do: "2026-08-25", dni: [] }, null, null, null);
+
+    expect(html).toContain("pusto");
+    expect(html).toContain("2026-08-12");
+  });
+
+  it("nie ocenia dni — liczby bez werdyktów", () => {
+    // Werdykty („na kursie", „lepiej") przychodzą z serwera na ekranie
+    // Postępy; historia ma pokazywać fakty, nie sądy.
+    const html = ekranDieta(historia, "2026-08-25", null, "2026-08-25");
+
+    expect(html).not.toMatch(/lepiej|gorzej|na kursie/);
   });
 });

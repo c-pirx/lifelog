@@ -6,6 +6,7 @@
  * ciężaru. Dlatego formularz serii jest wstępnie wypełniony poprzednim wynikiem.
  */
 
+import { ekranDieta } from "./dieta.js";
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "./nakladka.js";
 import { polaPosilku, szablonWiersza, wpisPosilku } from "./posilek.js";
@@ -39,6 +40,12 @@ let ostatnioUsuniety = null;
 
 /** Rozwinięty raport w archiwum; null znaczy „najnowszy". */
 let wybranyRaport = null;
+
+/** Rozwinięty dzień na zakładce Dieta; null znaczy „wszystkie zwinięte". */
+let rozwinietyDzien = null;
+
+/** Ile 14-dniowych okien historii diety pobrać. Rośnie od „Pokaż starsze". */
+let stronDiety = 1;
 
 /**
  * Propozycje wyniku z ostatniego odczytu, po nazwie ćwiczenia.
@@ -1342,6 +1349,7 @@ const TYTULY = {
   postepy: "Postępy",
   raporty: "Raporty",
   plany: "Plany",
+  dieta: "Dieta",
 };
 
 async function odswiez() {
@@ -1427,6 +1435,20 @@ async function odswiez() {
     return;
   }
 
+  if (ekran === "dieta") {
+    // Rosnące okno zamiast doklejania stron: odswiez() po każdej akcji
+    // odtwarza cały widok i doklejone strony by przepadały — a edycja posiłku
+    // sprzed trzech tygodni zwijałaby listę z powrotem do pierwszej.
+    const historia = await api(`/dieta?dni=${14 * stronDiety}`);
+    // Nakładka per dzień: poprawki i usunięcia z kolejki widać jak na Dziś.
+    // Posiłek dodany offline do dnia bez żadnego wpisu z serwera pojawi się
+    // tu dopiero po wysyłce — ekran Dziś pokazuje go od razu.
+    stan.dieta = { ...historia, dni: historia.dni.map((d) => nalozNaDzien(d, kolejka)) };
+    dataEkranu.textContent = `${14 * stronDiety} dni`;
+    widok.innerHTML = ekranDieta(stan.dieta, rozwinietyDzien, edytowanyPosilek, dzisiajData);
+    return;
+  }
+
   const [postepy, waga] = await Promise.all([api("/postepy?dni=30"), api("/waga?dni=30")]);
   dataEkranu.textContent = "30 dni";
   widok.innerHTML = ekranPostepy(postepy, waga);
@@ -1478,7 +1500,12 @@ menu?.addEventListener("click", async (zdarzenie) => {
   przelaczMenu(false);
 
   if (przycisk.dataset.ekran) {
+    // Wejście z menu zaczyna zakładkę od stanu wyjściowego — rozwinięcia
+    // i otwarte formularze sprzed kwadransa byłyby tylko zaskoczeniem.
     wybranyRaport = null;
+    rozwinietyDzien = null;
+    stronDiety = 1;
+    edytowanyPosilek = null;
     przejdzDo(przycisk.dataset.ekran);
     return;
   }
@@ -1603,6 +1630,24 @@ widok.addEventListener("click", (zdarzenie) => {
   if (naglowekRaportu) {
     wybranyRaport = naglowekRaportu.dataset.raport;
     widok.innerHTML = ekranRaporty(stan.raporty ?? [], wybranyRaport);
+    return;
+  }
+
+  // Ten sam wzorzec dla dnia diety: przerysowanie z pamięci, ponowne
+  // stuknięcie zwija.
+  const naglowekDnia = cel.closest("[data-dzien-diety]");
+  if (naglowekDnia) {
+    const data = naglowekDnia.dataset.dzienDiety;
+    rozwinietyDzien = rozwinietyDzien === data ? null : data;
+    edytowanyPosilek = null;
+    widok.innerHTML = ekranDieta(stan.dieta, rozwinietyDzien, edytowanyPosilek, dzisiajData);
+    return;
+  }
+
+  const starszeDiety = cel.closest("[data-starsze-diety]");
+  if (starszeDiety) {
+    stronDiety += 1;
+    odswiez().catch((blad) => komunikat(blad.message, true));
     return;
   }
 
@@ -1813,9 +1858,13 @@ widok.addEventListener("click", (zdarzenie) => {
   if (usun) {
     const id = Number(usun.dataset.usunPosilek);
     // Zapamiętujemy treść przed skasowaniem — inaczej „Cofnij" nie miałoby
-    // czego przywrócić. Wpis wraca z nowym id; miękkie usuwanie wymagałoby
-    // migracji i nie jest tego warte.
-    ostatnioUsuniety = stan.dzien?.posilki.find((p) => p.id === id) ?? null;
+    // czego przywrócić. Wpis wraca z nowym id, bez pozycji i pewności;
+    // miękkie usuwanie wymagałoby migracji i nie jest tego warte.
+    // Na zakładce Dieta wpis szukany jest w historii, nie w dzisiejszym dniu.
+    ostatnioUsuniety =
+      stan.dzien?.posilki.find((p) => p.id === id) ??
+      stan.dieta?.dni.flatMap((d) => d.posilki).find((p) => p.id === id) ??
+      null;
     edytowanyPosilek = null;
 
     akcja(async () => {

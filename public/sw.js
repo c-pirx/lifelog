@@ -18,6 +18,7 @@ const POWLOKA = [
   "/",
   "/index.html",
   "/app.js",
+  "/dieta.js",
   "/kolejka.js",
   "/nakladka.js",
   "/posilek.js",
