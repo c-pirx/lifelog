@@ -559,18 +559,22 @@ nav button[aria-current="page"] {
   opacity: 0.75;
 }
 
+/* „inny wynik" tylko otwiera formularz, „odhacz pozostałe…" pisze do bazy —
+   różne skutki, więc łącza stoją na przeciwległych końcach wiersza, żeby
+   kciuk nie pomylił jednego z drugim. */
 .drobne {
   display: flex;
   flex-wrap: wrap;
+  justify-content: space-between;
   gap: 16px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .lacze {
   appearance: none;
   border: 0;
   background: none;
-  padding: 6px 0;
+  padding: 10px 0;
   font: inherit;
   font-size: 0.82rem;
   color: var(--tekst-cichy);
@@ -583,12 +587,18 @@ nav button[aria-current="page"] {
 }
 
 /* Nazwa ćwiczenia otwiera jego pełny widok, więc musi być przyciskiem —
-   ale ma wyglądać jak nagłówek, nie jak kolejny klawisz na ekranie. */
+   ale ma wyglądać jak nagłówek, nie jak kolejny klawisz na ekranie.
+   Strzałka obok to jedyny ślad, że za stuknięciem coś jest; ujemny margines
+   powiększa pole dotyku do ~40 px bez rozpychania układu. */
 .cwiczenie .nazwa {
   appearance: none;
   border: 0;
   background: none;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 0;
+  margin: -10px 0;
   font: inherit;
   font-weight: 600;
   color: inherit;
@@ -596,7 +606,15 @@ nav button[aria-current="page"] {
   cursor: pointer;
 }
 
-.cwiczenie .nazwa:active {
+.cwiczenie .nazwa .dalej {
+  width: 13px;
+  height: 13px;
+  color: var(--tekst-cichy);
+  flex-shrink: 0;
+}
+
+.cwiczenie .nazwa:active,
+.cwiczenie .nazwa:active .dalej {
   color: var(--akcent);
 }
 
@@ -822,6 +840,16 @@ label {
 .przycisk.duzy {
   min-height: 56px;
   font-size: 1.05rem;
+}
+
+/* Druga linia przycisku odhaczania — źródło liczb („wg planu"). Jawny block,
+   bo dotąd łamała się do nowej linii tylko dzięki długości tekstu. */
+.przycisk small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.72rem;
+  font-weight: 400;
+  opacity: 0.75;
 }
 
 .przycisk.cichy {

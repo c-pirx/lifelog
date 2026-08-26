@@ -783,13 +783,32 @@ const OPIS_ZRODLA = {
   poprzedni_trening: "jak ostatnio",
 };
 
-/** Cel z planu w jednej linii: „4 × 8". */
+/**
+ * Strzałka przy nazwie ćwiczenia. Nazwa otwiera pełny widok z historią
+ * i rekordami, ale sama z siebie wygląda jak nagłówek — bez tego znaku
+ * funkcję można nigdy nie odkryć.
+ */
+const ZNAK_DALEJ = `<svg class="dalej" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M9 5.5l6.5 6.5L9 18.5" />
+  </svg>`;
+
+const przyciskNazwy = (cwiczenie, przedrostek = "") =>
+  `<button type="button" class="nazwa" data-cwiczenie-widok="${esc(cwiczenie.nazwa)}">
+     ${przedrostek}${esc(cwiczenie.nazwa)}${ZNAK_DALEJ}
+   </button>`;
+
+/** Cel z planu w jednej linii: „Cel: 4 × 8" — etykieta równolegle do „Poprzednio:". */
 function celWTekscie(cwiczenie) {
   if (!cwiczenie.serie_cel && !cwiczenie.powt_cel) return "";
-  return [cwiczenie.serie_cel ? `${cwiczenie.serie_cel} ×` : null, esc(cwiczenie.powt_cel ?? "")]
+  const liczby = [cwiczenie.serie_cel ? `${cwiczenie.serie_cel} ×` : null, esc(cwiczenie.powt_cel ?? "")]
     .filter(Boolean)
     .join(" ");
+  return `Cel: ${liczby}`;
 }
+
+/** „2 serie", ale „5 serii" — napis na łączu zbiorczego odhaczenia. */
+const odmianaSerii = (ile) => (ile < 5 ? "serie" : "serii");
 
 function serieWKarcie(cwiczenie) {
   if (!cwiczenie.serie.length) return "";
@@ -843,9 +862,7 @@ function kartaCwiczenia(cwiczenie) {
     return `
       <div class="cwiczenie zrobione zwiniete">
         <div class="tytul">
-          <button type="button" class="nazwa" data-cwiczenie-widok="${esc(cwiczenie.nazwa)}">
-            ✓ ${esc(cwiczenie.nazwa)}
-          </button>
+          ${przyciskNazwy(cwiczenie, "✓ ")}
           <span class="licznik">
             ${cwiczenie.serie_zrobione}${cwiczenie.serie_cel ? `/${cwiczenie.serie_cel}` : ""}${ostatnia ? ` · ${esc(seriaWTekscie(ostatnia))}` : ""}
           </span>
@@ -860,9 +877,7 @@ function kartaCwiczenia(cwiczenie) {
   return `
     <div class="cwiczenie">
       <div class="tytul">
-        <button type="button" class="nazwa" data-cwiczenie-widok="${esc(cwiczenie.nazwa)}">
-          ${esc(cwiczenie.nazwa)}
-        </button>
+        ${przyciskNazwy(cwiczenie)}
         ${kropkiSerii(cwiczenie)}
       </div>
       ${celWTekscie(cwiczenie) ? `<div class="cel-cwiczenia">${celWTekscie(cwiczenie)}</div>` : ""}
@@ -893,9 +908,16 @@ function kartaCwiczenia(cwiczenie) {
           ? `<div class="drobne">
                <button type="button" class="lacze" data-pokaz="${idFormularza}">inny wynik</button>
                ${
+                 // Łącze mówi, ile serii zapisze — jak przycisk główny, i z tego
+                 // samego powodu: zapis idzie bez potwierdzenia. Wielokropek przy
+                 // braku celu zapowiada, że najpierw padnie pytanie o liczbę.
                  zostalo === null || zostalo >= 2
                    ? `<button type="button" class="lacze" data-odhacz-cwiczenie="${esc(cwiczenie.nazwa)}"
-                        ${zostalo === null ? 'data-bez-celu="1"' : ""}>odhacz całe ćwiczenie</button>`
+                        ${zostalo === null ? 'data-bez-celu="1"' : ""}>${
+                          zostalo === null
+                            ? "odhacz całe ćwiczenie…"
+                            : `odhacz pozostałe ${zostalo} ${odmianaSerii(zostalo)}`
+                        }</button>`
                    : ""
                }
              </div>`
