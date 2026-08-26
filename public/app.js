@@ -749,14 +749,27 @@ function formularzPoprawkiSerii(typ, seria) {
     </form>`;
 }
 
-/** Kropki postępu: ● zrobiona, ○ została. Bez celu serii nie ma czego rysować. */
+/**
+ * Kropki postępu: pełna — seria zrobiona, obrys — została. SVG zamiast znaków
+ * ●○, bo font rysuje te glify w różnych rozmiarach zależnie od telefonu
+ * i pełne kółka wychodziły większe od pustych. Bez celu serii nie ma czego
+ * rysować.
+ */
 function kropkiSerii(cwiczenie) {
   if (!cwiczenie.serie_cel) return "";
 
   const zrobione = Math.min(cwiczenie.serie_zrobione, 12);
   const zostalo = Math.min(Math.max(0, cwiczenie.serie_cel - cwiczenie.serie_zrobione), 12);
+  const ile = zrobione + zostalo;
 
-  return `<span class="kropki" aria-hidden="true">${"●".repeat(zrobione)}${"○".repeat(zostalo)}</span>`;
+  // Promień 4 plus obrys 1.5 mieści się w wierszu o wysokości 12; odstęp 13
+  // trzyma kropki bliżej siebie niż litery z odstępem, którymi były wcześniej.
+  const kola = Array.from({ length: ile }, (_, i) =>
+    `<circle cx="${6 + i * 13}" cy="6" r="4" class="${i < zrobione ? "pelna" : "pusta"}" />`,
+  ).join("");
+
+  return `<svg class="kropki" width="${ile * 13 - 1}" height="12"
+       viewBox="0 0 ${ile * 13 - 1} 12" aria-hidden="true">${kola}</svg>`;
 }
 
 /**

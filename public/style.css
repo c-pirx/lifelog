@@ -147,8 +147,8 @@ nav button {
 }
 
 nav button .znak {
-  font-size: 1.25rem;
-  line-height: 1;
+  width: 22px;
+  height: 22px;
 }
 
 nav button[aria-current="page"] {
@@ -512,10 +512,18 @@ nav button[aria-current="page"] {
 /* Kropki zamiast liczby „2/4": stan ćwiczenia daje się przeczytać kątem oka,
    bez skupiania wzroku między seriami. */
 .cwiczenie .kropki {
-  font-size: 0.7rem;
-  letter-spacing: 3px;
   color: var(--akcent);
-  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.kropki .pelna {
+  fill: currentColor;
+}
+
+.kropki .pusta {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
 }
 
 .cel-cwiczenia {

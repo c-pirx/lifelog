@@ -80,15 +80,32 @@
         </aside>
       </div>
 
+      <!-- Ikony rysowane wprost w SVG, jak wykresy: currentColor przejmuje
+           kolor aktywnej zakładki, a kreska 1.8 czyta się przy 22 px. -->
       <nav>
         <button data-ekran="dzis" aria-current="page">
-          <span class="znak" aria-hidden="true">◍</span> Dziś
+          <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <rect x="4" y="5.5" width="16" height="15" rx="2.5" />
+            <path d="M8.5 3.5v3.5M15.5 3.5v3.5M4 10.5h16" />
+            <circle cx="12" cy="15.5" r="1.6" fill="currentColor" stroke="none" />
+          </svg>
+          Dziś
         </button>
         <button data-ekran="trening">
-          <span class="znak" aria-hidden="true">▦</span> Trening
+          <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M7 7.5v9M4 9.5v5M17 7.5v9M20 9.5v5M7 12h10" />
+          </svg>
+          Trening
         </button>
         <button data-ekran="postepy">
-          <span class="znak" aria-hidden="true">◈</span> Postępy
+          <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+               stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M4 16.5l5-5 3.5 3.5 7.5-7.5" />
+            <path d="M15.5 7.5H20V12" />
+          </svg>
+          Postępy
         </button>
       </nav>
     </div>
