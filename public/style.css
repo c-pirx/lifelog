@@ -403,6 +403,107 @@ nav button[aria-current="page"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* Kreska z podpisem oddzielająca plan bieżący od szablonów. Dni pod nią są
+   przygaszone, ale nadal klikalne — to nadal pełnoprawna droga do treningu,
+   tylko nie ta, po którą sięga się codziennie. */
+.rozdzielnik {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0 12px;
+  color: var(--tekst-cichy);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.rozdzielnik::before,
+.rozdzielnik::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--obramowanie);
+}
+
+.szablony {
+  opacity: 0.72;
+}
+
+.szablon + .szablon {
+  margin-top: 14px;
+}
+
+.szablon .nazwa-planu {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--tekst-cichy);
+}
+
+/* === Plany treningowe ================================================== */
+
+.plan-naglowek {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.plan-naglowek .nazwa {
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.odznaka {
+  flex-shrink: 0;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--akcent-ciemny);
+  color: var(--akcent);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.dzien-planu {
+  border-top: 1px solid var(--obramowanie);
+  padding-top: 12px;
+  margin-top: 12px;
+}
+
+.dzien-planu .tytul {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.dzien-planu .tytul .nazwa {
+  font-weight: 600;
+}
+
+.dzien-planu .kiedy {
+  font-size: 0.8rem;
+  color: var(--tekst-cichy);
+}
+
+.dzien-planu ol {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 0.85rem;
+  color: var(--tekst-cichy);
+}
+
+.dzien-planu li + li {
+  margin-top: 3px;
+}
+
+.dzien-planu .cel {
+  font-variant-numeric: tabular-nums;
+}
+
 /* === Ćwiczenia ========================================================= */
 
 .cwiczenie {

@@ -206,6 +206,21 @@ describe("nakładka na stan treningu", () => {
     expect(wynik.poza_planem[0]!.serie).toHaveLength(1);
   });
 
+  it("odtwarza sesję po id dnia, gdy dwa plany mają dzień o tym samym kodzie", () => {
+    const pusty = { sesja: null, wg_planu: [], poza_planem: [], ukonczone_cwiczen: 0, wszystkich_cwiczen: 0, pozostalo: [] };
+
+    const wynik = nalozNaTrening(
+      pusty,
+      [{ id: 20, sciezka: "/trening/start", czas_lokalny: CZAS, dane: { dzien_id: 7 } }],
+      [
+        { id: 1, kod: "A", nazwa: "Nogi" },
+        { id: 7, kod: "A", nazwa: "Push" },
+      ],
+    );
+
+    expect(wynik.sesja).toMatchObject({ dzien_nazwa: "Push", oczekuje: true });
+  });
+
   it("zakończenie czekające w kolejce zamyka sesję na ekranie", () => {
     const wynik = nalozNaTrening(treningZSerwera(), [
       { id: 14, sciezka: "/trening/koniec", czas_lokalny: CZAS, dane: {} },

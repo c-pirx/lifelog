@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 235 testów
+npm test             # 259 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -110,6 +110,26 @@ proces potomny wstawał martwy, a vitest raportował mylące „Connection close
 **Timer przerwy żyje poza `#widok`.** `odswiez()` podmienia całą zawartość
 widoku, więc odliczanie umieszczone w środku ginęłoby przy każdej zapisanej
 serii — czyli dokładnie wtedy, kiedy jest potrzebne.
+
+**Migracje biegną z wyłączonym kluczem obcym, a po nich stoi
+`foreign_key_check`.** Zdjęcie w SQLite więzu `UNIQUE` zadeklarowanego przy
+kolumnie wymaga przepisania tabeli (nowa obok, kopia, `DROP`, `RENAME`), a `DROP`
+na tabeli-rodzicu przerywa na naruszeniu więzów. `PRAGMA foreign_keys` jest
+bezczynne wewnątrz transakcji, więc przełącznik stoi wokół całej pętli
+w `uruchomMigracje`, nie w pliku `.sql`. Kontrola po migracjach jest tu
+najważniejsza — bez niej przebudowa mogłaby po cichu osierocić sesje, a błąd
+wyszedłby tygodnie później.
+
+**Kod dnia jest unikalny w obrębie planu, nie globalnie.** Zbierając szablony
+nie da się uniknąć dwóch dni „A". Dlatego aplikacja startuje trening po `dzien_id`,
+a czat po kodzie szukanym w planie domyślnym. Harmonogram tygodniowy też czyta
+wyłącznie plan domyślny — inaczej szablon z ustawionym dniem tygodnia przejąłby
+poniedziałek.
+
+**Nadpisanie planu gasi dni, nie kasuje ich.** `zapiszPlan` ustawia `aktywny = 0`
+dniom nieobecnym w nowej wersji. Usuwanie wywróciłoby się na kluczu obcym
+dokładnie wtedy, kiedy najbardziej boli — gdy dzień ma za sobą miesiące sesji.
+Wygaszony dzień wraca do życia, jeśli wróci do planu.
 
 **Kafelki timera podają całkowity czas przerwy, nie dokładkę.** Stan liczy się
 od `startPrzerwy`, a kafelek zmienia `celPrzerwy` — po 90 sekundach stuknięcie

@@ -89,9 +89,20 @@ export function nalozNaDzien(dzien, kolejka = []) {
   };
 }
 
-/** Sesja udawana na czas, w którym jej rozpoczęcie czeka w kolejce. */
-function sesjaZKolejki(wpis, plan) {
-  const dzien = wpis.dane?.kod ? plan.find((d) => d.kod === wpis.dane.kod) : null;
+/**
+ * Sesja udawana na czas, w którym jej rozpoczęcie czeka w kolejce.
+ *
+ * Dzień szukany po id, bo kod przestał być jednoznaczny — dwa plany mogą mieć
+ * własne „A". Aplikacja wysyła id, czat kod; ten drugi zostaje jako zapas.
+ */
+function sesjaZKolejki(wpis, dni) {
+  const szukaj = (warunek) => dni.find(warunek) ?? null;
+  const dzien =
+    wpis.dane?.dzien_id != null
+      ? szukaj((d) => d.id === wpis.dane.dzien_id)
+      : wpis.dane?.kod
+        ? szukaj((d) => d.kod === wpis.dane.kod)
+        : null;
 
   return {
     id: null,
@@ -128,10 +139,10 @@ function postepZKolejki(nazwa, typ) {
 }
 
 /**
- * Stan treningu z doliczonymi seriami z kolejki. `plan` służy tylko do nazwania
- * dnia w sesji odtworzonej z kolejki.
+ * Stan treningu z doliczonymi seriami z kolejki. `dni` to dni ze wszystkich
+ * planów — służą tylko do nazwania dnia w sesji odtworzonej z kolejki.
  */
-export function nalozNaTrening(trening, kolejka = [], plan = []) {
+export function nalozNaTrening(trening, kolejka = [], dni = []) {
   // Zakończenie treningu czekające w kolejce zamyka sesję także na ekranie —
   // inaczej przycisk „Zakończ" kusiłby do drugiego kliknięcia.
   if (kolejka.some((w) => dopasujSciezke(w, "/trening/koniec"))) {
@@ -144,7 +155,7 @@ export function nalozNaTrening(trening, kolejka = [], plan = []) {
 
   if (!start && serie.length === 0 && odhaczone.length === 0) return trening;
 
-  const sesja = trening.sesja ?? (start ? sesjaZKolejki(start, plan) : null);
+  const sesja = trening.sesja ?? (start ? sesjaZKolejki(start, dni) : null);
   if (!sesja) return trening;
 
   const wgPlanu = trening.wg_planu.map((c) => ({ ...c, serie: [...c.serie] }));

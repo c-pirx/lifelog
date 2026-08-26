@@ -691,19 +691,37 @@ function ekranDzis(dzien, czeste = []) {
 
 // === Ekran: Trening =====================================================
 
-function kartaBezSesji(plan, dzisiajKod) {
-  const proponowany = plan.find((d) => d.kod === dzisiajKod);
-  const pozostale = plan.filter((d) => d.kod !== dzisiajKod);
+const przyciskDnia = (dzien, klasy = "przycisk pelny") =>
+  `<div class="przyciski"><button class="${klasy}" data-start-dzien="${dzien.id}">
+     ${esc(dzien.kod)} — ${esc(dzien.nazwa)}
+   </button></div>`;
+
+/**
+ * Ekran przed rozpoczęciem treningu, w trzech poziomach widoczności.
+ *
+ * 1. Dzień, który harmonogram przewiduje na dziś — albo wprost napisane, że
+ *    dziś nic nie przewiduje. To jedyne pytanie, z jakim się tu wchodzi.
+ * 2. Reszta planu domyślnego — nadal twój plan, tylko nie na dzisiaj.
+ * 3. Dni z pozostałych planów, pod kreską i przygaszone: szablony, nie plan.
+ *
+ * Trzeci poziom jest osobny, bo szablon sprzed miesiąca i dzień z bieżącego
+ * planu to nie to samo, choć jedno i drugie da się odpalić stuknięciem.
+ */
+function kartaBezSesji(plany, dzisiajDzienTygodnia) {
+  const domyslny = plany.find((p) => p.domyslny);
+  const naDzis = domyslny?.dni.find((d) => d.dzien_tygodnia === dzisiajDzienTygodnia);
+  const resztaPlanu = (domyslny?.dni ?? []).filter((d) => d.id !== naDzis?.id);
+  const szablony = plany.filter((p) => !p.domyslny && p.dni.length);
 
   const bezPlanu = `
     <div class="przyciski">
       <button class="przycisk pelny" data-start-bez-planu>Trening bez planu</button>
     </div>`;
 
-  if (!plan.length) {
+  if (!plany.length) {
     return `<section class="karta">
       <h2>Trening</h2>
-      <div class="pusto">Plan jest pusty. Podyktuj go Claude'owi — zapisze go sam.</div>
+      <div class="pusto">Nie masz jeszcze planu. Podyktuj go Claude'owi — zapisze go sam.</div>
       ${bezPlanu}
     </section>`;
   }
@@ -712,21 +730,30 @@ function kartaBezSesji(plan, dzisiajKod) {
     <section class="karta">
       <h2>Zacznij trening</h2>
       ${
-        proponowany
-          ? `<button class="przycisk glowny pelny duzy" data-start="${esc(proponowany.kod)}">
-               ${esc(proponowany.kod)} — ${esc(proponowany.nazwa)}
+        naDzis
+          ? `<button class="przycisk glowny pelny duzy" data-start-dzien="${naDzis.id}">
+               ${esc(naDzis.kod)} — ${esc(naDzis.nazwa)}
              </button>
-             <div class="pusto">Dzisiejszy dzień wg harmonogramu.</div>`
-          : '<div class="pusto">Harmonogram nie przewiduje dziś treningu. Wybierz dzień:</div>'
+             <div class="pusto">Dzisiejszy dzień wg planu „${esc(domyslny.nazwa)}".</div>`
+          : '<div class="pusto">Dziś nie ma zaplanowanego treningu.</div>'
       }
-      ${pozostale
-        .map(
-          (d) =>
-            `<div class="przyciski"><button class="przycisk pelny" data-start="${esc(d.kod)}">
-               ${esc(d.kod)} — ${esc(d.nazwa)}
-             </button></div>`,
-        )
-        .join("")}
+      ${resztaPlanu.map((d) => przyciskDnia(d)).join("")}
+
+      ${
+        szablony.length
+          ? `<div class="rozdzielnik"><span>Inne plany</span></div>
+             <div class="szablony">
+               ${szablony
+                 .map(
+                   (p) => `<div class="szablon">
+                     <span class="nazwa-planu">${esc(p.nazwa)}</span>
+                     ${p.dni.map((d) => przyciskDnia(d, "przycisk pelny cichy")).join("")}
+                   </div>`,
+                 )
+                 .join("")}
+             </div>`
+          : ""
+      }
       ${bezPlanu}
     </section>`;
 }
@@ -1045,8 +1072,8 @@ function ekranCwiczenie(cwiczenie, historia) {
     </section>`;
 }
 
-function ekranTrening(trening, plan, dzisiajKod) {
-  if (!trening.sesja) return kartaBezSesji(plan, dzisiajKod);
+function ekranTrening(trening, plany, dzisiajDzienTygodnia) {
+  if (!trening.sesja) return kartaBezSesji(plany, dzisiajDzienTygodnia);
 
   return `
     <section class="karta">
@@ -1105,6 +1132,95 @@ function ekranTrening(trening, plan, dzisiajKod) {
     <div class="przyciski">
       <button class="przycisk pelny duzy" id="zakoncz-trening">Zakończ trening</button>
     </div>`;
+}
+
+// === Ekran: Plany treningowe ============================================
+
+const DNI_TYGODNIA = [
+  "",
+  "poniedziałek",
+  "wtorek",
+  "środa",
+  "czwartek",
+  "piątek",
+  "sobota",
+  "niedziela",
+];
+
+/** Cel ćwiczenia w planie: „3 serie po 10 @ 60 kg". */
+function celCwiczeniaWPlanie(c) {
+  return [
+    c.serie_cel ? `${c.serie_cel} serie` : null,
+    c.powt_cel ? `po ${esc(c.powt_cel)}` : null,
+    c.czas_cel_s ? `${c.czas_cel_s} s` : null,
+    c.dystans_cel_m ? `${(c.dystans_cel_m / 1000).toFixed(2)} km` : null,
+    c.ciezar_cel_kg ? `@ ${c.ciezar_cel_kg} kg` : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function dzienWPlanie(dzien) {
+  const cwiczenia = dzien.cwiczenia.length
+    ? `<ol>${dzien.cwiczenia
+        .map((c) => {
+          const cel = celCwiczeniaWPlanie(c);
+          return `<li>${esc(c.nazwa)}${cel ? ` <span class="cel">— ${cel}</span>` : ""}</li>`;
+        })
+        .join("")}</ol>`
+    : '<div class="pusto">Dzień bez ćwiczeń.</div>';
+
+  return `
+    <div class="dzien-planu">
+      <div class="tytul">
+        <span class="nazwa">${esc(dzien.kod)} — ${esc(dzien.nazwa)}</span>
+        <span class="kiedy">${dzien.dzien_tygodnia ? DNI_TYGODNIA[dzien.dzien_tygodnia] : "bez stałego dnia"}</span>
+      </div>
+      ${cwiczenia}
+    </div>`;
+}
+
+/**
+ * Zakładka z planami. Tylko do czytania i do przełączania domyślnego —
+ * plany dyktuje się Claude'owi jednym zdaniem, więc edycja z telefonu
+ * kosztowałaby więcej, niż daje.
+ */
+function ekranPlany(plany) {
+  if (!plany.length) {
+    return `<section class="karta">
+      <h2>Plany treningowe</h2>
+      <div class="pusto">
+        Nie masz jeszcze żadnego planu. Podyktuj go Claude'owi — zapisze go sam.
+      </div>
+    </section>`;
+  }
+
+  return plany
+    .map(
+      (p) => `
+      <section class="karta">
+        <div class="plan-naglowek">
+          <span class="nazwa">${esc(p.nazwa)}</span>
+          ${p.domyslny ? '<span class="odznaka">domyślny</span>' : ""}
+        </div>
+        ${p.opis ? `<div class="poprzednio">${esc(p.opis)}</div>` : ""}
+        ${
+          p.dni.length
+            ? p.dni.map(dzienWPlanie).join("")
+            : '<div class="pusto">Plan bez dni treningowych.</div>'
+        }
+        ${
+          p.domyslny
+            ? '<div class="pusto">Ten plan rządzi harmonogramem tygodnia.</div>'
+            : `<div class="przyciski">
+                 <button class="przycisk pelny" data-plan-domyslny="${esc(p.nazwa)}">
+                   Ustaw jako domyślny
+                 </button>
+               </div>`
+        }
+      </section>`,
+    )
+    .join("");
 }
 
 // === Ekran: Postępy =====================================================
@@ -1221,7 +1337,13 @@ function ekranPostepy(postepy, waga) {
 
 // === Renderowanie i odświeżanie ========================================
 
-const TYTULY = { dzis: "Dziś", trening: "Trening", postepy: "Postępy", raporty: "Raporty" };
+const TYTULY = {
+  dzis: "Dziś",
+  trening: "Trening",
+  postepy: "Postępy",
+  raporty: "Raporty",
+  plany: "Plany",
+};
 
 async function odswiez() {
   tytulEkranu.textContent = TYTULY[ekran];
@@ -1246,17 +1368,18 @@ async function odswiez() {
   }
 
   if (ekran === "trening") {
-    const [trening, plan, zdrowie] = await Promise.all([
+    const [trening, plany, zdrowie] = await Promise.all([
       api("/trening"),
-      api("/plan"),
+      api("/plany"),
       fetch("/zdrowie").then((o) => o.json()),
     ]);
 
     // Dzień tygodnia liczony z daty serwera, żeby nie zależeć od zegara telefonu.
     const numerDnia = ((new Date(`${zdrowie.dzisiaj}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
-    const dzisiajKod = plan.find((d) => d.dzien_tygodnia === numerDnia)?.kod;
 
-    const stanTreningu = nalozNaTrening(trening, kolejka, plan);
+    // Nakładka szuka dnia po id, więc dostaje dni ze wszystkich planów naraz.
+    const wszystkieDni = plany.flatMap((p) => p.dni);
+    const stanTreningu = nalozNaTrening(trening, kolejka, wszystkieDni);
     const wszystkie = [...stanTreningu.wg_planu, ...stanTreningu.poza_planem];
 
     propozycje.clear();
@@ -1278,7 +1401,7 @@ async function odswiez() {
     }
 
     otwarteCwiczenie = null;
-    widok.innerHTML = ekranTrening(stanTreningu, plan, dzisiajKod);
+    widok.innerHTML = ekranTrening(stanTreningu, plany, numerDnia);
 
     // Tylko po odhaczeniu: przewijanie przy każdym odświeżeniu wyrywałoby ekran
     // spod palca również wtedy, gdy użytkownik tylko czyta.
@@ -1295,6 +1418,13 @@ async function odswiez() {
     stan.raporty = await api("/raporty");
     dataEkranu.textContent = stan.raporty.length ? `${stan.raporty.length} tyg.` : "";
     widok.innerHTML = ekranRaporty(stan.raporty, wybranyRaport);
+    return;
+  }
+
+  if (ekran === "plany") {
+    const plany = await api("/plany");
+    dataEkranu.textContent = plany.length ? `${plany.length} pl.` : "";
+    widok.innerHTML = ekranPlany(plany);
     return;
   }
 
@@ -1506,14 +1636,30 @@ widok.addEventListener("click", (zdarzenie) => {
     return;
   }
 
+  const planDomyslny = cel.closest("[data-plan-domyslny]");
+  if (planDomyslny) {
+    akcjaPrzycisku(
+      planDomyslny,
+      () =>
+        api("/plan/domyslny", {
+          method: "POST",
+          dane: { plan: planDomyslny.dataset.planDomyslny },
+        }),
+      "Zmieniono plan domyślny",
+    );
+    return;
+  }
+
   if (cel.closest("[data-start-bez-planu]")) {
     akcja(() => api("/trening/start", { method: "POST", dane: { bez_planu: true } }));
     return;
   }
 
-  const start = cel.closest("[data-start]");
+  const start = cel.closest("[data-start-dzien]");
   if (start) {
-    akcja(() => api("/trening/start", { method: "POST", dane: { kod: start.dataset.start } }));
+    // Po id, nie po kodzie: dwa plany mogą mieć własny dzień „A".
+    const dzienId = Number(start.dataset.startDzien);
+    akcja(() => api("/trening/start", { method: "POST", dane: { dzien_id: dzienId } }));
     return;
   }
 
