@@ -219,6 +219,66 @@ export function czestePosilki(
   }));
 }
 
+export type DzienHistorii = {
+  data: string;
+  /** Suma nagłówków posiłków — ta sama zasada co w podsumowaniu dnia. */
+  spozyte: Makro;
+  /** Cel obowiązujący TEGO dnia — cele historyczne, nie dzisiejsze. */
+  cel_kcal: number | null;
+  ile_szacowanych: number;
+  ile_niepewnych: number;
+  posilki: Posilek[];
+};
+
+export type HistoriaDiety = { od: string; do: string; dni: DzienHistorii[] };
+
+/**
+ * Historia posiłków do zakładki Dieta: ostatnie dni z sumami i kompletem
+ * posiłków (z pozycjami), najnowszy dzień pierwszy.
+ *
+ * Dni bez posiłków są pomijane — jak w `sumyDzienne`, żeby lista nie
+ * sugerowała głodówki tam, gdzie nic nie zapisano. Zwracane `od` jest
+ * kursorem paginacji: „pokaż starsze" woła ponownie z `przed = od`.
+ */
+export function historiaDiety(
+  db: Baza,
+  opcje: Opcje & { dni?: number; przed?: string } = {},
+): HistoriaDiety {
+  const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
+  const dni = opcje.dni ?? 14;
+  const koniec = opcje.przed ? przesunDate(opcje.przed, -1) : dzisiaj(strefa);
+  const od = przesunDate(koniec, -(dni - 1));
+
+  const wiersze = repo.posilkiZZakresu(db, od, koniec);
+  const pozycje = repo.pozycjeDlaPosilkow(
+    db,
+    wiersze.map((w) => w.id),
+  );
+
+  const poDniu = new Map<string, Posilek[]>();
+  for (const w of wiersze) {
+    const posilek = zbudujPosilek(w, pozycje, strefa);
+    const lista = poDniu.get(w.data_lokalna);
+    if (lista) lista.push(posilek);
+    else poDniu.set(w.data_lokalna, [posilek]);
+  }
+
+  return {
+    od,
+    do: koniec,
+    dni: [...poDniu.entries()]
+      .sort(([a], [b]) => (a < b ? 1 : -1))
+      .map(([data, posilkiDnia]) => ({
+        data,
+        spozyte: zsumujMakro(posilkiDnia),
+        cel_kcal: repo.celeNaDzien(db, data)?.kcal ?? null,
+        ile_szacowanych: posilkiDnia.filter((p) => p.pewnosc !== "dokladne").length,
+        ile_niepewnych: posilkiDnia.filter((p) => p.pewnosc === "niepewne").length,
+        posilki: posilkiDnia,
+      })),
+  };
+}
+
 export function podsumowanieDnia(db: Baza, data?: string, opcje: Opcje = {}): PodsumowanieDnia {
   const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
   const dzien = data ?? dzisiaj(strefa);

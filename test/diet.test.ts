@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { otworzBaze, type Baza } from "../src/db/index.js";
 import {
   czestePosilki,
+  historiaDiety,
   podsumowanieDnia,
   ustawCele,
   zapiszPosilek,
@@ -315,5 +316,74 @@ describe("częste posiłki", () => {
 
   it("na pustej bazie zwraca pustą listę", () => {
     expect(czestePosilki(db, { do: DO })).toEqual([]);
+  });
+});
+
+describe("historia diety", () => {
+  // Data odniesienia zawsze przez `przed` — inaczej testy zaczęłyby padać
+  // po wyjściu wpisów poza domyślne okno. Ta sama pułapka co przy czestePosilki.
+  const PRZED = "2026-08-26";
+
+  const zapisz = (data: string, kcal: number, dodatki: Record<string, unknown> = {}) =>
+    zapiszPosilek(db, { opis: `posiłek ${kcal}`, kcal, ts: `${data}T10:00:00.000Z`, ...dodatki });
+
+  it("grupuje posiłki po dniach, najnowszy dzień pierwszy", () => {
+    zapisz("2026-08-20", 500);
+    zapisz("2026-08-22", 300);
+    zapisz("2026-08-22", 400);
+
+    const historia = historiaDiety(db, { przed: PRZED, dni: 14 });
+
+    expect(historia.dni.map((d) => d.data)).toEqual(["2026-08-22", "2026-08-20"]);
+    expect(historia.dni[0]?.spozyte.kcal).toBe(700);
+    expect(historia.dni[0]?.posilki).toHaveLength(2);
+  });
+
+  it("pomija dni bez posiłków zamiast zmyślać zera", () => {
+    zapisz("2026-08-20", 500);
+
+    const historia = historiaDiety(db, { przed: PRZED, dni: 14 });
+
+    expect(historia.dni).toHaveLength(1);
+    expect(historia.od).toBe("2026-08-12");
+    expect(historia.do).toBe("2026-08-25");
+  });
+
+  it("podaje cel obowiązujący danego dnia, nie dzisiejszy", () => {
+    ustawCele(db, { ...CELE, kcal: 2000, obowiazuje_od: "2026-08-01" });
+    ustawCele(db, { ...CELE, kcal: 1800, obowiazuje_od: "2026-08-22" });
+    zapisz("2026-08-20", 500);
+    zapisz("2026-08-23", 500);
+
+    const historia = historiaDiety(db, { przed: PRZED, dni: 14 });
+
+    expect(historia.dni.find((d) => d.data === "2026-08-20")?.cel_kcal).toBe(2000);
+    expect(historia.dni.find((d) => d.data === "2026-08-23")?.cel_kcal).toBe(1800);
+  });
+
+  it("parametr przed przesuwa okno — kursor do „pokaż starsze”", () => {
+    zapisz("2026-08-11", 500);
+    zapisz("2026-08-20", 600);
+
+    const pierwsza = historiaDiety(db, { przed: PRZED, dni: 14 });
+    expect(pierwsza.dni.map((d) => d.data)).toEqual(["2026-08-20"]);
+
+    const starsza = historiaDiety(db, { przed: pierwsza.od, dni: 14 });
+    expect(starsza.dni.map((d) => d.data)).toEqual(["2026-08-11"]);
+    expect(starsza.do).toBe("2026-08-11");
+  });
+
+  it("dołącza pozycje i liczniki pewności do dnia", () => {
+    zapisz("2026-08-20", 500, {
+      pewnosc: "niepewne",
+      pozycje: [{ nazwa: "jajko", kcal: 150 }],
+    });
+    zapisz("2026-08-20", 300, { pewnosc: "dokladne" });
+
+    const dzien = historiaDiety(db, { przed: PRZED, dni: 14 }).dni[0];
+
+    expect(dzien?.posilki[0]?.pozycje[0]?.nazwa).toBe("jajko");
+    expect(dzien?.ile_szacowanych).toBe(1);
+    expect(dzien?.ile_niepewnych).toBe(1);
   });
 });

@@ -172,6 +172,25 @@ describe("dieta przez API", () => {
     expect(posilek?.kcal).toBe(350);
   });
 
+  it("zwraca historię diety pogrupowaną po dniach", async () => {
+    // Posiłki z 2026-08-23 zapisał test poprawki pozycji wyżej.
+    const historia = await pobierz<{
+      od: string;
+      do: string;
+      dni: { data: string; spozyte: { kcal: number }; posilki: unknown[] }[];
+    }>("/api/dieta?przed=2026-08-24&dni=7");
+
+    expect(historia.od).toBe("2026-08-17");
+    expect(historia.do).toBe("2026-08-23");
+    const dzien = historia.dni.find((d) => d.data === "2026-08-23");
+    expect(dzien?.posilki.length).toBeGreaterThan(0);
+  });
+
+  it("historia wymaga zalogowania jak każda trasa", async () => {
+    const odpowiedz = await fetch(`${adres}/api/dieta`);
+    expect(odpowiedz.status).toBe(401);
+  });
+
   it("odrzuca zniekształcone pozycje zamiast zapisać śmieci", async () => {
     const utworzony = await wyslij("/api/posilki", {
       opis: "obiad",

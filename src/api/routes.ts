@@ -15,6 +15,7 @@ import { czyBladDomeny } from "../domain/bledy.js";
 import {
   celeNaDzien,
   czestePosilki,
+  historiaDiety,
   podsumowanieDnia,
   sumyDzienne,
   ustawCele,
@@ -180,6 +181,18 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
       czestePosilki(db, {
         dni: Number(c.req.query("dni") ?? 30),
         limit: Number(c.req.query("limit") ?? 8),
+        strefa: ustawienia.strefa,
+      }),
+    ),
+  );
+
+  // Historia do zakładki Dieta. Górna granica okna to higiena wejścia —
+  // trzy miesiące posiłków z pozycjami to i tak sporo kilobajtów.
+  api.get("/dieta", (c) =>
+    c.json(
+      historiaDiety(db, {
+        dni: Math.min(Number(c.req.query("dni") ?? 14), 92),
+        przed: c.req.query("przed"),
         strefa: ustawienia.strefa,
       }),
     ),
