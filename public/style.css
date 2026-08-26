@@ -207,15 +207,21 @@ nav button[aria-current="page"] {
   }
 }
 
-/* Trzy przebiegi, nie w kółko: przerwa się skończyła, ale telefon leży obok
-   sztangi i migający bez końca kafelek rozpraszałby przez całą serię. */
 #timer.minela {
   border-color: var(--akcent);
+}
+
+/* Drżenie ma własną klasę, oddzieloną od koloru: `minela` bywa zdejmowana
+   i zakładana z powrotem przy wydłużaniu przerwy, a animacja doczepiona do
+   niej nie startowała wtedy od nowa. Trzy przebiegi, nie w kółko — telefon
+   leży obok sztangi i kafelek migający bez końca rozpraszałby przez całą
+   następną serię. */
+#timer.drzy {
   animation: drzenie-timera 0.5s ease-in-out 3;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #timer.minela {
+  #timer.drzy {
     animation: none;
   }
 }
@@ -375,6 +381,26 @@ nav button[aria-current="page"] {
   background: var(--powierzchnia-2);
   color: var(--tekst-cichy);
   vertical-align: 1px;
+}
+
+/* Licznik czasu sesji tuż nad „Zakończ trening": etykieta z lewej, liczba
+   z prawej, żeby dało się ją odczytać kątem oka bez czytania podpisu. */
+.czas-treningu {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.czas-treningu .etykieta {
+  color: var(--tekst-cichy);
+  font-size: 0.9rem;
+}
+
+.czas-treningu .odliczanie {
+  font-size: 1.5rem;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 /* === Ćwiczenia ========================================================= */

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { stanPrzerwy } from "../public/przerwa.js";
+import { stanPrzerwy, trwanieWTekscie } from "../public/przerwa.js";
 
 const KROKI = [90, 120, 180];
 const START = 1_000_000;
@@ -52,5 +52,24 @@ describe("timer przerwy", () => {
   it("bez rozpoczętej przerwy nie ma czego liczyć", () => {
     expect(stanPrzerwy(null, null, po(10), KROKI)).toMatchObject({ pozostalo: 0, gotowe: false });
     expect(widoczne(null, null, po(10))).toEqual(KROKI);
+  });
+});
+
+describe("czas trwania treningu", () => {
+  it("pokazuje minuty i sekundy przez pierwszą godzinę", () => {
+    expect(trwanieWTekscie(0)).toBe("0:00");
+    expect(trwanieWTekscie(95)).toBe("1:35");
+    expect(trwanieWTekscie(3599)).toBe("59:59");
+  });
+
+  it("dokłada godziny dopiero wtedy, gdy są", () => {
+    expect(trwanieWTekscie(3600)).toBe("1:00:00");
+    expect(trwanieWTekscie(3725)).toBe("1:02:05");
+  });
+
+  it("ujemny czas czyta jako zero", () => {
+    // Sesja otwarta przez czat mogła powstać z czasem, który zegar telefonu
+    // ma jeszcze przed sobą. Licznik lecący wstecz wyglądałby na awarię.
+    expect(trwanieWTekscie(-30)).toBe("0:00");
   });
 });

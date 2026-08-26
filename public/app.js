@@ -8,7 +8,7 @@
 
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
 import { nalozNaDzien, nalozNaTrening } from "./nakladka.js";
-import { czasWTekscie, stanPrzerwy } from "./przerwa.js";
+import { czasWTekscie, stanPrzerwy, trwanieWTekscie } from "./przerwa.js";
 import { ekranRaporty, panelTygodnia } from "./raporty.js";
 
 const widok = document.getElementById("widok");
@@ -316,6 +316,24 @@ function wybranaPrzerwa() {
   return KROKI_PRZERWY.includes(zapisana) ? zapisana : DOMYSLNA_PRZERWA;
 }
 
+/**
+ * Jednorazowe drżenie kafelka na koniec przerwy.
+ *
+ * Osobna klasa, a nie animacja doczepiona do `minela`: przy wydłużonej przerwie
+ * kolor bywa zdejmowany i zakładany z powrotem, a przeglądarka **nie startuje
+ * wtedy animacji od nowa** — kontynuuje zakończoną, więc drugie i trzecie
+ * odliczenie mijało bez drgnięcia. Wymuszony reflow gwarantuje restart.
+ */
+function zadrzyj() {
+  elementTimera.classList.remove("drzy");
+  void elementTimera.offsetWidth;
+  elementTimera.classList.add("drzy");
+}
+
+// Klasa schodzi zaraz po animacji, żeby kolejne drżenie zawsze zaczynało od
+// czystego stanu, a nie od zakończonego przebiegu.
+elementTimera?.addEventListener("animationend", () => elementTimera.classList.remove("drzy"));
+
 function odswiezTimer() {
   const stan = stanPrzerwy(startPrzerwy, celPrzerwy, Date.now(), KROKI_PRZERWY);
   czasTimera.textContent = czasWTekscie(stan.pozostalo);
@@ -331,13 +349,13 @@ function odswiezTimer() {
 
   if (!stan.gotowe) return;
 
-  // Klasa niesie drżenie i kolor; zdejmuje ją dopiero nowa przerwa albo
-  // wydłużenie bieżącej.
+  // Kolor zostaje aż do nowej przerwy albo wydłużenia bieżącej.
   elementTimera.classList.add("minela");
 
   if (!zadzwonilo) {
     zadzwonilo = true;
     navigator.vibrate?.([180, 90, 180]);
+    zadrzyj();
   }
 
   // Odliczanie stoi, ale kafelki nadal się przeterminowują — interwał gasimy
@@ -361,7 +379,7 @@ function startujPrzerwe(sekundy = wybranaPrzerwa()) {
   zadzwonilo = false;
 
   elementTimera.hidden = false;
-  elementTimera.classList.remove("minela");
+  elementTimera.classList.remove("minela", "drzy");
   tykaj();
 }
 
@@ -376,7 +394,7 @@ function zmienCelPrzerwy(sekundy) {
 
   celPrzerwy = sekundy;
   zadzwonilo = false;
-  elementTimera.classList.remove("minela");
+  elementTimera.classList.remove("minela", "drzy");
   tykaj();
 }
 
@@ -387,7 +405,7 @@ function zatrzymajPrzerwe() {
   celPrzerwy = null;
   zadzwonilo = false;
   elementTimera.hidden = true;
-  elementTimera.classList.remove("minela");
+  elementTimera.classList.remove("minela", "drzy");
 }
 
 elementTimera?.addEventListener("click", (zdarzenie) => {
@@ -395,6 +413,27 @@ elementTimera?.addEventListener("click", (zdarzenie) => {
   if (wybor) return zmienCelPrzerwy(Number(wybor.dataset.przerwa));
   if (zdarzenie.target.closest("#timer-zamknij")) zatrzymajPrzerwe();
 });
+
+// === Czas trwania treningu ==============================================
+
+/** Sekundy od znacznika. Ujemne przycina dopiero `trwanieWTekscie`. */
+const sekundOd = (znacznik) => Math.floor((Date.now() - Date.parse(znacznik)) / 1000);
+
+/**
+ * Licznik czasu sesji.
+ *
+ * Kafelek żyje wewnątrz `#widok`, który `odswiez()` podmienia w całości, więc
+ * odliczanie nie może trzymać się jego referencji — przy każdym tiku szukamy go
+ * od nowa i milczymy, gdy go nie ma. Dzięki temu ten sam interwał obsługuje
+ * każde przerysowanie widoku i nie trzeba go nigdzie restartować.
+ */
+function odswiezCzasTreningu() {
+  const kafelek = document.querySelector("[data-start-treningu]");
+  const napis = kafelek?.querySelector(".odliczanie");
+  if (napis) napis.textContent = trwanieWTekscie(sekundOd(kafelek.dataset.startTreningu));
+}
+
+setInterval(odswiezCzasTreningu, 1000);
 
 // === Pomocnicze =========================================================
 
@@ -991,6 +1030,15 @@ function ekranTrening(trening, plan, dzisiajKod) {
       <div class="przyciski">
         <button class="przycisk pelny" data-pokaz="nowe-cwiczenie">+ Ćwiczenie spoza planu</button>
       </div>
+    </section>
+
+    <!-- Licznik od rozpoczęcia sesji. Stoi tuż nad „Zakończ trening", bo to
+         jedyna chwila, w której czas trwania coś zmienia. Tekst odświeża
+         osobny interwał — tutaj zostaje sam znacznik startu, żeby
+         przerysowanie widoku nie gubiło odliczania. -->
+    <section class="karta czas-treningu" data-start-treningu="${esc(trening.sesja.start_ts)}">
+      <span class="etykieta">Czas treningu</span>
+      <span class="odliczanie">${trwanieWTekscie(sekundOd(trening.sesja.start_ts))}</span>
     </section>
 
     <div class="przyciski">

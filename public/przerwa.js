@@ -43,3 +43,22 @@ export function czasWTekscie(pozostalo) {
   if (pozostalo <= 0) return "gotowe";
   return `${Math.floor(pozostalo / 60)}:${String(pozostalo % 60).padStart(2, "0")}`;
 }
+
+/**
+ * Czas trwania treningu: „42:15", a po godzinie „1:02:05".
+ *
+ * Godziny dochodzą dopiero wtedy, gdy są — trening trwa zwykle poniżej
+ * godziny i wiodące „0:" zabierałoby miejsce, nie niosąc niczego.
+ *
+ * Ujemna wartość czytana jest jako zero: sesję mógł otworzyć czat z czasem,
+ * który zegar telefonu ma jeszcze przed sobą, a licznik lecący wstecz
+ * wyglądałby na awarię.
+ */
+export function trwanieWTekscie(sekundy) {
+  const calosc = Math.max(0, Math.floor(sekundy));
+  const s = String(calosc % 60).padStart(2, "0");
+  const minuty = Math.floor(calosc / 60);
+
+  if (minuty < 60) return `${minuty}:${s}`;
+  return `${Math.floor(minuty / 60)}:${String(minuty % 60).padStart(2, "0")}:${s}`;
+}
