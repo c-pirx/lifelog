@@ -7,6 +7,7 @@
  * w edycji) przychodzi parametrami z app.js i tam mieszka.
  */
 
+import { etykietaDnia } from "./kalendarz.js";
 import { wpisPosilku } from "./posilek.js";
 
 const esc = (tekst) =>
@@ -16,17 +17,6 @@ const esc = (tekst) =>
   );
 
 const zaokr = (liczba) => Math.round(Number(liczba) || 0);
-
-const DNI_TYGODNIA = ["nd", "pn", "wt", "śr", "cz", "pt", "sb"];
-
-/** „wt 25.08", a dla dzisiejszego dnia z dopiskiem — żeby lista miała kotwicę. */
-function etykietaDnia(data, dzisiaj) {
-  // Południe UTC: ta sama data w każdej strefie — ten sam trik co przy wykresach.
-  const chwila = new Date(`${data}T12:00:00Z`);
-  const [, miesiac, dzien] = data.split("-");
-  const podstawa = `${DNI_TYGODNIA[chwila.getUTCDay()]} ${dzien}.${miesiac}`;
-  return data === dzisiaj ? `${podstawa} · dziś` : podstawa;
-}
 
 function kartaDnia(d, rozwiniety, edytowanyPosilek, dzisiaj) {
   const cel = d.cel_kcal ? ` / ${zaokr(d.cel_kcal)}` : "";

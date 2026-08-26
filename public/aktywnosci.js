@@ -15,6 +15,7 @@
  * nazwy różniące się jedną literą — pomyłka przy imporcie byłaby kwestią czasu.
  */
 
+import { etykietaDnia } from "./kalendarz.js";
 import { serieZgrupowane } from "./seria.js";
 
 const esc = (tekst) =>
@@ -22,8 +23,6 @@ const esc = (tekst) =>
     /[&<>"']/g,
     (z) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[z],
   );
-
-const DNI_TYGODNIA = ["nd", "pn", "wt", "śr", "cz", "pt", "sb"];
 
 /** „5,2 km" — jedno miejsce po przecinku wystarczy, GPS-a i tak tu nie ma. */
 const kilometry = (metry) => (Math.round((Number(metry) || 0) / 100) / 10).toFixed(1);
@@ -33,15 +32,6 @@ export function czasWysilku(sekundy) {
   const minuty = Math.round((Number(sekundy) || 0) / 60);
   if (minuty < 60) return `${minuty} min`;
   return `${Math.floor(minuty / 60)} h ${String(minuty % 60).padStart(2, "0")} min`;
-}
-
-/** „wt 25.08", a dla dzisiejszego dnia z dopiskiem — żeby lista miała kotwicę. */
-function etykietaDnia(data, dzisiaj) {
-  // Południe UTC: ta sama data w każdej strefie — ten sam trik co przy wykresach.
-  const chwila = new Date(`${data}T12:00:00Z`);
-  const [, miesiac, dzien] = data.split("-");
-  const podstawa = `${DNI_TYGODNIA[chwila.getUTCDay()]} ${dzien}.${miesiac}`;
-  return data === dzisiaj ? `${podstawa} · dziś` : podstawa;
 }
 
 /** Miary wpisu w jednej linii; kolejność jak w czacie: najpierw dystans. */

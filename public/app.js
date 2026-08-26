@@ -8,6 +8,7 @@
 
 import { ekranAktywnosci, polaAktywnosci, wpisAktywnosci, wpisTreningu } from "./aktywnosci.js";
 import { ekranDieta } from "./dieta.js";
+import { etykietaDnia } from "./kalendarz.js";
 import { dodajDoKolejki, wpisyKolejki, wyslijKolejke } from "./kolejka.js";
 import {
   nalozNaAktywnosci,
@@ -758,7 +759,7 @@ function ekranDzis(dzien, czeste = []) {
     <section class="karta">
       <div class="paskodat">
         <button class="przycisk cichy" data-dzien="-1" aria-label="Poprzedni dzień">‹</button>
-        <span class="etykieta-daty">${esc(dzien.data)}${wybranaData ? "" : " · dziś"}</span>
+        <span class="etykieta-daty ${wybranaData ? "" : "dzis"}">${esc(etykietaDnia(dzien.data, dzisiajData))}</span>
         <button class="przycisk cichy" data-dzien="1" aria-label="Następny dzień" ${wybranaData ? "" : "disabled"}>›</button>
       </div>
       ${pasekMakro("Kalorie", dzien.spozyte.kcal, cele?.kcal, "kcal")}
