@@ -23,8 +23,10 @@ import {
   nalozNaAktywnosci,
   nalozNaDzien,
   nalozNaDzienRuchu,
+  nalozNaNotatki,
   nalozNaTrening,
 } from "../public/nakladka.js";
+import { ekranNotatki } from "../public/notatki.js";
 import { wpisPosilku } from "../public/posilek.js";
 import { ekranRaporty, panelTygodnia } from "../public/raporty.js";
 
@@ -927,5 +929,183 @@ describe("skrót dnia w historii ruchu", () => {
 
     expect(html).not.toContain("0 min");
     expect(html).toContain("Trening T");
+  });
+});
+
+describe("nakładka na notatki", () => {
+  const zSerwera = () => [
+    {
+      kategoria: "dziennik",
+      ile: 2,
+      ostatnia: "2026-08-25",
+      notatki: [
+        {
+          id: 1,
+          data_lokalna: "2026-08-25",
+          godzina: "09:12",
+          kategoria: "dziennik",
+          tytul: "Zebranie",
+          tresc: "Nikogo nie było.",
+          surowe_wejscie: "no dzisiaj pojechalem",
+        },
+      ],
+    },
+    { kategoria: "praca", ile: 0, ostatnia: null, notatki: [] },
+    { kategoria: "inne", ile: 0, ostatnia: null, notatki: [] },
+  ];
+
+  it("bez kolejki zwraca foldery nietknięte", () => {
+    const foldery = zSerwera();
+
+    expect(nalozNaNotatki(foldery, [])).toBe(foldery);
+  });
+
+  it("dokłada notatkę z kolejki do właściwego folderu i podbija licznik", () => {
+    const wynik = nalozNaNotatki(zSerwera(), [
+      {
+        id: 7,
+        sciezka: "/notatki",
+        dane: { tresc: "Termin na piątek", kategoria: "praca" },
+        czas_lokalny: "2026-08-25T14:00:00.000Z",
+      },
+    ]);
+
+    const praca = wynik.find((f) => f.kategoria === "praca");
+    expect(praca?.ile).toBe(1);
+    expect(praca?.notatki[0]?.oczekuje).toBe(true);
+    expect(praca?.notatki[0]?.tresc).toBe("Termin na piątek");
+    // Tytułu nie zgadujemy — nadaje go model przy zapisie z czatu.
+    expect(praca?.notatki[0]?.tytul).toBeNull();
+    // Folder, którego kolejka nie dotyczy, zostaje ten sam.
+    expect(wynik.find((f) => f.kategoria === "dziennik")?.ile).toBe(2);
+  });
+
+  it("notatka bez kategorii ląduje w worku, tak jak w domenie", () => {
+    const wynik = nalozNaNotatki(zSerwera(), [
+      {
+        id: 8,
+        sciezka: "/notatki",
+        dane: { tresc: "Luźna myśl" },
+        czas_lokalny: "2026-08-25T14:00:00.000Z",
+      },
+    ]);
+
+    expect(wynik.find((f) => f.kategoria === "inne")?.notatki).toHaveLength(1);
+  });
+
+  it("usunięcie czekające w kolejce znika z listy od razu", () => {
+    const wynik = nalozNaNotatki(zSerwera(), [
+      {
+        id: 9,
+        sciezka: "/wpis",
+        dane: { typ: "notatka", id: 1, akcja: "usun" },
+        czas_lokalny: "2026-08-25T15:00:00.000Z",
+      },
+    ]);
+
+    const dziennik = wynik.find((f) => f.kategoria === "dziennik");
+    expect(dziennik?.notatki).toHaveLength(0);
+    // Licznik idzie w dół razem z listą — karta mówiąca „2 notatki" nad pustą
+    // listą wyglądałaby na zepsutą.
+    expect(dziennik?.ile).toBe(1);
+  });
+
+  it("nie rusza usunięć innych typów wpisu", () => {
+    const foldery = zSerwera();
+    const wynik = nalozNaNotatki(foldery, [
+      {
+        id: 10,
+        sciezka: "/wpis",
+        dane: { typ: "posilek", id: 1, akcja: "usun" },
+        czas_lokalny: "2026-08-25T15:00:00.000Z",
+      },
+    ]);
+
+    expect(wynik).toBe(foldery);
+  });
+});
+
+describe("ekran notatek", () => {
+  const historia = {
+    ile: 30,
+    foldery: [
+      {
+        kategoria: "dziennik",
+        ile: 1,
+        ostatnia: "2026-08-25",
+        notatki: [
+          {
+            id: 1,
+            data_lokalna: "2026-08-25",
+            godzina: "09:12",
+            kategoria: "dziennik",
+            tytul: "Zebranie",
+            tresc: "Nikogo nie było.",
+            surowe_wejscie: "no dzisiaj pojechalem do zebranie",
+          },
+        ],
+      },
+      { kategoria: "praca", ile: 0, ostatnia: null, notatki: [] },
+      { kategoria: "inne", ile: 3, ostatnia: "2026-08-20", notatki: [] },
+    ],
+  };
+
+  it("pokazuje trzy foldery, a worek na resztę ciszej niż pozostałe", () => {
+    const ekran = ekranNotatki(historia, null, null, "2026-08-25");
+
+    expect(ekran).toMatch(/data-folder="dziennik"/);
+    expect(ekran).toMatch(/data-folder="praca"/);
+    expect(ekran).toMatch(/folder-cichy/);
+    expect(ekran).toMatch(/1 notatka/);
+    expect(ekran).toMatch(/3 notatki/);
+  });
+
+  it("zwinięta notatka pokazuje sam nagłówek, rozwinięta pełną treść i oryginał", () => {
+    const zwinieta = ekranNotatki(historia, "dziennik", null, "2026-08-25");
+    expect(zwinieta).toMatch(/Zebranie/);
+    expect(zwinieta).not.toMatch(/tresc-notatki/);
+
+    const rozwinieta = ekranNotatki(historia, "dziennik", "1", "2026-08-25");
+    expect(rozwinieta).toMatch(/tresc-notatki/);
+    expect(rozwinieta).toMatch(/Pokaż oryginał/);
+    expect(rozwinieta).toMatch(/pojechalem do zebranie/);
+  });
+
+  it("notatka z kolejki nie ma przycisku usuwania — nie ma jeszcze czego usuwać", () => {
+    const zOczekujaca = {
+      ile: 30,
+      foldery: [
+        {
+          kategoria: "dziennik",
+          ile: 1,
+          ostatnia: "2026-08-25",
+          notatki: [
+            {
+              id: "oczekuje-4",
+              oczekuje: true,
+              data_lokalna: "2026-08-25",
+              godzina: "18:00",
+              kategoria: "dziennik",
+              tytul: null,
+              tresc: "Notatka bez zasięgu",
+              surowe_wejscie: null,
+            },
+          ],
+        },
+      ],
+    };
+
+    const ekran = ekranNotatki(zOczekujaca, "dziennik", null, "2026-08-25");
+    expect(ekran).toMatch(/czeka/);
+    expect(ekran).not.toMatch(/data-usun-notatke/);
+    // Bez tytułu listę otwiera pierwsza linia treści.
+    expect(ekran).toMatch(/Notatka bez zasięgu/);
+  });
+
+  it("pusty folder mówi, skąd wziąć notatki", () => {
+    const ekran = ekranNotatki(historia, "praca", null, "2026-08-25");
+
+    expect(ekran).toMatch(/jest pusty/);
+    expect(ekran).toMatch(/data-zamknij-folder/);
   });
 });

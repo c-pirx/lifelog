@@ -79,13 +79,15 @@ describe("uwierzytelnianie", () => {
 });
 
 describe("lista narzędzi", () => {
-  it("wystawia dokładnie 11 narzędzi", async () => {
+  it("wystawia dokładnie 12 narzędzi", async () => {
     const { tools } = await klient.listTools();
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(12);
   });
 
   it("mieści się w przyjętym budżecie 12 narzędzi", async () => {
-    // Każde narzędzie zajmuje kontekst w KAŻDEJ rozmowie z Claude.
+    // Każde narzędzie zajmuje kontekst w KAŻDEJ rozmowie z Claude. Notatki
+    // zajęły ostatnie wolne miejsce, więc budżet jest wyczerpany co do jednego:
+    // każda następna możliwość musi iść parametrem istniejącego narzędzia.
     const { tools } = await klient.listTools();
     expect(tools.length).toBeLessThanOrEqual(12);
   });
@@ -389,7 +391,7 @@ describe("raport tygodniowy przez MCP", () => {
     const { tools } = await klient.listTools();
     const podsumowanie = tools.find((t) => t.name === "podsumowanie_dnia");
 
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(12);
     expect(Object.keys(podsumowanie?.inputSchema.properties ?? {})).toContain("okres");
   });
 });
@@ -507,5 +509,78 @@ describe("odbyte treningi w czacie", () => {
 
     expect(wynik.isError).toBe(true);
     expect(tresc(wynik)).toMatch(/pojedyncze serie/i);
+  });
+});
+
+describe("notatki", () => {
+  it("zapisuje oczyszczoną treść razem z surową transkrypcją", async () => {
+    const wynik = await wywolaj("notatki", {
+      akcja: "zapisz",
+      tresc: "Pojechałem na zebranie, ale nikogo nie było.",
+      surowe_wejscie: "no dzisiaj pojechalem do zebranie i nikogo nie bylo",
+      kategoria: "dziennik",
+      tytul: "Zebranie bez nikogo",
+      czas: "2026-09-01 09:12",
+    });
+
+    // Odpowiedź pokazuje wersję oczyszczoną — po to, żeby użytkownik zobaczył,
+    // co naprawdę trafiło do dziennika, i mógł to poprawić jednym zdaniem.
+    expect(wynik).toMatch(/folderze Dziennik/i);
+    expect(wynik).toMatch(/Zebranie bez nikogo/);
+    expect(wynik).toMatch(/nikogo nie było/);
+    // Surowa transkrypcja zostaje w bazie, ale nie zaśmieca rozmowy.
+    expect(wynik).not.toMatch(/pojechalem do zebranie/);
+  });
+
+  it("czyta notatki i zawęża odczyt do jednego folderu", async () => {
+    await wywolaj("notatki", { akcja: "zapisz", tresc: "Termin na piątek", kategoria: "praca" });
+
+    const wszystkie = await wywolaj("notatki", { akcja: "pokaz" });
+    expect(wszystkie).toMatch(/Dziennik \(/);
+    expect(wszystkie).toMatch(/Praca \(/);
+
+    const tylkoPraca = await wywolaj("notatki", { akcja: "pokaz", kategoria: "praca" });
+    expect(tylkoPraca).toMatch(/Termin na piątek/);
+    expect(tylkoPraca).not.toMatch(/Zebranie bez nikogo/);
+  });
+
+  it("bez kategorii notatka ląduje w worku, zamiast zgadywać folder", async () => {
+    await wywolaj("notatki", { akcja: "zapisz", tresc: "Luźna myśl bez folderu" });
+
+    expect(await wywolaj("notatki", { akcja: "pokaz", kategoria: "inne" })).toMatch(/Luźna myśl/);
+  });
+
+  it("odmawia zapisu przy akcji pokaz, zamiast po cichu gubić treść", async () => {
+    const wynik = await klient.callTool({
+      name: "notatki",
+      arguments: { akcja: "pokaz", tresc: "To miała być notatka" },
+    });
+
+    expect(wynik.isError).toBe(true);
+    expect(tresc(wynik)).toMatch(/akcja='zapisz'/);
+  });
+
+  it("poprawia treść notatki przez zmien_wpis", async () => {
+    const lista = await wywolaj("notatki", { akcja: "pokaz", kategoria: "praca" });
+    const id = Number(/#(\d+)/.exec(lista)?.[1]);
+
+    expect(await wywolaj("zmien_wpis", { typ: "notatka", id, akcja: "popraw", dane: { tresc: "Termin przesunięty na poniedziałek" } })).toMatch(
+      /poprawiono notatkę/i,
+    );
+    expect(await wywolaj("notatki", { akcja: "pokaz", kategoria: "praca" })).toMatch(
+      /przesunięty na poniedziałek/,
+    );
+  });
+
+  it("usuwa notatkę przez zmien_wpis", async () => {
+    const lista = await wywolaj("notatki", { akcja: "pokaz", kategoria: "praca" });
+    const id = Number(/#(\d+)/.exec(lista)?.[1]);
+
+    expect(await wywolaj("zmien_wpis", { typ: "notatka", id, akcja: "usun" })).toMatch(
+      /usunięto notatkę/i,
+    );
+    expect(await wywolaj("notatki", { akcja: "pokaz", kategoria: "praca" })).toMatch(
+      /żadnej notatki/i,
+    );
   });
 });

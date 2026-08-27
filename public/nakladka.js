@@ -341,3 +341,54 @@ export function nalozNaDzienRuchu(dzien, kolejka = []) {
   const suma = (pole) => aktywnosci.reduce((s, a) => s + (Number(a[pole]) || 0), 0);
   return { ...dzien, aktywnosci, treningi, dystans_m: suma("dystans_m"), czas_s: suma("czas_s") };
 }
+
+/**
+ * Foldery notatek z doliczonymi wpisami czekającymi w kolejce.
+ *
+ * Polityka jak przy treningach i posiłkach: dodania widać od razu ze
+ * znacznikiem „czeka", usunięcia znikają natychmiast. Poprawek nie nakładamy
+ * w ogóle — notatki edytuje się wyłącznie w czacie, więc w kolejce aplikacji
+ * nie mają skąd się wziąć.
+ *
+ * Licznik folderu przeliczamy razem z listą: karta pokazująca „12 notatek" nad
+ * listą, w której właśnie jedna zniknęła, wyglądałaby na zepsutą.
+ */
+export function nalozNaNotatki(foldery = [], kolejka = []) {
+  const dodane = kolejka.filter((w) => dopasujSciezke(w, "/notatki"));
+  const usuwane = new Set(
+    kolejka
+      .filter((w) => dopasujSciezke(w, "/wpis"))
+      .filter((w) => w.dane?.typ === "notatka" && w.dane?.akcja === "usun")
+      .map((w) => w.dane.id),
+  );
+
+  if (dodane.length === 0 && usuwane.size === 0) return foldery;
+
+  return foldery.map((f) => {
+    // Kategoria z formularza; jej brak spada na „inne" tak samo jak w domenie.
+    const moje = dodane.filter((w) => (w.dane?.kategoria ?? "inne") === f.kategoria);
+    const zostajace = f.notatki.filter((n) => !usuwane.has(n.id));
+    const usunieto = f.notatki.length - zostajace.length;
+
+    if (moje.length === 0 && usunieto === 0) return f;
+
+    const oczekujace = moje.map((wpis) => ({
+      id: `oczekuje-${wpis.id}`,
+      oczekuje: true,
+      godzina: godzina(wpis.dane.czas ?? wpis.czas_lokalny),
+      data_lokalna: dataWpisu(wpis),
+      kategoria: f.kategoria,
+      // Tytułu nie zgadujemy — nadaje go model przy zapisie z czatu, a lista
+      // i tak umie wziąć pierwszą linię treści.
+      tytul: null,
+      tresc: wpis.dane.tresc ?? "",
+      surowe_wejscie: null,
+    }));
+
+    return {
+      ...f,
+      ile: Math.max(f.ile - usunieto, 0) + oczekujace.length,
+      notatki: [...oczekujace, ...zostajace],
+    };
+  });
+}

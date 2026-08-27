@@ -15,9 +15,10 @@ import { BladDomeny, czyBladDomeny } from "../domain/bledy.js";
 import { podsumowanieDnia, ustawCele, zapiszPosilek } from "../domain/diet.js";
 import { zmienWpis } from "../domain/edits.js";
 import { trendWagi, zapiszWage } from "../domain/metrics.js";
+import { historiaNotatek, zapiszNotatke } from "../domain/notatki.js";
 import { dopiszKomentarz, raport, zapewnijRaporty } from "../domain/raporty.js";
 import type { PostepCwiczenia } from "../domain/typy.js";
-import { PEWNOSCI, PORY, TYPY_CWICZEN } from "../domain/typy.js";
+import { KATEGORIE_NOTATEK, PEWNOSCI, PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
@@ -37,6 +38,9 @@ import { parsujCzas, STREFA_DOMYSLNA } from "../lib/time.js";
 import {
   aktywnoscWTekscie,
   historiaWTekscie,
+  NAZWY_KATEGORII,
+  notatkaWTekscie,
+  notatkiWTekscie,
   planWTekscie,
   planyWTekscie,
   podsumowanieWTekscie,
@@ -602,6 +606,101 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       zBezpiecznikiem(() => historiaWTekscie(historiaCwiczenia(db, args.cwiczenie, args.ile_sesji ?? 10))),
   );
 
+  // === NOTATKI ==========================================================
+
+  server.registerTool(
+    "notatki",
+    {
+      title: "Notatki i dziennik",
+      description:
+        "Dziennik notatek z dnia: myśli, przeżycia, ustalenia z pracy. Dwie akcje:\n" +
+        "• akcja='zapisz' — dopisuje notatkę.\n" +
+        "• akcja='pokaz' — czyta ostatnie notatki, opcjonalnie z jednego folderu.\n\n" +
+        "ZASADA CZYSZCZENIA — stosuj ją zawsze przy zapisie. Tekst przychodzi zwykle " +
+        "z dyktowania, więc bywa pełen powtórzeń, urwanych zdań i słów przekręconych " +
+        "przez rozpoznawanie mowy.\n" +
+        "• tresc to wersja UPORZĄDKOWANA: pełne zdania, poprawiona interpunkcja, " +
+        "usunięte powtórzenia i przejęzyczenia, zachowana pierwsza osoba i kolejność myśli.\n" +
+        "• surowe_wejscie to DOKŁADNA wypowiedź użytkownika, bez jednej zmiany. Podawaj " +
+        "je zawsze, gdy notatka pochodzi z dyktowania — to ono jest zapisem prawdy " +
+        "i tylko z niego da się notatkę odtworzyć, gdyby oczyszczanie przekłamało sens.\n" +
+        "• Poprawiaj FORMĘ, nie dopisuj TREŚCI: żadnych wniosków, domyślonych dat, " +
+        "nazwisk ani zdań, których użytkownik nie powiedział.\n" +
+        "• Fragmentu, którego nie da się odczytać, NIE ZGADUJ — zostaw w treści " +
+        "[niejasne: …] z surowym brzmieniem w środku.\n" +
+        "• tytul to trzy–pięć słów, po których notatkę widać na liście w aplikacji.\n" +
+        "• Po zapisie pokaż użytkownikowi oczyszczoną wersję — poprawi ją jednym " +
+        "zdaniem przez zmien_wpis z typ='notatka'.\n\n" +
+        "KATEGORIE (foldery w aplikacji): 'dziennik' — przeżycia, myśli, sprawy osobiste; " +
+        "'praca' — sprawy zawodowe, ustalenia, zadania; 'inne' — reszta. Nie naciągaj: " +
+        "gdy notatka nie pasuje do żadnego, wybierz 'inne'.",
+      inputSchema: {
+        akcja: z.enum(["zapisz", "pokaz"]),
+        tresc: z
+          .string()
+          .optional()
+          .describe("Tylko przy zapisz. Oczyszczona wersja — patrz zasada w opisie narzędzia."),
+        surowe_wejscie: z
+          .string()
+          .optional()
+          .describe("Tylko przy zapisz. Wypowiedź użytkownika co do słowa, bez poprawek."),
+        kategoria: z
+          .enum(KATEGORIE_NOTATEK as unknown as [string, ...string[]])
+          .optional()
+          .describe("Przy zapisz: folder notatki. Przy pokaz: zawęża odczyt do jednego folderu."),
+        tytul: z.string().optional().describe("Tylko przy zapisz. Trzy–pięć słów."),
+        ile: z
+          .number()
+          .int()
+          .positive()
+          .max(100)
+          .optional()
+          .describe("Tylko przy pokaz: ile najnowszych notatek z folderu. Domyślnie 10."),
+        czas: z.string().optional().describe(OPIS_CZASU),
+      },
+    },
+    async (args) =>
+      zBezpiecznikiem(() => {
+        if (args.akcja === "pokaz") {
+          // Treść podana przy odczycie znaczy, że model wybrał złą akcję. Cicha
+          // akceptacja zgubiłaby notatkę, którą użytkownik właśnie podyktował.
+          if (args.tresc || args.surowe_wejscie) {
+            throw new BladDomeny(
+              "Przy akcja='pokaz' nic nie zapisuję — żeby dopisać notatkę, użyj akcja='zapisz'.",
+              "tresc_przy_odczycie",
+            );
+          }
+
+          const historia = historiaNotatek(db, { ile: args.ile ?? 10, strefa });
+          const foldery = args.kategoria
+            ? historia.foldery.filter((f) => f.kategoria === args.kategoria)
+            : historia.foldery;
+
+          return notatkiWTekscie(foldery);
+        }
+
+        if (!args.tresc) {
+          throw new BladDomeny("Podaj treść notatki (pole tresc).", "pusta_tresc");
+        }
+
+        const zapisana = zapiszNotatke(
+          db,
+          {
+            tresc: args.tresc,
+            kategoria: args.kategoria as never,
+            tytul: args.tytul,
+            surowe_wejscie: args.surowe_wejscie,
+            ts: czas(args.czas),
+          },
+          { strefa },
+        );
+
+        // Odpowiedź niesie oczyszczoną wersję, żeby użytkownik zobaczył, co
+        // naprawdę trafiło do dziennika — i mógł to poprawić jednym zdaniem.
+        return `Zapisano w folderze ${NAZWY_KATEGORII[zapisana.kategoria]}:\n${notatkaWTekscie(zapisana)}`;
+      }),
+  );
+
   // === POMIARY I POPRAWKI ==============================================
 
   server.registerTool(
@@ -654,7 +753,10 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "(identyfikatory aktywności są w podsumowaniu dnia)\n" +
         "• typ='sesja' — TYLKO akcja='usun'. Kasuje cały trening razem ze wszystkimi jego " +
         "seriami i jest nieodwracalne; upewnij się, że użytkownik o to prosi. Pojedynczy " +
-        "wynik poprawia się przez typ='seria'.\n\n" +
+        "wynik poprawia się przez typ='seria'.\n" +
+        "• typ='notatka' — pola: tresc, kategoria, tytul, czas (identyfikatory pokazuje " +
+        "narzędzie notatki z akcja='pokaz'). Surowej transkrypcji poprawić się NIE DA " +
+        "i tak ma być: oczyszczona treść jest interpretacją, oryginał zapisem prawdy.\n\n" +
         "Podawaj wyłącznie pola, które mają się zmienić — reszta zostaje nietknięta. " +
         "Po poprawieniu szacunku na potwierdzoną wartość ustaw pewnosc='dokladne'.\n" +
         "pozycje ZASTĘPUJĄ całe rozbicie posiłku — podawaj zawsze komplet składników; pusta " +
@@ -662,7 +764,7 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         "przeliczony z ich sumy — chyba że pole podano jawnie w tej samej poprawce; następna " +
         "poprawka pozycji znów przeliczy.",
       inputSchema: {
-        typ: z.enum(["posilek", "seria", "waga", "aktywnosc", "sesja"]),
+        typ: z.enum(["posilek", "seria", "waga", "aktywnosc", "sesja", "notatka"]),
         id: z.number().int().positive(),
         akcja: z.enum(["popraw", "usun"]),
         dane: z
@@ -693,6 +795,9 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
             rpe: z.number().optional(),
             kg: z.number().optional(),
             notatka: z.string().optional(),
+            tresc: z.string().optional(),
+            kategoria: z.enum(KATEGORIE_NOTATEK as unknown as [string, ...string[]]).optional(),
+            tytul: z.string().optional(),
           })
           .optional(),
       },
@@ -729,5 +834,6 @@ export const NAZWY_NARZEDZI = [
   "historia_cwiczenia",
   "zapisz_wage",
   "zmien_wpis",
+  "notatki",
 ] as const;
 

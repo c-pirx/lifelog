@@ -89,9 +89,13 @@
 
       <!-- Szuflada na to, co nie mieści się w dolnym pasku. Pasek zostaje przy
            trzech ekranach używanych codziennie, żeby kciuk trafiał bez patrzenia. -->
+      <!-- Grupy zamiast płaskiej listy: dieta, ruch i raporty to jedna dziedzina,
+           notatki zupełnie inna. Nagłówek „Menu" nie jest potrzebny — panel jest
+           oczywisty z kontekstu, a etykiety grup niosą więcej. Stąd aria-label,
+           żeby szuflada nie została bez nazwy dla czytnika ekranu. -->
       <div id="menu" hidden>
-        <aside>
-          <h2>Menu</h2>
+        <aside aria-label="Menu">
+          <h2>Zdrowie</h2>
           <button data-ekran="dieta">
             <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -129,7 +133,19 @@
             </svg>
             Raporty
           </button>
-          <button data-akcja="wyloguj">
+
+          <h2>Życie</h2>
+          <button data-ekran="notatki">
+            <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M7.5 4h9A1.5 1.5 0 0 1 18 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-9" />
+              <path d="M7.5 4A1.5 1.5 0 0 0 6 5.5v13A1.5 1.5 0 0 0 7.5 20" />
+              <path d="M10 8.5h5M10 12h5M10 15.5h3" />
+            </svg>
+            Notatki
+          </button>
+
+          <button class="na-dole" data-akcja="wyloguj">
             <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M9.5 4.5H7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2.5" />

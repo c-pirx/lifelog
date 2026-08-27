@@ -7,7 +7,14 @@
  */
 
 import type { Baza } from "./index.js";
-import type { Pewnosc, Pora, StatusSesji, TypCwiczenia, ZrodloWpisu } from "../domain/typy.js";
+import type {
+  KategoriaNotatki,
+  Pewnosc,
+  Pora,
+  StatusSesji,
+  TypCwiczenia,
+  ZrodloWpisu,
+} from "../domain/typy.js";
 
 // === Surowe kształty wierszy =============================================
 
@@ -128,6 +135,17 @@ export type WierszAktywnosci = {
   czas_s: number | null;
   rpe: number | null;
   notatka: string | null;
+  zrodlo: "czat" | "apka";
+};
+
+export type WierszNotatki = {
+  id: number;
+  ts: string;
+  data_lokalna: string;
+  kategoria: KategoriaNotatki;
+  tytul: string | null;
+  tresc: string;
+  surowe_wejscie: string | null;
   zrodlo: "czat" | "apka";
 };
 
@@ -928,6 +946,79 @@ export function agregatAktywnosci(
        ORDER BY ile DESC, czas_s DESC, nazwa`,
     )
     .all(od, doDaty);
+}
+
+// === NOTATKI ============================================================
+
+const KOLUMNY_NOTATKI = `id, ts, data_lokalna, kategoria, tytul, tresc, surowe_wejscie, zrodlo`;
+
+export function wstawNotatke(
+  db: Baza,
+  dane: {
+    ts: string;
+    data_lokalna: string;
+    kategoria: KategoriaNotatki;
+    tytul: string | null;
+    tresc: string;
+    surowe_wejscie: string | null;
+    zrodlo: "czat" | "apka";
+    utworzono: string;
+  },
+): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO notatki (ts, data_lokalna, kategoria, tytul, tresc, surowe_wejscie, zrodlo, utworzono)
+       VALUES (@ts, @data_lokalna, @kategoria, @tytul, @tresc, @surowe_wejscie, @zrodlo, @utworzono)`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+/** Najnowsze notatki jednego folderu. Dziennik czyta się od końca. */
+export function notatkiZKategorii(db: Baza, kategoria: string, limit: number): WierszNotatki[] {
+  return db
+    .prepare<[string, number], WierszNotatki>(
+      `SELECT ${KOLUMNY_NOTATKI} FROM notatki
+       WHERE kategoria = ? ORDER BY ts DESC, id DESC LIMIT ?`,
+    )
+    .all(kategoria, limit);
+}
+
+export function notatkaPoId(db: Baza, id: number): WierszNotatki | undefined {
+  return db
+    .prepare<[number], WierszNotatki>(`SELECT ${KOLUMNY_NOTATKI} FROM notatki WHERE id = ?`)
+    .get(id);
+}
+
+export function aktualizujNotatke(
+  db: Baza,
+  id: number,
+  pola: Partial<Omit<WierszNotatki, "id" | "zrodlo" | "surowe_wejscie">>,
+): number {
+  const klucze = Object.keys(pola);
+  if (klucze.length === 0) return 0;
+  const przypisania = klucze.map((k) => `${k} = @${k}`).join(", ");
+  return db.prepare(`UPDATE notatki SET ${przypisania} WHERE id = @id`).run({ ...pola, id }).changes;
+}
+
+export function usunNotatke(db: Baza, id: number): number {
+  return db.prepare("DELETE FROM notatki WHERE id = ?").run(id).changes;
+}
+
+/**
+ * Licznik i data ostatniej notatki per folder.
+ *
+ * Osobne zapytanie, bo karta folderu ma mówić, ile notatek jest W OGÓLE — nie
+ * ile zmieściło się w pobranej porcji. Inaczej „Pokaż starsze" podbijałoby
+ * licznik, jakby notatek przybywało.
+ */
+export function agregatNotatek(db: Baza): { kategoria: string; ile: number; ostatnia: string }[] {
+  return db
+    .prepare<[], { kategoria: string; ile: number; ostatnia: string }>(
+      `SELECT kategoria, COUNT(*) AS ile, MAX(data_lokalna) AS ostatnia
+       FROM notatki GROUP BY kategoria`,
+    )
+    .all();
 }
 
 // === RAPORTY TYGODNIOWE =================================================

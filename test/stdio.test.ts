@@ -59,7 +59,7 @@ afterAll(async () => {
 describe("lokalny serwer stdio", () => {
   it("startuje bez serwera HTTP i wystawia komplet narzędzi", async () => {
     const { tools } = await klient.listTools();
-    expect(tools).toHaveLength(11);
+    expect(tools).toHaveLength(12);
   });
 
   it("zakłada bazę od zera i zapisuje do niej", async () => {

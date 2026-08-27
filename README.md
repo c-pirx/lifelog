@@ -42,6 +42,17 @@ session the system tracks what's done and what's left, shows what you lifted
 last time, and flags sets weaker than before. It does **not** prescribe
 progression — that call stays yours.
 
+**Activities outside the plan** — running, cycling, walking, swimming. One
+entry after the fact ("did 5 km on the bike"), distance and time, with no
+session to open or close. Deliberately no calories burned: any estimate would
+be guesswork, and a number once shown invites you to "earn it back" at dinner.
+
+**Notes** — a journal of thoughts and work items, dictated in a sentence.
+Claude tidies the transcript before saving it (speech-to-text drops words), but
+**the raw original stays in the database untouched** — there is something to go
+back to if the tidying ever distorts the meaning. Three folders, read-only in
+the app.
+
 **Body weight** — with a 7-day rolling average, because daily readings swing
 too much to read directly.
 

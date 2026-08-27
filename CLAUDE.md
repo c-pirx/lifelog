@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 384 testy
+npm test             # 428 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -107,9 +107,10 @@ JavaScriptu kompiluje kod w locie i inaczej Node nie wystartuje.
 inaczej telefon potrafi tygodniami serwować starą wersję i poprawki nie
 docierają do użytkownika.
 
-**Limit narzędzi MCP: 12.** Obecnie 11. Każde narzędzie zajmuje kontekst
-w **każdej** rozmowie. Nowe możliwości dokładaj przez parametry istniejących
-narzędzi (wzorzec: `zmien_wpis`), nie przez kolejne pozycje. Pilnuje tego test.
+**Limit narzędzi MCP: 12.** Obecnie 12 — budżet jest wyczerpany co do jednego.
+Ostatnie miejsce zajęły `notatki`, więc każda następna możliwość musi iść przez
+parametr istniejącego narzędzia (wzorzec: `zmien_wpis`), nie przez kolejną
+pozycję. Każde narzędzie zajmuje kontekst w **każdej** rozmowie. Pilnuje tego test.
 
 **Testy nie mogą zależeć od dzisiejszej daty.** `trendWagi` i `czestePosilki`
 przyjmują datę odniesienia właśnie dlatego — wcześniejsza wersja testów
@@ -208,7 +209,10 @@ trzy typy ćwiczeń (siłowe / cardio / na czas). System **pokazuje** poprzednie
 wyniki i oznacza słabsze serie, ale **nie narzuca** progresji.
 Aktywności poza planem: bieg, rower, spacer — dystans i czas, bez kalorii,
 poza realizacją planu.
-Poprawki wpisów: dostępne i w czacie, i w aplikacji.
+Notatki: dziennik myśli i spraw roboczych, dyktowany do Claude'a i przez niego
+czyszczony; trzy foldery, w aplikacji tylko do czytania.
+Poprawki wpisów: dostępne i w czacie, i w aplikacji — poza notatkami, które
+poprawia się wyłącznie w czacie.
 
 Poza zakresem: nawodnienie, suplementy, sen, samopoczucie.
 
@@ -238,7 +242,8 @@ Tą samą zasadą rządzą się `public/raporty.js` (panel tygodnia i archiwum),
 `public/dieta.js` i `public/posilek.js` (zakładka Dieta i wspólny renderer wpisu
 posiłku) oraz `public/aktywnosci.js` (zakładka Aktywności razem z rendererem
 wpisu — jeden plik, bo `aktywnosc.js` obok `aktywnosci.js` prosiłoby się
-o pomyłkę przy imporcie) wsparta `public/seria.js` (jak seria czyta się
+o pomyłkę przy imporcie) i `public/notatki.js` (zakładka Notatki: foldery,
+lista i pojedyncza notatka), wsparte `public/seria.js` (jak seria czyta się
 w tekście — wspólne z ekranem Trening, bo dwie kopie tej samej funkcji
 rozjechałyby się przy pierwszej poprawce): renderują, ale nie oceniają — werdykty „na kursie"
 i „idzie lepiej" przychodzą gotowe z serwera. Testy leżą obok,
@@ -309,8 +314,9 @@ więc niedomknięta przejażdżka zablokowałaby wieczorny trening; raport zesta
 `sesje` z `sesje_w_planie` i liczy serie, więc spacer podbiłby realizację planu
 siłowego; „słabsza niż poprzednio" i „rekord" nie mają sensu dla losowego wyjazdu.
 
-**Parametr, nie dwunaste narzędzie.** Limit MCP to 12, stoimy na 11 i to miejsce
-zostaje wolne. Opis `zapisz_serie` rozstrzyga jedyną realną pomyłkę: bieżnia
+**Parametr, nie dwunaste narzędzie.** Aktywności zmieściły się w istniejącym
+narzędziu; dwunaste zajęły dopiero notatki i na tym budżet się kończy.
+Opis `zapisz_serie` rozstrzyga jedyną realną pomyłkę: bieżnia
 **w trakcie** trwającej sesji to seria, samodzielny wyjazd to aktywność.
 Pola siłowe podane razem z `aktywnosc` są błędem, a nie czymś do zignorowania —
 cicha akceptacja zgubiłaby połowę tego, co model podał.
@@ -326,6 +332,62 @@ widzi, czy tydzień był ruchliwy.
 
 Dyscyplina to wolny tekst; grupowanie w statystyce idzie `COLLATE NOCASE`,
 więc „Rower" z czatu i „rower" z aplikacji to jedna pozycja.
+
+## Notatki
+
+Dziennik myśli i spraw roboczych. Powstaje **głosem**, w drodze, przez telefon —
+i to przesądza o całej reszcie: rozpoznawanie mowy gubi słowa, skleja zdania
+i wtrąca wyrazy, których nikt nie powiedział. Notatka zapisana słowo w słowo
+byłaby po tygodniu nieczytelna.
+
+**Czyszczenie robi Claude, nie serwer.** Serwer nie ma połączenia z żadnym
+modelem i mieć nie będzie, więc reguła żyje w opisie narzędzia `notatki` —
+obok zasady szacowania makro to drugie miejsce, w którym o zachowaniu produktu
+decyduje tekst, a nie kod. Model dostaje wprost: porządkuj FORMĘ, nie dopisuj
+TREŚCI, a fragmentu, którego nie da się odczytać, zostaw jako `[niejasne: …]`
+zamiast zgadywać.
+
+**Dwie kolumny na ten sam tekst.** `tresc` to wersja oczyszczona — tę widać
+w aplikacji. `surowe_wejscie` to transkrypcja co do słowa i **nigdy się jej nie
+poprawia**: `zmien_wpis` z `typ='notatka'` nie ma takiego pola. Oczyszczona treść
+jest interpretacją modelu, oryginał zapisem prawdy — gdyby poprawka nadpisywała
+oba, nie byłoby do czego wrócić. Ta sama zasada każe „Cofnij" po usunięciu
+przywracać notatkę **razem z oryginałem**; to jedyna droga, którą aplikacja
+w ogóle wysyła `surowe_wejscie`.
+
+**Trzy sztywne kategorie, ale bez `CHECK` w SQL.** Lista `KATEGORIE_NOTATEK`
+(`dziennik`, `praca`, `inne`) żyje w `src/domain/typy.ts` i to ona ustala
+zarazem kolejność folderów w aplikacji. Więz `CHECK` na kolumnie unieruchomiłby
+ją do czasu przepisania tabeli — patrz pułapka przy migracji 0005 — a czwarty
+folder ma być jedną linią w TypeScripcie. Brak kategorii spada na `inne`;
+nieznana jest błędem, bo znaczy, że model wymyślił własną.
+
+**Aplikacja czyta, czat poprawia.** Zakładka pokazuje foldery, listę i pełną
+treść, pozwala dopisać notatkę z ręki i usunąć pomyłkę — ale nie edytuje.
+Poprawianie wymaga kontekstu rozmowy i wersji surowej, więc mieszka tam, gdzie
+notatka powstała. Pod rozwiniętą treścią stoi zwinięty `<details>` z oryginałem:
+skoro tekst przepisał model, aplikacja ma to powiedzieć wprost.
+
+**Stronicowanie liczbą, nie oknem dni.** Inaczej niż dieta i ruch, tak samo jak
+archiwum raportów. Dziennik czyta się „ostatnie trzydzieści"; przy dwóch
+notatkach w miesiącu okno dni pokazywałoby pustkę mimo pełnego folderu. Licznik
+na karcie folderu liczy **wszystkie** notatki (`repo.agregatNotatek`), nie te
+z pobranej porcji — inaczej „Pokaż starsze" wyglądałoby jak przyrost.
+
+**Szuflada dzieli się na grupy: Zdrowie i Życie.** Dieta, Aktywności, Plany
+i Raporty to jedna dziedzina, notatki zupełnie inna — włosowa linia i etykieta
+grupy mówią to bez słowa. „Wyloguj" siedzi na samym dole panelu
+(`margin-top: auto`), poza obiema grupami. Następna zakładka ma trafić do
+właściwej grupy, a nie na koniec listy. W samej zakładce hierarchia idzie dalej:
+„Dziennik" i „Praca" dostają pełne karty, „Inne" jest workiem na resztę i tak
+też wygląda — ciszej, bez karty, ale zawsze widoczne. Folder, który znika przy
+zerze, przestaje być folderem.
+
+**Notatki nie wchodzą do raportu tygodnia ani do oceny „lepiej / gorzej".**
+Werdykt mierzy realizację planu i trafienia w cel; tekst nie jest pomiarem.
+Nie ma ich też na ekranie Dziś ani w `podsumowanie_dnia` — dziennik doklejony
+do bilansu dnia byłby szumem w miejscu, gdzie liczy się jedno spojrzenie
+na makro.
 
 ## Tydzień: raport i tempo
 
@@ -376,10 +438,16 @@ tempa na ekranie Postępy, odhaczanie serii wraz z widokiem pojedynczego
 poziom pewności estymacji (`niepewne`), aktywności poza planem
 (zakładka Aktywności, `GET/POST /aktywnosci`, `zapisz_serie` z `aktywnosc`)
 oraz historia odbytych treningów w tej samej zakładce wraz z usuwaniem całej
-sesji (`historiaSesji`, `zmien_wpis` z `typ='sesja'`).
+sesji (`historiaSesji`, `zmien_wpis` z `typ='sesja'`), a na koniec zakładka
+Notatki z czyszczeniem dyktowanej transkrypcji (narzędzie `notatki`,
+`GET/POST /notatki`, `zmien_wpis` z `typ='notatka'`).
 
 Z listy odłożonych spadło przez to „lista ostatnich sesji"; **poprawianie serii
 wstecz nadal czeka** — zakładka pokazuje wyniki, ale ich nie edytuje.
+
+Odłożone świadomie przy notatkach: wyszukiwanie pełnotekstowe (trzy foldery
+i „Pokaż starsze" wystarczają, dopóki notatek są setki; FTS5 to osobna decyzja)
+oraz edycja notatki w aplikacji — uzgodniona jako robota czatu.
 
 Odłożone świadomie przy odhaczaniu: podsumowanie po zakończeniu treningu,
 poprawianie serii wstecz, edycja planu w aplikacji,

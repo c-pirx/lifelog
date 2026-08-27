@@ -37,6 +37,16 @@ system pilnuje, co zrobione i co zostało, pokazuje wyniki z poprzedniego razu
 i oznacza serie słabsze niż ostatnio. **Nie narzuca** progresji — ta decyzja
 zostaje Twoja.
 
+**Aktywności poza planem** — bieg, rower, spacer, basen. Jeden wpis po fakcie
+(„przejechałem 5 km"), dystans i czas, bez otwierania i zamykania sesji.
+Świadomie bez spalonych kalorii: każde ich oszacowanie byłoby zgadywaniem,
+a liczba raz pokazana kusi, żeby ją „odrobić" przy kolacji.
+
+**Notatki** — dziennik myśli i spraw roboczych, dyktowany zdaniem. Claude
+porządkuje transkrypcję, zanim ją zapisze (rozpoznawanie mowy gubi słowa),
+ale **oryginał zostaje w bazie nietknięty** — jest do czego wrócić, gdyby
+porządkowanie przekłamało sens. Trzy foldery, w aplikacji do czytania.
+
 **Waga ciała** — ze średnią kroczącą z 7 dni, bo dzienne odczyty wahają się
 za mocno, żeby czytać je wprost.
 

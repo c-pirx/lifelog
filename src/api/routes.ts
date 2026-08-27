@@ -24,8 +24,9 @@ import {
 } from "../domain/diet.js";
 import { zmienWpis } from "../domain/edits.js";
 import { ostatniaWaga, trendWagi, zapiszWage } from "../domain/metrics.js";
+import { historiaNotatek, zapiszNotatke } from "../domain/notatki.js";
 import { raporty, tydzienWToku, zapewnijRaporty } from "../domain/raporty.js";
-import { PORY, TYPY_CWICZEN } from "../domain/typy.js";
+import { KATEGORIE_NOTATEK, PORY, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
@@ -91,8 +92,20 @@ const schematAktywnosci = z.object({
   czas: z.string().optional(),
 });
 
+// Notatka wpisana palcem nie ma surowej transkrypcji — nie przeszła przez model,
+// więc nie ma czego zestawiać. Pole zostaje w schemacie wyłącznie dla „Cofnij"
+// po usunięciu: przywracana notatka musi wrócić z oryginałem, inaczej jedno
+// omyłkowe stuknięcie w ✕ kasowałoby zapis prawdy bezpowrotnie.
+const schematNotatki = z.object({
+  tresc: z.string().min(1),
+  kategoria: z.enum(KATEGORIE_NOTATEK as unknown as [string, ...string[]]).optional(),
+  tytul: z.string().optional(),
+  surowe_wejscie: z.string().optional(),
+  czas: z.string().optional(),
+});
+
 const schematWpisu = z.object({
-  typ: z.enum(["posilek", "seria", "waga", "aktywnosc", "sesja"]),
+  typ: z.enum(["posilek", "seria", "waga", "aktywnosc", "sesja", "notatka"]),
   id: z.number().int().positive(),
   akcja: z.enum(["popraw", "usun"]),
   dane: z.record(z.string(), z.unknown()).optional(),
@@ -254,6 +267,32 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   api.post("/cele", async (c) => {
     const dane = schematCelow.parse(await c.req.json());
     return c.json(ustawCele(db, dane, { strefa: ustawienia.strefa }), 201);
+  });
+
+  // === Notatki ==========================================================
+
+  // Komplet folderów w jednej odpowiedzi, każdy z najnowszą porcją notatek.
+  // Dzięki temu po zbuforowaniu zakładka działa bez zasięgu w całości, nie
+  // tylko ten folder, który akurat był otwarty — ten sam chwyt co przy /raporty.
+  api.get("/notatki", (c) =>
+    c.json(
+      historiaNotatek(db, {
+        ile: Number(c.req.query("ile") ?? 30),
+        strefa: ustawienia.strefa,
+      }),
+    ),
+  );
+
+  api.post("/notatki", async (c) => {
+    const { czas: kiedy, ...dane } = schematNotatki.parse(await c.req.json());
+    return c.json(
+      zapiszNotatke(
+        db,
+        { ...dane, kategoria: dane.kategoria as never, ts: czas(kiedy), zrodlo: "apka" },
+        { strefa: ustawienia.strefa },
+      ),
+      201,
+    );
   });
 
   // === Trening ==========================================================

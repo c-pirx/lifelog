@@ -10,7 +10,10 @@ import type { HistoriaCwiczenia } from "../domain/workouts.js";
 import type {
   Aktywnosc,
   DzienPlanu,
+  FolderNotatek,
+  KategoriaNotatki,
   Makro,
+  Notatka,
   Plan,
   PodsumowanieDnia,
   Posilek,
@@ -348,4 +351,44 @@ export function raportWTekscie(r: RaportTygodniowy): string {
   }
 
   return linie.join("\n");
+}
+
+/** Nazwy folderów po ludzku — te same, które widać w aplikacji. */
+export const NAZWY_KATEGORII: Record<KategoriaNotatki, string> = {
+  dziennik: "Dziennik",
+  praca: "Praca",
+  inne: "Inne",
+};
+
+/**
+ * Notatka w rozmowie: nagłówek z identyfikatorem i datą, treść wcięta pod nim.
+ *
+ * Pokazujemy wyłącznie wersję oczyszczoną. Surowa transkrypcja leży w bazie na
+ * wypadek sporu o sens, ale wklejona do rozmowy tylko zaśmiecałaby odczyt —
+ * to od niej właśnie uciekamy.
+ */
+export function notatkaWTekscie(n: Notatka): string {
+  const tytul = n.tytul ? ` ${n.tytul}` : "";
+  const tresc = n.tresc.split("\n").join("\n    ");
+  return `#${n.id} ${n.data_lokalna} ${n.godzina}${tytul}\n    ${tresc}`;
+}
+
+export function notatkiWTekscie(foldery: FolderNotatek[]): string {
+  const zTrescia = foldery.filter((f) => f.notatki.length > 0);
+
+  if (zTrescia.length === 0) {
+    return "Nie ma tu jeszcze żadnej notatki.";
+  }
+
+  return zTrescia
+    .map((f) => {
+      // „(pokazano 10 z 42)" tylko wtedy, gdy porcja nie objęła całego folderu —
+      // przy komplecie sam licznik wystarczy.
+      const zakres = f.notatki.length < f.ile ? ` — pokazano ${f.notatki.length} z ${f.ile}` : "";
+      return [
+        `${NAZWY_KATEGORII[f.kategoria]} (${f.ile})${zakres}:`,
+        ...f.notatki.map(notatkaWTekscie),
+      ].join("\n");
+    })
+    .join("\n\n");
 }

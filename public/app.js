@@ -14,9 +14,11 @@ import {
   nalozNaAktywnosci,
   nalozNaDzien,
   nalozNaDzienRuchu,
+  nalozNaNotatki,
   nalozNaTreningi,
   nalozNaTrening,
 } from "./nakladka.js";
+import { ekranNotatki } from "./notatki.js";
 import { polaPosilku, szablonWiersza, wpisPosilku } from "./posilek.js";
 import { czasWTekscie, stanPrzerwy, trwanieWTekscie } from "./przerwa.js";
 import { ekranRaporty, panelTygodnia } from "./raporty.js";
@@ -67,6 +69,18 @@ let stronAktywnosci = 1;
 
 /** Ostatnio usunięta aktywność — materiał na „Cofnij" w komunikacie. */
 let ostatnioUsunietaAktywnosc = null;
+
+/** Otwarty folder notatek; null znaczy „lista folderów". */
+let otwartyFolder = null;
+
+/** Rozwinięta notatka. Id trzymamy tekstem, bo wpis z kolejki ma id „oczekuje-3". */
+let otwartaNotatka = null;
+
+/** Ile 30-notatkowych porcji pobrać z każdego folderu. Rośnie od „Pokaż starsze". */
+let stronNotatek = 1;
+
+/** Ostatnio usunięta notatka — materiał na „Cofnij" w komunikacie. */
+let ostatnioUsunietaNotatka = null;
 
 /**
  * Propozycje wyniku z ostatniego odczytu, po nazwie ćwiczenia.
@@ -1467,6 +1481,7 @@ const TYTULY = {
   plany: "Plany",
   dieta: "Dieta",
   aktywnosci: "Aktywności",
+  notatki: "Notatki",
 };
 
 async function odswiez() {
@@ -1588,6 +1603,19 @@ async function odswiez() {
     return;
   }
 
+  if (ekran === "notatki") {
+    // Komplet folderów jednym żądaniem — porcja rośnie od „Pokaż starsze",
+    // tak jak okno diety, i z tego samego powodu: odswiez() po każdej akcji
+    // odtwarza widok od zera, więc doklejane strony by przepadały.
+    const historia = await api(`/notatki?ile=${30 * stronNotatek}`);
+    stan.notatki = { ...historia, foldery: nalozNaNotatki(historia.foldery, kolejka) };
+
+    const wszystkich = stan.notatki.foldery.reduce((suma, f) => suma + f.ile, 0);
+    dataEkranu.textContent = wszystkich ? `${wszystkich} szt.` : "";
+    widok.innerHTML = ekranNotatki(stan.notatki, otwartyFolder, otwartaNotatka, dzisiajData);
+    return;
+  }
+
   const [postepy, waga] = await Promise.all([api("/postepy?dni=30"), api("/waga?dni=30")]);
   dataEkranu.textContent = "30 dni";
   widok.innerHTML = ekranPostepy(postepy, waga);
@@ -1598,8 +1626,11 @@ async function odswiez() {
 function przejdzDo(nowyEkran) {
   ekran = nowyEkran;
   // Wyjście z zakładki zamyka też widok pojedynczego ćwiczenia — inaczej powrót
-  // na Trening otwierałby ćwiczenie sprzed kwadransa zamiast listy.
+  // na Trening otwierałby ćwiczenie sprzed kwadransa zamiast listy. Z folderem
+  // notatek jest dokładnie tak samo.
   otwarteCwiczenie = null;
+  otwartyFolder = null;
+  otwartaNotatka = null;
 
   // Raporty żyją w bocznym menu, nie w dolnym pasku — wtedy żaden przycisk
   // paska nie jest bieżący i wszystkie muszą stracić zaznaczenie.
@@ -1648,6 +1679,7 @@ menu?.addEventListener("click", async (zdarzenie) => {
     rozwinietyDzienAktywnosci = null;
     stronAktywnosci = 1;
     edytowanaAktywnosc = null;
+    stronNotatek = 1;
     przejdzDo(przycisk.dataset.ekran);
     return;
   }
@@ -1889,6 +1921,75 @@ widok.addEventListener("click", (zdarzenie) => {
     return;
   }
 
+  // Wejście do folderu i rozwinięcie notatki przerysowują widok z pamięci,
+  // bez żądania — cała porcja przyszła jednym zapytaniem, więc czytanie
+  // dziennika działa też bez zasięgu.
+  const folder = cel.closest("[data-folder]");
+  if (folder) {
+    otwartyFolder = folder.dataset.folder;
+    otwartaNotatka = null;
+    widok.innerHTML = ekranNotatki(stan.notatki, otwartyFolder, otwartaNotatka, dzisiajData);
+    return;
+  }
+
+  if (cel.closest("[data-zamknij-folder]")) {
+    otwartyFolder = null;
+    otwartaNotatka = null;
+    widok.innerHTML = ekranNotatki(stan.notatki, otwartyFolder, otwartaNotatka, dzisiajData);
+    return;
+  }
+
+  const notatka = cel.closest("[data-notatka]");
+  if (notatka) {
+    // Id tekstem, nie liczbą: notatka czekająca w kolejce ma id „oczekuje-3".
+    const id = notatka.dataset.notatka;
+    otwartaNotatka = otwartaNotatka === id ? null : id;
+    widok.innerHTML = ekranNotatki(stan.notatki, otwartyFolder, otwartaNotatka, dzisiajData);
+    return;
+  }
+
+  const starszeNotatek = cel.closest("[data-starsze-notatek]");
+  if (starszeNotatek) {
+    stronNotatek += 1;
+    odswiez().catch((blad) => komunikat(blad.message, true));
+    return;
+  }
+
+  const usunNotatke = cel.closest("[data-usun-notatke]");
+  if (usunNotatke) {
+    const id = Number(usunNotatke.dataset.usunNotatke);
+    // Treść zapamiętana przed skasowaniem — inaczej „Cofnij" nie miałoby czego
+    // przywrócić. Wraca też surowa transkrypcja: to ona jest zapisem prawdy
+    // i omyłkowe stuknięcie w ✕ nie może jej zabrać.
+    ostatnioUsunietaNotatka =
+      stan.notatki?.foldery.flatMap((f) => f.notatki).find((n) => n.id === id) ?? null;
+    otwartaNotatka = null;
+
+    akcja(async () => {
+      await api("/wpis", { method: "POST", dane: { typ: "notatka", id, akcja: "usun" } });
+      const wrocDo = ostatnioUsunietaNotatka;
+      if (!wrocDo) return;
+
+      komunikat("Usunięto notatkę", false, () =>
+        akcja(
+          () =>
+            api("/notatki", {
+              method: "POST",
+              dane: {
+                tresc: wrocDo.tresc,
+                kategoria: wrocDo.kategoria,
+                tytul: wrocDo.tytul ?? undefined,
+                surowe_wejscie: wrocDo.surowe_wejscie ?? undefined,
+                czas: `${wrocDo.data_lokalna} ${wrocDo.godzina}`,
+              },
+            }),
+          "Przywrócono",
+        ),
+      );
+    });
+    return;
+  }
+
   // Edytor składników: wiersze dodaje i usuwa się lokalnie, bez wysyłki —
   // zapis idzie dopiero z całym formularzem poprawki.
   const dodajWiersz = cel.closest("[data-dodaj-wiersz]");
@@ -1908,7 +2009,9 @@ widok.addEventListener("click", (zdarzenie) => {
     const formularz = document.getElementById(pokaz.dataset.pokaz);
     formularz.hidden = false;
     pokaz.parentElement.hidden = true;
-    formularz.querySelector("input")?.focus();
+    // Także textarea: formularz notatki nie ma ani jednego pola input,
+    // a kursor ma stanąć od razu tam, gdzie się pisze.
+    formularz.querySelector("input, textarea")?.focus();
     return;
   }
 
@@ -2187,6 +2290,24 @@ widok.addEventListener("submit", (zdarzenie) => {
           dane: { ...dane, czas: czasAktywnosci(formularz, dzien, wymuszDate) },
         }),
       "Zapisano aktywność",
+      formularz,
+    );
+    return;
+  }
+
+  if (formularz.id === "formularz-notatki") {
+    const tresc = formularz.elements.tresc.value.trim();
+    if (!tresc) return komunikat("Napisz coś w notatce", true);
+
+    // Bez `czas`: notatka wpisana z ręki powstaje teraz. Gdy leci przez kolejkę,
+    // godzinę powstania dokłada sama wysyłka.
+    akcja(
+      () =>
+        api("/notatki", {
+          method: "POST",
+          dane: { tresc, kategoria: formularz.elements.kategoria.value },
+        }),
+      "Zapisano notatkę",
       formularz,
     );
     return;

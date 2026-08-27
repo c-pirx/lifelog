@@ -540,3 +540,96 @@ describe("historia ruchu", () => {
     expect(odpowiedz.status).toBe(400);
   });
 });
+
+describe("notatki", () => {
+  type Folder = {
+    kategoria: string;
+    ile: number;
+    ostatnia: string | null;
+    notatki: { id: number; tresc: string; surowe_wejscie: string | null; zrodlo: string }[];
+  };
+
+  const foldery = async () => (await pobierz<{ foldery: Folder[] }>("/api/notatki")).foldery;
+  const folder = async (kategoria: string) =>
+    (await foldery()).find((f) => f.kategoria === kategoria)!;
+
+  it("zapisuje notatkę z aplikacji i pokazuje ją w folderze", async () => {
+    const odpowiedz = await wyslij("/api/notatki", {
+      tresc: "Ustaliliśmy termin na piątek.",
+      kategoria: "praca",
+    });
+    expect(odpowiedz.status).toBe(201);
+
+    const zapisana = (await odpowiedz.json()) as { id: number; zrodlo: string; godzina: string };
+    expect(zapisana.zrodlo).toBe("apka");
+    expect(zapisana.godzina).toMatch(/^\d{2}:\d{2}$/);
+
+    const praca = await folder("praca");
+    expect(praca.ile).toBe(1);
+    expect(praca.notatki[0]?.tresc).toBe("Ustaliliśmy termin na piątek.");
+    // Notatka wpisana palcem nie przeszła przez model — nie ma oryginału.
+    expect(praca.notatki[0]?.surowe_wejscie).toBeNull();
+  });
+
+  it("odczyt zwraca komplet folderów, także pustych", async () => {
+    expect((await foldery()).map((f) => f.kategoria)).toEqual(["dziennik", "praca", "inne"]);
+  });
+
+  it("odrzuca notatkę bez treści", async () => {
+    expect((await wyslij("/api/notatki", { tresc: "" })).status).toBe(400);
+  });
+
+  it("odrzuca folder spoza listy", async () => {
+    const odpowiedz = await wyslij("/api/notatki", { tresc: "Coś", kategoria: "pomysly" });
+    expect(odpowiedz.status).toBe(400);
+  });
+
+  it("wpis odłożony w kolejce trafia pod swoją godzinę, nie pod godzinę wysyłki", async () => {
+    const zapisana = (await (
+      await wyslij("/api/notatki", { tresc: "Notatka sprzed dwóch dni", czas: "2026-08-23 07:15" })
+    ).json()) as { data_lokalna: string; godzina: string };
+
+    expect(zapisana.data_lokalna).toBe("2026-08-23");
+    expect(zapisana.godzina).toBe("07:15");
+  });
+
+  it("przywrócenie po usunięciu niesie z powrotem surową transkrypcję", async () => {
+    // Ta jedna droga wysyła surowe_wejscie z aplikacji: bez niej omyłkowe
+    // stuknięcie w ✕ kasowałoby zapis prawdy bezpowrotnie.
+    const odpowiedz = await wyslij("/api/notatki", {
+      tresc: "Przywrócona notatka",
+      kategoria: "dziennik",
+      surowe_wejscie: "przywrocona notatka tak jak bylo podyktowane",
+    });
+
+    const zapisana = (await odpowiedz.json()) as { surowe_wejscie: string | null };
+    expect(zapisana.surowe_wejscie).toContain("podyktowane");
+  });
+
+  it("poprawia i usuwa notatkę tą samą trasą co pozostałe wpisy", async () => {
+    const utworzona = (await (
+      await wyslij("/api/notatki", { tresc: "Do poprawki", kategoria: "inne" })
+    ).json()) as { id: number };
+
+    const poprawka = await wyslij("/api/wpis", {
+      typ: "notatka",
+      id: utworzona.id,
+      akcja: "popraw",
+      dane: { tresc: "Po poprawce" },
+    });
+    expect(poprawka.status).toBe(200);
+    expect((await folder("inne")).notatki[0]?.tresc).toBe("Po poprawce");
+
+    const usuniecie = await wyslij("/api/wpis", {
+      typ: "notatka",
+      id: utworzona.id,
+      akcja: "usun",
+    });
+    expect(usuniecie.status).toBe(200);
+
+    // Licznik folderu tu nie wystarczy: „inne" jest workiem i leży w nim także
+    // notatka z testu godziny wysyłki.
+    const zostale = (await folder("inne")).notatki.map((n) => n.tresc);
+    expect(zostale).not.toContain("Po poprawce");
+  });
+});

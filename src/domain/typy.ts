@@ -313,6 +313,71 @@ export type HistoriaRuchu = {
   dni: DzienRuchu[];
 };
 
+// === NOTATKI ============================================================
+
+/**
+ * Foldery zakładki Notatki. Lista jest zamknięta i ustala zarazem KOLEJNOŚĆ
+ * folderów w aplikacji — „dziennik" i „praca" to dwa miejsca, do których się
+ * wraca, „inne" jest workiem na resztę i tak też wygląda.
+ *
+ * Zamknięta w TypeScripcie, nie w SQL: więz CHECK na kolumnie unieruchomiłby ją
+ * do czasu przepisania tabeli. Tu dołożenie folderu to jedna linia.
+ */
+export type KategoriaNotatki = "dziennik" | "praca" | "inne";
+
+export const KATEGORIE_NOTATEK: readonly KategoriaNotatki[] = ["dziennik", "praca", "inne"];
+
+export const KATEGORIA_DOMYSLNA: KategoriaNotatki = "inne";
+
+/**
+ * Notatka z dnia — myśl, ustalenie, obserwacja.
+ *
+ * `tresc` jest wersją oczyszczoną (model składa dyktowaną wypowiedź w zdania),
+ * `surowe_wejscie` dokładną transkrypcją. Rozdział jest po to, żeby dało się
+ * wrócić do oryginału, kiedy oczyszczanie przekłamie sens.
+ */
+export type Notatka = {
+  id: number;
+  ts: string;
+  data_lokalna: string;
+  godzina: string;
+  kategoria: KategoriaNotatki;
+  tytul: string | null;
+  tresc: string;
+  surowe_wejscie: string | null;
+  zrodlo: "czat" | "apka";
+};
+
+export type NowaNotatka = {
+  tresc: string;
+  /** Pominięta spada na „inne" — zgadywanie za użytkownika byłoby gorsze. */
+  kategoria?: KategoriaNotatki;
+  tytul?: string;
+  surowe_wejscie?: string;
+  /** Chwila powstania notatki w UTC ISO. Domyślnie teraz. */
+  ts?: string;
+  zrodlo?: Notatka["zrodlo"];
+};
+
+/**
+ * Folder z notatkami. `ile` liczy WSZYSTKIE notatki kategorii, także te poza
+ * pobraną porcją — inaczej licznik na karcie mówiłby o oknie odczytu, a nie
+ * o zawartości folderu.
+ */
+export type FolderNotatek = {
+  kategoria: KategoriaNotatki;
+  ile: number;
+  /** Data ostatniej notatki albo null dla pustego folderu. */
+  ostatnia: string | null;
+  notatki: Notatka[];
+};
+
+export type HistoriaNotatek = {
+  /** Ile najnowszych notatek pobrano z każdego folderu. */
+  ile: number;
+  foldery: FolderNotatek[];
+};
+
 // === POMIARY ============================================================
 
 export type Waga = {

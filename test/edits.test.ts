@@ -5,6 +5,7 @@ import { aktywnosciZDnia, zapiszAktywnosc } from "../src/domain/aktywnosci.js";
 import { podsumowanieDnia, ustawCele, zapiszPosilek } from "../src/domain/diet.js";
 import { zmienWpis } from "../src/domain/edits.js";
 import { ostatniaWaga, trendWagi, zapiszWage } from "../src/domain/metrics.js";
+import { historiaNotatek, zapiszNotatke } from "../src/domain/notatki.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
@@ -554,6 +555,99 @@ describe("usuwanie całego treningu", () => {
 
   it("zgłasza brak sesji o podanym id", () => {
     expect(() => zmienWpis(db, { typ: "sesja", id: 999, akcja: "usun" })).toThrow(
+      /nie znaleziono/i,
+    );
+  });
+});
+
+describe("poprawki notatek", () => {
+  const notatka = () =>
+    zapiszNotatke(db, {
+      tresc: "Pojechałem na zebranie, ale nikogo nie było.",
+      surowe_wejscie: "no dzisiaj pojechalem do zebranie i nikogo nie bylo",
+      kategoria: "dziennik",
+      tytul: "Zebranie",
+      ts: "2026-08-25T07:00:00.000Z",
+    });
+
+  const zFolderu = (kategoria: string) =>
+    historiaNotatek(db).foldery.find((f) => f.kategoria === kategoria)!.notatki;
+
+  it("poprawia treść, ale surowej transkrypcji nie rusza", () => {
+    const wpis = notatka();
+
+    zmienWpis(db, {
+      typ: "notatka",
+      id: wpis.id,
+      akcja: "popraw",
+      dane: { tresc: "Pojechałem na zebranie — nikogo nie zastałem." },
+    });
+
+    const [poprawiona] = zFolderu("dziennik");
+    expect(poprawiona?.tresc).toBe("Pojechałem na zebranie — nikogo nie zastałem.");
+    // Oczyszczona treść jest interpretacją modelu, oryginał zapisem prawdy.
+    // Gdyby poprawka nadpisywała jedno i drugie, nie byłoby do czego wrócić.
+    expect(poprawiona?.surowe_wejscie).toBe("no dzisiaj pojechalem do zebranie i nikogo nie bylo");
+  });
+
+  it("przenosi notatkę do innego folderu", () => {
+    const wpis = notatka();
+
+    zmienWpis(db, {
+      typ: "notatka",
+      id: wpis.id,
+      akcja: "popraw",
+      dane: { kategoria: "praca" },
+    });
+
+    expect(zFolderu("dziennik")).toHaveLength(0);
+    expect(zFolderu("praca")).toHaveLength(1);
+  });
+
+  it("goła godzina zostaje w dniu wpisu, pełna data go przenosi", () => {
+    const wpis = notatka();
+
+    zmienWpis(db, { typ: "notatka", id: wpis.id, akcja: "popraw", dane: { czas: "21:15" } });
+    expect(zFolderu("dziennik")[0]?.data_lokalna).toBe("2026-08-25");
+    expect(zFolderu("dziennik")[0]?.godzina).toBe("21:15");
+
+    zmienWpis(db, {
+      typ: "notatka",
+      id: wpis.id,
+      akcja: "popraw",
+      dane: { czas: "2026-08-20 08:00" },
+    });
+    expect(zFolderu("dziennik")[0]?.data_lokalna).toBe("2026-08-20");
+  });
+
+  it("odrzuca pustą treść i nieznany folder tak samo jak zapis", () => {
+    const wpis = notatka();
+
+    expect(() =>
+      zmienWpis(db, { typ: "notatka", id: wpis.id, akcja: "popraw", dane: { tresc: "  " } }),
+    ).toThrow(/bez treści/i);
+
+    expect(() =>
+      zmienWpis(db, {
+        typ: "notatka",
+        id: wpis.id,
+        akcja: "popraw",
+        dane: { kategoria: "pomysly" as never },
+      }),
+    ).toThrow(/nieznana kategoria/i);
+  });
+
+  it("usuwa notatkę razem z jej surową transkrypcją", () => {
+    const wpis = notatka();
+
+    const wynik = zmienWpis(db, { typ: "notatka", id: wpis.id, akcja: "usun" });
+
+    expect(wynik.opis).toMatch(/Zebranie/);
+    expect(zFolderu("dziennik")).toHaveLength(0);
+  });
+
+  it("zgłasza brak notatki o podanym id", () => {
+    expect(() => zmienWpis(db, { typ: "notatka", id: 999, akcja: "usun" })).toThrow(
       /nie znaleziono/i,
     );
   });

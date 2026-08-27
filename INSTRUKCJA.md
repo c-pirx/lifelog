@@ -329,6 +329,52 @@ przy kolacji. Aktywności nie zmieniają też Twojego dziennego limitu.
 osobną linijką, ale ocena „idzie lepiej / gorzej" ich nie obejmuje — mierzy ona
 plan, a nie to, czy pogoda sprzyjała rowerowi.
 
+## Notatki
+
+Myśl, ustalenie, obserwacja z dnia — wszystko, co chcesz zapisać, a co nie jest
+posiłkiem ani treningiem. Najwygodniej **dyktować**:
+
+> zapisz w dzienniku: dzisiaj mam dużo na głowie, byłem na zebraniu, na którym
+> nikogo nie było
+
+> notatka do pracy: ustaliliśmy termin na piątek, klient dosyła materiały we wtorek
+
+**Claude porządkuje to, co powiesz, zanim zapisze.** Dyktowanie gubi słowa,
+skleja zdania i wtrąca wyrazy, których nie było — zapisane słowo w słowo, po
+tygodniu byłoby nieczytelne. Do dziennika trafia więc wersja złożona w zdania,
+z poprawioną interpunkcją i bez powtórzeń. **Sens zostaje nietknięty**: Claude
+poprawia formę, ale niczego nie dopisuje, a fragmentu, którego nie da się
+odczytać, nie zgaduje — zostawia go zaznaczonego jako niejasny.
+
+**Oryginał zostaje w bazie na zawsze.** Surowa transkrypcja zapisuje się obok
+wersji uporządkowanej i nigdy nie jest zmieniana. W aplikacji znajdziesz ją pod
+notatką, po stuknięciu w „Pokaż oryginał dyktowania" — gdyby porządkowanie
+kiedyś przekłamało sens, jest do czego wrócić.
+
+Notatka trafia do jednego z trzech folderów: **Dziennik** (przeżycia i myśli),
+**Praca** (ustalenia, zadania) albo **Inne**. Możesz wskazać folder wprost
+(„zapisz w dzienniku…", „notatka do pracy…") albo zostawić wybór Claude'owi.
+
+W aplikacji: zakładka **Notatki** w bocznym menu (☰), w grupie „Życie".
+Stuknięcie w folder pokazuje notatki od najnowszej, stuknięcie w notatkę
+rozwija pełną treść. Krzyżyk usuwa — z możliwością cofnięcia, dopóki komunikat
+nie zniknie. Przycisk „+ Dodaj notatkę" zapisuje tekst wpisany palcem; taki nie
+przechodzi przez porządkowanie, bo nie ma czego porządkować.
+
+**Notatek nie da się poprawić w aplikacji — to robota czatu:**
+
+> popraw ostatnią notatkę: to było w środę, nie we wtorek
+
+> przenieś tę notatkę do pracy
+
+Claude umie też czytać dziennik wstecz:
+
+> co zapisałem w notatkach w tym tygodniu?
+
+**Notatki nie mają wpływu na nic innego.** Nie wchodzą do raportu tygodnia,
+nie zmieniają oceny „idzie lepiej / gorzej" i nie pokazują się na ekranie Dziś.
+Dziennik to dziennik, a nie kolejna liczba do pilnowania.
+
 ## Waga
 
 > zważyłem się, 81,4

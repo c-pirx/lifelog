@@ -11,9 +11,17 @@ import * as repo from "../db/repo.js";
 import { dataLokalna, parsujCzas, STREFA_DOMYSLNA } from "../lib/time.js";
 import { sprawdzWartosci } from "./aktywnosci.js";
 import { BladDomeny } from "./bledy.js";
-import { PEWNOSCI, PORY, type NowaPozycja, type Pewnosc, type Pora } from "./typy.js";
+import { przytnijTytul, sprawdzKategorie, sprawdzTresc } from "./notatki.js";
+import {
+  PEWNOSCI,
+  PORY,
+  type KategoriaNotatki,
+  type NowaPozycja,
+  type Pewnosc,
+  type Pora,
+} from "./typy.js";
 
-export type TypWpisu = "posilek" | "seria" | "waga" | "aktywnosc" | "sesja";
+export type TypWpisu = "posilek" | "seria" | "waga" | "aktywnosc" | "sesja" | "notatka";
 export type AkcjaWpisu = "popraw" | "usun";
 
 export const TYPY_WPISOW: readonly TypWpisu[] = [
@@ -22,6 +30,7 @@ export const TYPY_WPISOW: readonly TypWpisu[] = [
   "waga",
   "aktywnosc",
   "sesja",
+  "notatka",
 ];
 
 export type ZmianyPosilku = {
@@ -61,11 +70,24 @@ export type ZmianyAktywnosci = {
   czas?: string;
 };
 
+/**
+ * Poprawka notatki nie ma pola `surowe_wejscie` i to jest cała jej istota:
+ * oczyszczona treść jest interpretacją modelu i wolno ją prostować, ale
+ * transkrypcja jest zapisem prawdy i zostaje nietknięta na zawsze.
+ */
+export type ZmianyNotatki = {
+  tresc?: string;
+  kategoria?: KategoriaNotatki;
+  tytul?: string | null;
+  /** Jak przy posiłku: "HH:MM" zostaje w dniu wpisu, pełna data go przenosi. */
+  czas?: string;
+};
+
 export type ZadanieZmiany = {
   typ: TypWpisu;
   id: number;
   akcja: AkcjaWpisu;
-  dane?: ZmianyPosilku | ZmianySerii | ZmianyWagi | ZmianyAktywnosci;
+  dane?: ZmianyPosilku | ZmianySerii | ZmianyWagi | ZmianyAktywnosci | ZmianyNotatki;
 };
 
 export type WynikZmiany = {
@@ -287,6 +309,39 @@ function poprawAktywnosc(db: Baza, id: number, dane: ZmianyAktywnosci, strefa: s
   return `Poprawiono aktywność „${zmiany.dyscyplina ?? istniejaca.dyscyplina}" z ${zmiany.data_lokalna ?? istniejaca.data_lokalna}`;
 }
 
+/** Czym nazwać notatkę w komunikacie: tytułem, a bez niego początkiem treści. */
+function nazwaNotatki(w: repo.WierszNotatki): string {
+  if (w.tytul) return w.tytul;
+  const skrot = w.tresc.slice(0, 40);
+  return skrot.length < w.tresc.length ? `${skrot}…` : skrot;
+}
+
+function poprawNotatke(db: Baza, id: number, dane: ZmianyNotatki, strefa: string): string {
+  const istniejaca = repo.notatkaPoId(db, id);
+  if (!istniejaca) brakWpisu("notatka", id);
+
+  const zmiany: Partial<Omit<repo.WierszNotatki, "id" | "zrodlo" | "surowe_wejscie">> = {};
+
+  // Pole po polu, a nie przez `tylkoPodane`: każde ma własną walidację, tę samą
+  // co przy zapisie. Poprawka nie może wpuścić tego, czego zapis by nie przyjął.
+  if (dane.tresc !== undefined) zmiany.tresc = sprawdzTresc(dane.tresc);
+  if (dane.kategoria !== undefined) zmiany.kategoria = sprawdzKategorie(dane.kategoria);
+  if (dane.tytul !== undefined) zmiany.tytul = przytnijTytul(dane.tytul);
+
+  if (dane.czas !== undefined) {
+    Object.assign(zmiany, nowyCzasWpisu(dane.czas, istniejaca.data_lokalna, strefa));
+  }
+
+  if (Object.keys(zmiany).length === 0) {
+    throw new BladDomeny("Nie podano żadnych zmian", "brak_zmian");
+  }
+
+  repo.aktualizujNotatke(db, id, zmiany);
+
+  const nazwa = zmiany.tytul ?? nazwaNotatki({ ...istniejaca, ...zmiany });
+  return `Poprawiono notatkę „${nazwa}" z ${zmiany.data_lokalna ?? istniejaca.data_lokalna}`;
+}
+
 function usun(db: Baza, typ: TypWpisu, id: number): string {
   switch (typ) {
     case "posilek": {
@@ -313,6 +368,14 @@ function usun(db: Baza, typ: TypWpisu, id: number): string {
       if (!wpis) brakWpisu(typ, id);
       repo.usunAktywnosc(db, id);
       return `Usunięto aktywność „${wpis.dyscyplina}" z ${wpis.data_lokalna}`;
+    }
+    case "notatka": {
+      const wpis = repo.notatkaPoId(db, id);
+      if (!wpis) brakWpisu(typ, id);
+      repo.usunNotatke(db, id);
+      // Razem z notatką znika też jej surowa transkrypcja — to jedyna droga,
+      // żeby dyktowaną pomyłkę usunąć z bazy naprawdę.
+      return `Usunięto notatkę „${nazwaNotatki(wpis)}" z ${wpis.data_lokalna}`;
     }
     case "sesja": {
       const wpis = repo.sesjaPoId(db, id);
@@ -366,7 +429,9 @@ export function zmienWpis(
         ? poprawSerie(db, id, dane as ZmianySerii)
         : typ === "aktywnosc"
           ? poprawAktywnosc(db, id, dane as ZmianyAktywnosci, strefa)
-          : poprawWage(db, id, dane as ZmianyWagi);
+          : typ === "notatka"
+            ? poprawNotatke(db, id, dane as ZmianyNotatki, strefa)
+            : poprawWage(db, id, dane as ZmianyWagi);
 
   return { typ, id, akcja, opis };
 }

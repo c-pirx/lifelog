@@ -342,3 +342,50 @@ describe("migracja 0006 — aktywności", () => {
     ).toThrow();
   });
 });
+
+describe("migracja 0007 — notatki", () => {
+  it("dokłada tabelę do bazy z danymi, nie ruszając istniejących wpisów", () => {
+    const db = bazaPrzedMigracja("0007");
+
+    db.prepare(
+      `INSERT INTO posilki (ts, data_lokalna, pora, opis, kcal, bialko_g, wegle_g, tluszcz_g,
+                            zrodlo, pewnosc, utworzono)
+       VALUES ('2026-08-25T10:00:00.000Z', '2026-08-25', 'obiad', 'ryż z kurczakiem',
+               700, 50, 80, 15, 'czat', 'szacowane', '2026-08-25T10:00:00.000Z')`,
+    ).run();
+
+    expect(uruchomMigracje(db)).toContain("0007_notatki.sql");
+
+    const posilki = db.prepare<[], { ile: number }>("SELECT COUNT(*) AS ile FROM posilki").get();
+    expect(posilki?.ile).toBe(1);
+    expect(db.pragma("foreign_key_check")).toEqual([]);
+  });
+
+  it("nie pilnuje kategorii w SQL — listy strzeże domena", () => {
+    // Świadomie bez CHECK: zmiana takiego więzu wymaga przepisania tabeli,
+    // a czwarty folder ma być jedną linią w KATEGORIE_NOTATEK.
+    const db = otworzBaze({ sciezka: ":memory:" });
+
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO notatki (ts, data_lokalna, kategoria, tresc, zrodlo, utworzono)
+           VALUES ('2026-08-25T10:00:00.000Z', '2026-08-25', 'pomysly', 'treść', 'czat', ?)`,
+        )
+        .run("2026-08-25T10:00:00.000Z"),
+    ).not.toThrow();
+  });
+
+  it("odrzuca źródło spoza listy — apka i czat, nic więcej", () => {
+    const db = otworzBaze({ sciezka: ":memory:" });
+
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO notatki (ts, data_lokalna, kategoria, tresc, zrodlo, utworzono)
+           VALUES ('2026-08-25T10:00:00.000Z', '2026-08-25', 'dziennik', 'treść', 'zdjecie', ?)`,
+        )
+        .run("2026-08-25T10:00:00.000Z"),
+    ).toThrow();
+  });
+});
