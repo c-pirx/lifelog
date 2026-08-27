@@ -47,8 +47,8 @@ message telling you to upgrade.
 ## Step 1. Clone and configure
 
 ```bash
-git clone https://github.com/c-pirx/get-things-done
-cd get-things-done
+git clone https://github.com/c-pirx/lifelog
+cd lifelog
 npm install
 npm run setup
 ```

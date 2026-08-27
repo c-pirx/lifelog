@@ -42,8 +42,8 @@ z komunikatem o konieczności aktualizacji.
 ## Krok 1. Pobranie i konfiguracja
 
 ```bash
-git clone https://github.com/c-pirx/get-things-done
-cd get-things-done
+git clone https://github.com/c-pirx/lifelog
+cd lifelog
 npm install
 npm run setup
 ```
