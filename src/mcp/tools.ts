@@ -25,6 +25,7 @@ import {
   historiaSesji,
   odhaczCwiczenie,
   planTreningowy,
+  planNaDzis,
   plany,
   ustawPlanDomyslny,
   zapiszPlan,
@@ -549,10 +550,16 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       description:
         "Pokazuje trwającą sesję: co już zrobione, ile serii zostało do celu, wyniki " +
         "z poprzedniego takiego treningu i serie słabsze niż ostatnio. " +
-        "Używaj, gdy użytkownik pyta „co mi zostało” albo chce porównania z poprzednim razem.",
+        "Bez otwartej sesji mówi, co harmonogram przewiduje na dziś i czy to już zrobione. " +
+        "Używaj, gdy użytkownik pyta „co mi zostało” albo „czy trenowałem już dziś”.",
       inputSchema: {},
     },
-    async () => zBezpiecznikiem(() => stanTreninguWTekscie(stanTreningu(db))),
+    // `dzis` liczone tylko tutaj: przy trwającej sesji formatowanie go nie
+    // dotknie, a przy zamkniętej to jedyna odpowiedź, jaką da się dać.
+    async () =>
+      zBezpiecznikiem(() =>
+        stanTreninguWTekscie(stanTreningu(db), planNaDzis(db, { strefa })),
+      ),
   );
 
   server.registerTool(

@@ -161,19 +161,51 @@ function postepZKolejki(nazwa, typ) {
 }
 
 /**
+ * Dzisiejsze zadanie zgaszone treningiem zamkniętym bez zasięgu.
+ *
+ * Bez tego ekran tuż po zakończeniu treningu wracałby do dużego przycisku
+ * „zacznij" — czyli psułby się dokładnie na siłowni, gdzie zasięgu nie ma.
+ *
+ * To porównanie identyfikatorów i policzenie wpisów z kolejki, a nie ocena
+ * domenowa: regułę „zakończona i ma choć jedną serię" trzyma serwer, tutaj
+ * odtwarzamy wyłącznie to, co użytkownik przed chwilą zrobił. Sesja bywa znana
+ * dopiero z kolejki — cały trening potrafi się odbyć bez zasięgu.
+ */
+function dzisPoKoncu(trening, start, dni, zapisyWKolejce) {
+  const dzis = trening.dzis;
+  if (!dzis?.dzien || dzis.zrealizowany) return dzis;
+
+  const sesja = trening.sesja ?? (start ? sesjaZKolejki(start, dni) : null);
+  if (sesja?.dzien_id !== dzis.dzien.id) return dzis;
+
+  const zSerwera = [...(trening.wg_planu ?? []), ...(trening.poza_planem ?? [])].reduce(
+    (suma, c) => suma + c.serie_zrobione,
+    0,
+  );
+
+  return zSerwera + zapisyWKolejce > 0 ? { ...dzis, zrealizowany: true } : dzis;
+}
+
+/**
  * Stan treningu z doliczonymi seriami z kolejki. `dni` to dni ze wszystkich
  * planów — służą tylko do nazwania dnia w sesji odtworzonej z kolejki.
  */
 export function nalozNaTrening(trening, kolejka = [], dni = []) {
-  // Zakończenie treningu czekające w kolejce zamyka sesję także na ekranie —
-  // inaczej przycisk „Zakończ" kusiłby do drugiego kliknięcia.
-  if (kolejka.some((w) => dopasujSciezke(w, "/trening/koniec"))) {
-    return { ...trening, sesja: null, wg_planu: [], poza_planem: [] };
-  }
-
   const start = kolejka.find((w) => dopasujSciezke(w, "/trening/start"));
   const serie = kolejka.filter((w) => dopasujSciezke(w, "/trening/seria"));
   const odhaczone = kolejka.filter((w) => dopasujSciezke(w, "/trening/cwiczenie/odhacz"));
+
+  // Zakończenie treningu czekające w kolejce zamyka sesję także na ekranie —
+  // inaczej przycisk „Zakończ" kusiłby do drugiego kliknięcia.
+  if (kolejka.some((w) => dopasujSciezke(w, "/trening/koniec"))) {
+    return {
+      ...trening,
+      sesja: null,
+      wg_planu: [],
+      poza_planem: [],
+      dzis: dzisPoKoncu(trening, start, dni, serie.length + odhaczone.length),
+    };
+  }
 
   if (!start && serie.length === 0 && odhaczone.length === 0) return trening;
 

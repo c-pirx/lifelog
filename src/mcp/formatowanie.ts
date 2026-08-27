@@ -15,6 +15,7 @@ import type {
   Makro,
   Notatka,
   Plan,
+  PlanNaDzis,
   PodsumowanieDnia,
   Posilek,
   PostepCwiczenia,
@@ -172,10 +173,26 @@ function postepWTekscie(c: PostepCwiczenia): string {
   return linie.join("\n");
 }
 
-export function stanTreninguWTekscie(s: StanTreningu): string {
-  if (!s.sesja) {
-    return "Nie ma otwartej sesji treningowej. Zacznij treningiem przez rozpocznij_trening.";
+/**
+ * Bez otwartej sesji ekran Trening odpowiada na pytanie „co dziś" — i czat ma
+ * odpowiadać tak samo. Trzy zdania, po jednym na każdy stan tamtego ekranu:
+ * dzień zrobiony, dzień do zrobienia, dzień wolny.
+ */
+function bezSesjiWTekscie(dzis?: PlanNaDzis): string {
+  if (!dzis?.dzien) {
+    return "Nie ma otwartej sesji treningowej. Plan nie przewiduje dziś treningu.";
   }
+
+  const dzien = `${dzis.dzien.kod} (${dzis.dzien.nazwa})`;
+
+  return dzis.zrealizowany
+    ? `Dzisiejszy trening ${dzien} jest już zrobiony. Nie ma otwartej sesji.`
+    : `Nie ma otwartej sesji treningowej. Na dziś plan przewiduje ${dzien} — ` +
+        "zacznij przez rozpocznij_trening.";
+}
+
+export function stanTreninguWTekscie(s: StanTreningu, dzis?: PlanNaDzis): string {
+  if (!s.sesja) return bezSesjiWTekscie(dzis);
 
   const naglowek = s.sesja.dzien_kod
     ? `Trening ${s.sesja.dzien_kod} (${s.sesja.dzien_nazwa}) — ${s.sesja.data_lokalna}`

@@ -46,7 +46,8 @@ function dzienZSerwera() {
 
 function treningZSerwera() {
   return {
-    sesja: { id: 7, dzien_kod: "A", dzien_nazwa: "Nogi", status: "aktywna" },
+    sesja: { id: 7, dzien_id: 2, dzien_kod: "A", dzien_nazwa: "Nogi", status: "aktywna" },
+    dzis: { data: "2026-08-25", dzien: { id: 2, kod: "A", nazwa: "Nogi" }, zrealizowany: false },
     wg_planu: [
       {
         cwiczenie_id: 3,
@@ -286,12 +287,80 @@ describe("nakładka na stan treningu", () => {
     expect(wynik.sesja).toMatchObject({ dzien_nazwa: "Push", oczekuje: true });
   });
 
-  it("zakończenie czekające w kolejce zamyka sesję na ekranie", () => {
+  it("zakończenie czekające w kolejce zamyka sesję i gasi dzisiejsze zadanie", () => {
     const wynik = nalozNaTrening(treningZSerwera(), [
       { id: 14, sciezka: "/trening/koniec", czas_lokalny: CZAS, dane: {} },
     ]);
 
     expect(wynik.sesja).toBeNull();
+    expect(wynik.dzis.zrealizowany).toBe(true);
+  });
+
+  it("zakończenie sesji bez ani jednej serii nie gasi dzisiejszego zadania", () => {
+    const trening = treningZSerwera();
+    trening.wg_planu[0]!.serie_zrobione = 0;
+    trening.wg_planu[0]!.serie = [];
+
+    const wynik = nalozNaTrening(trening, [
+      { id: 14, sciezka: "/trening/koniec", czas_lokalny: CZAS, dane: {} },
+    ]);
+
+    expect(wynik.dzis.zrealizowany).toBe(false);
+  });
+
+  it("zakończenie treningu z innego dnia nie gasi dzisiejszego zadania", () => {
+    const trening = treningZSerwera();
+    trening.sesja.dzien_id = 9;
+
+    const wynik = nalozNaTrening(trening, [
+      { id: 14, sciezka: "/trening/koniec", czas_lokalny: CZAS, dane: {} },
+    ]);
+
+    expect(wynik.dzis.zrealizowany).toBe(false);
+  });
+
+  it("trening rozegrany w całości bez zasięgu też gasi dzisiejsze zadanie", () => {
+    // Start, seria i koniec czekają w kolejce — serwer nie wie jeszcze o niczym,
+    // a to najczęstszy przebieg treningu na siłowni.
+    const zSerwera = treningZSerwera();
+    const pusty = {
+      sesja: null,
+      wg_planu: [],
+      poza_planem: [],
+      ukonczone_cwiczen: 0,
+      wszystkich_cwiczen: 0,
+      pozostalo: [],
+      dzis: zSerwera.dzis,
+    };
+
+    const wynik = nalozNaTrening(
+      pusty,
+      [
+        { id: 21, sciezka: "/trening/start", czas_lokalny: CZAS, dane: { dzien_id: 2 } },
+        {
+          id: 22,
+          sciezka: "/trening/seria",
+          czas_lokalny: CZAS,
+          dane: { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100 },
+        },
+        { id: 23, sciezka: "/trening/koniec", czas_lokalny: CZAS, dane: {} },
+      ],
+      [{ id: 2, kod: "A", nazwa: "Nogi" }],
+    );
+
+    expect(wynik.sesja).toBeNull();
+    expect(wynik.dzis.zrealizowany).toBe(true);
+  });
+
+  it("dzień wolny zostaje wolny, choćby trening zamknięto bez zasięgu", () => {
+    const trening = treningZSerwera();
+    trening.dzis = { data: "2026-08-25", dzien: null, zrealizowany: false };
+
+    const wynik = nalozNaTrening(trening, [
+      { id: 14, sciezka: "/trening/koniec", czas_lokalny: CZAS, dane: {} },
+    ]);
+
+    expect(wynik.dzis.zrealizowany).toBe(false);
   });
 
   it("odhaczenie całego ćwiczenia z kolejki pokazuje jeden znacznik, a nie zgadnięte serie", () => {

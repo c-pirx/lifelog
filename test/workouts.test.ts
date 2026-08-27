@@ -7,6 +7,7 @@ import {
   historiaSesji,
   odhaczCwiczenie,
   planDomyslny,
+  planNaDzis,
   planTreningowy,
   plany,
   propozycjaSerii,
@@ -828,5 +829,105 @@ describe("historia odbytych sesji", () => {
 
     expect(sesja?.dzien_kod).toBeNull();
     expect(sesja?.cwiczenia[0]).toMatchObject({ nazwa: "rower", typ: "cardio" });
+  });
+});
+
+describe("plan na dziś", () => {
+  // 24.08.2026 to poniedziałek, 25.08 wtorek.
+  const PONIEDZIALEK = "2026-08-24T09:00:00.000Z";
+  const WTOREK = "2026-08-25T09:00:00.000Z";
+
+  /** Trening rozegrany od początku do końca, z jedną serią na koncie. */
+  function odbytyTrening(kod: string, ts: string) {
+    rozpocznijTrening(db, { kod, ts });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts });
+    zakonczTrening(db, { ts });
+  }
+
+  it("podaje dzień, który harmonogram przewiduje na dziś", () => {
+    planA();
+
+    const dzis = planNaDzis(db, { ts: PONIEDZIALEK });
+
+    expect(dzis.data).toBe("2026-08-24");
+    expect(dzis.dzien?.kod).toBe("A");
+    expect(dzis.dzien?.cwiczenia.map((c) => c.nazwa)).toEqual(["przysiad", "wyciskanie"]);
+    expect(dzis.zrealizowany).toBe(false);
+  });
+
+  it("bez dnia w harmonogramie mówi wprost, że dziś nic nie ma", () => {
+    planA();
+
+    expect(planNaDzis(db, { ts: WTOREK })).toMatchObject({ dzien: null, zrealizowany: false });
+  });
+
+  it("bez żadnego planu odpowiada, zamiast się wywracać", () => {
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).dzien).toBeNull();
+  });
+
+  it("zakończony trening tego dnia gasi dzisiejsze zadanie", () => {
+    planA();
+    odbytyTrening("A", PONIEDZIALEK);
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).zrealizowany).toBe(true);
+  });
+
+  it("trwająca sesja jeszcze niczego nie gasi", () => {
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: PONIEDZIALEK });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: PONIEDZIALEK });
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).zrealizowany).toBe(false);
+  });
+
+  it("sesja bez ani jednej serii nie gasi dnia — to ślad po otwarciu ekranu", () => {
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: PONIEDZIALEK });
+    zakonczTrening(db, { ts: PONIEDZIALEK });
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).zrealizowany).toBe(false);
+  });
+
+  it("porzucony trening nie gasi dnia", () => {
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: PONIEDZIALEK });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: PONIEDZIALEK });
+    zakonczTrening(db, { ts: PONIEDZIALEK, status: "porzucona" });
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).zrealizowany).toBe(false);
+  });
+
+  it("trening bez planu nie gasi dzisiejszego dnia — nie wykonał go", () => {
+    planA();
+    rozpocznijTrening(db, { bez_planu: true, ts: PONIEDZIALEK });
+    zapiszSerie(db, { cwiczenie: "rower", typ: "cardio", czas_s: 1800, ts: PONIEDZIALEK });
+    zakonczTrening(db, { ts: PONIEDZIALEK });
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).zrealizowany).toBe(false);
+  });
+
+  it("inny dzień planu odpalony ręcznie też nie gasi dzisiejszego", () => {
+    planA();
+    dodajDzienPlanu(db, { kod: "B", nazwa: "Plecy", dzien_tygodnia: 3, cwiczenia: [] });
+    odbytyTrening("B", PONIEDZIALEK);
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).zrealizowany).toBe(false);
+  });
+
+  it("trening sprzed tygodnia nie gasi dzisiejszego dnia", () => {
+    planA();
+    odbytyTrening("A", "2026-08-17T09:00:00.000Z");
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).zrealizowany).toBe(false);
+  });
+
+  it("szablon z ustawionym dniem tygodnia nie przejmuje poniedziałku", () => {
+    planA();
+    zapiszPlan(db, {
+      nazwa: "PPL",
+      dni: [{ kod: "P", nazwa: "Push", dzien_tygodnia: 1, cwiczenia: [] }],
+    });
+
+    expect(planNaDzis(db, { ts: PONIEDZIALEK }).dzien?.kod).toBe("A");
   });
 });

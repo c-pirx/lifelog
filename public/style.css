@@ -459,11 +459,12 @@ nav button[aria-current="page"] {
   font-variant-numeric: tabular-nums;
 }
 
-/* Dzień wolny zajmuje to samo miejsce i tę samą wysokość co przycisk dnia
-   treningowego — oba odpowiadają na pytanie „co dziś", więc muszą ważyć tyle
-   samo. Wyróżnia się barwą akcentu, ale nie udaje przycisku: bez cienia,
-   bez kursora, bez reakcji na dotyk. Nie ma w co stukać. */
-.dzien-wolny {
+/* Dzień wolny i dzień odhaczony zajmują to samo miejsce i tę samą wysokość co
+   przycisk dnia treningowego — wszystkie trzy odpowiadają na pytanie „co dziś",
+   więc muszą ważyć tyle samo. Wyróżniają się barwą akcentu, ale nie udają
+   przycisku: bez cienia, bez kursora, bez reakcji na dotyk. Nie ma w co stukać. */
+.dzien-wolny,
+.dzien-zrobiony {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -479,7 +480,16 @@ nav button[aria-current="page"] {
   text-align: center;
 }
 
-.dzien-wolny .znak {
+/* Zrobiony dzień jest mocniejszy niż wolny: to zamknięta sprawa, a nie stan
+   oczekiwania. Sam kolor ich nie rozróżni — oba są zielone — więc pierwszą
+   różnicę robi znak, a tło tylko ją podpiera. */
+.dzien-zrobiony {
+  border-color: var(--akcent);
+  background: color-mix(in srgb, var(--akcent) 16%, transparent);
+}
+
+.dzien-wolny .znak,
+.dzien-zrobiony .znak {
   width: 20px;
   height: 20px;
   flex-shrink: 0;

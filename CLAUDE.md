@@ -23,7 +23,7 @@ gotowe `YYYY-MM-DD`.
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 428 testów
+npm test             # 447 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
@@ -259,6 +259,27 @@ Zakładka Treningi ma trzy poziomy: wybór dnia → lista ćwiczeń → pojedync
 co zapisze** („Odhacz serię 3 — 8 × 60 kg"), bo jedno stuknięcie zapisuje bez
 potwierdzenia. Formularz pełnego wyniku zostaje pod „inny wynik".
 
+**Ekran przed sesją odpowiada na jedno pytanie w trzech stanach**: dzień
+z harmonogramu do zrobienia, dzień wolny albo dzień **już zrobiony**. Wszystkie
+trzy ważą w układzie tyle samo, bo każdy jest pełną odpowiedzią na „co dziś".
+Zrobiony nie dostaje przycisku — wraca za to niżej, do reszty planu, i to
+jedyna droga do powtórki tego samego dnia.
+
+Liczy to `planNaDzis` w domenie: dzień wybiera tym samym `dzienZHarmonogramu`,
+którym start treningu go otwiera, a realizację czyta przez `historiaSesji` —
+tę samą, którą pokazuje zakładka Aktywności, więc liczą się wyłącznie sesje
+**zakończone i mające choć jedną serię**, i wyłącznie te przypisane do tego
+dnia (porównanie po `dzien_id`, bo kod jest unikalny tylko w obrębie planu).
+Wynik dojeżdża gotowy w `GET /trening`, a przy zamkniętej sesji tym samym
+zdaniem odpowiada `stan_treningu` w czacie. Wcześniej dzień na dziś wybierała
+**sama aplikacja w JavaScripcie**, z dnia tygodnia policzonego z `/zdrowie` —
+dwie drogi do jednej odpowiedzi, dokładnie to, przed czym ostrzega zasada 1.
+
+Nakładka offline dokłada tu jedyny wyjątek: trening zamknięty bez zasięgu gasi
+dzisiejsze zadanie od razu, na podstawie kolejki. Bez tego ekran wracałby do
+przycisku „zacznij" tuż po treningu — czyli psułby się na siłowni, gdzie jest
+oglądany najczęściej.
+
 Skąd biorą się te liczby, rozstrzyga jedna czysta funkcja — `propozycjaSerii`
 w `src/domain/workouts.ts`. Kolejność źródeł, ta sama dla wszystkich pól:
 
@@ -438,9 +459,11 @@ tempa na ekranie Postępy, odhaczanie serii wraz z widokiem pojedynczego
 poziom pewności estymacji (`niepewne`), aktywności poza planem
 (zakładka Aktywności, `GET/POST /aktywnosci`, `zapisz_serie` z `aktywnosc`)
 oraz historia odbytych treningów w tej samej zakładce wraz z usuwaniem całej
-sesji (`historiaSesji`, `zmien_wpis` z `typ='sesja'`), a na koniec zakładka
-Notatki z czyszczeniem dyktowanej transkrypcji (narzędzie `notatki`,
-`GET/POST /notatki`, `zmien_wpis` z `typ='notatka'`).
+sesji (`historiaSesji`, `zmien_wpis` z `typ='sesja'`), zakładka Notatki
+z czyszczeniem dyktowanej transkrypcji (narzędzie `notatki`,
+`GET/POST /notatki`, `zmien_wpis` z `typ='notatka'`), a na koniec komunikat
+o zrealizowanym dniu na ekranie Trening (`planNaDzis` w `GET /trening`
+i w `stan_treningu`).
 
 Z listy odłożonych spadło przez to „lista ostatnich sesji"; **poprawianie serii
 wstecz nadal czeka** — zakładka pokazuje wyniki, ale ich nie edytuje.

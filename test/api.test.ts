@@ -15,7 +15,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { utworzApp } from "../src/app.js";
 import { otworzBaze, type Baza } from "../src/db/index.js";
-import type { PodsumowanieDnia, StanTreningu } from "../src/domain/typy.js";
+import type { PlanNaDzis, PodsumowanieDnia, StanTreningu } from "../src/domain/typy.js";
 
 const HASLO = "tajne-haslo-testowe";
 const TOKEN_MCP = "token-mcp-o-wystarczajacej-dlugosci";
@@ -334,6 +334,17 @@ describe("trening przez API", () => {
     expect(odpowiedz.status).toBe(200);
 
     expect((await pobierz<StanTreningu>("/api/trening")).sesja).toBeNull();
+  });
+
+  // Bez tego pola ekran Trening nie ma z czego zbudować góry karty — od niego
+  // zależy, czy pokaże przycisk, „rest day", czy komunikat o zrobionym dniu.
+  // Dzień wypada z harmonogramu, więc test nie zagląda w `dzien`: to zależałoby
+  // od dnia tygodnia, w którym akurat biegnie.
+  it("stan treningu niesie dzisiejsze zadanie", async () => {
+    const stan = await pobierz<StanTreningu & { dzis: PlanNaDzis }>("/api/trening");
+
+    expect(stan.dzis.data).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(typeof stan.dzis.zrealizowany).toBe("boolean");
   });
 });
 

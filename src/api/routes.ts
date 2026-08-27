@@ -32,6 +32,7 @@ import {
   historiaCwiczenia,
   historiaSesji,
   odhaczCwiczenie,
+  planNaDzis,
   planTreningowy,
   plany,
   ustawPlanDomyslny,
@@ -313,7 +314,12 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
     return c.json(ustawPlanDomyslny(db, plan));
   });
 
-  api.get("/trening", (c) => c.json(stanTreningu(db)));
+  // `dzis` dokładane w trasie, tak samo jak `/dzien` dokłada aktywności: stan
+  // trwającej sesji i harmonogram to dwa osobne pytania, ale ekran Trening
+  // zadaje oba naraz, a drugie żądanie to drugie czekanie na telefonie.
+  api.get("/trening", (c) =>
+    c.json({ ...stanTreningu(db), dzis: planNaDzis(db, { strefa: ustawienia.strefa }) }),
+  );
 
   // Pole `czas` w trzech trasach poniżej jest po to, żeby zapis odłożony
   // w kolejce offline trafił pod godzinę, o której użytkownik go wpisał,

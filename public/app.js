@@ -839,26 +839,73 @@ const ZNAK_ODPOCZYNKU = `<svg viewBox="0 0 24 24" fill="none" stroke="currentCol
     <path d="M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z" />
   </svg>`;
 
+/** Ptaszek w kółku — dzień odhaczony. Oba znaki są zielone, więc to on, a nie
+    kolor pudełka, odróżnia „zrobione" od „wolne". */
+const ZNAK_ZROBIONE = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="m8.5 12.4 2.4 2.4 4.6-5.2" />
+  </svg>`;
+
 const przyciskDnia = (dzien, klasy = "przycisk pelny") =>
   `<div class="przyciski"><button class="${klasy}" data-start-dzien="${dzien.id}">
      ${esc(dzien.kod)} — ${esc(dzien.nazwa)}
    </button></div>`;
 
 /**
+ * Odpowiedź na „co dziś", w jednym miejscu układu i w trzech stanach: dzień
+ * zrobiony, dzień do zrobienia, dzień wolny. Wszystkie trzy ważą w układzie
+ * tyle samo, bo każdy jest pełną odpowiedzią, a nie brakiem odpowiedzi.
+ *
+ * Zrobiony dzień nie dostaje przycisku — powtórka jest niżej, w reszcie planu.
+ */
+function blokNaDzis(dzis, wgPlanu) {
+  const dzien = dzis?.dzien;
+
+  if (!dzien) {
+    return `<div class="dzien-wolny">
+         <span class="znak" aria-hidden="true">${ZNAK_ODPOCZYNKU}</span>
+         Dziś rest day, bro :)
+       </div>
+       <div class="pusto">Plan nie przewiduje na dziś treningu.</div>`;
+  }
+
+  if (dzis.zrealizowany) {
+    return `<div class="dzien-zrobiony">
+         <span class="znak" aria-hidden="true">${ZNAK_ZROBIONE}</span>
+         ${esc(dzien.kod)} — ${esc(dzien.nazwa)}: zrobione
+       </div>
+       <div class="pusto">Dzisiejszy trening${wgPlanu} masz już za sobą.</div>`;
+  }
+
+  return `<button class="przycisk glowny pelny duzy" data-start-dzien="${dzien.id}">
+       ${esc(dzien.kod)} — ${esc(dzien.nazwa)}
+     </button>
+     <div class="pusto">Dzisiejszy dzień${wgPlanu}.</div>`;
+}
+
+/**
  * Ekran przed rozpoczęciem treningu, w trzech poziomach widoczności.
  *
  * 1. Dzień, który harmonogram przewiduje na dziś — albo wprost napisane, że
- *    dziś nic nie przewiduje. To jedyne pytanie, z jakim się tu wchodzi.
+ *    dziś nic nie przewiduje, albo że jest już za nami. To jedyne pytanie,
+ *    z jakim się tu wchodzi.
  * 2. Reszta planu domyślnego — nadal twój plan, tylko nie na dzisiaj.
  * 3. Dni z pozostałych planów, pod kreską i przygaszone: szablony, nie plan.
  *
  * Trzeci poziom jest osobny, bo szablon sprzed miesiąca i dzień z bieżącego
  * planu to nie to samo, choć jedno i drugie da się odpalić stuknięciem.
+ *
+ * `dzis` przychodzi gotowe z serwera — dzień na dziś wybiera domena tą samą
+ * drogą, którą otwiera go start treningu.
  */
-function kartaBezSesji(plany, dzisiajDzienTygodnia) {
+function kartaBezSesji(plany, dzis) {
   const domyslny = plany.find((p) => p.domyslny);
-  const naDzis = domyslny?.dni.find((d) => d.dzien_tygodnia === dzisiajDzienTygodnia);
-  const resztaPlanu = (domyslny?.dni ?? []).filter((d) => d.id !== naDzis?.id);
+
+  // Zrobiony dzień schodzi na dół, do reszty planu: komunikat na górze nie ma
+  // przycisku, więc to jedyna droga do powtórki tego samego dnia.
+  const doZrobienia = dzis?.zrealizowany ? null : dzis?.dzien;
+  const resztaPlanu = (domyslny?.dni ?? []).filter((d) => d.id !== doZrobienia?.id);
   const szablony = plany.filter((p) => !p.domyslny && p.dni.length);
 
   const bezPlanu = `
@@ -877,21 +924,7 @@ function kartaBezSesji(plany, dzisiajDzienTygodnia) {
   return `
     <section class="karta">
       <h2>Zacznij trening</h2>
-      ${
-        // Jedno miejsce, dwa stany: albo dzień do zrobienia, albo dzień wolny.
-        // Wolny ma ten sam ciężar w układzie co przycisk, bo to równoprawna
-        // odpowiedź na pytanie „co dziś", a nie brak odpowiedzi.
-        naDzis
-          ? `<button class="przycisk glowny pelny duzy" data-start-dzien="${naDzis.id}">
-               ${esc(naDzis.kod)} — ${esc(naDzis.nazwa)}
-             </button>
-             <div class="pusto">Dzisiejszy dzień wg planu „${esc(domyslny.nazwa)}".</div>`
-          : `<div class="dzien-wolny">
-               <span class="znak" aria-hidden="true">${ZNAK_ODPOCZYNKU}</span>
-               Dziś rest day, bro :)
-             </div>
-             <div class="pusto">Plan nie przewiduje na dziś treningu.</div>`
-      }
+      ${blokNaDzis(dzis, domyslny ? ` wg planu „${esc(domyslny.nazwa)}"` : "")}
       ${resztaPlanu.map((d) => przyciskDnia(d)).join("")}
 
       ${
@@ -1208,8 +1241,8 @@ function ekranCwiczenie(cwiczenie, historia) {
     </section>`;
 }
 
-function ekranTrening(trening, plany, dzisiajDzienTygodnia) {
-  if (!trening.sesja) return kartaBezSesji(plany, dzisiajDzienTygodnia);
+function ekranTrening(trening, plany, dzis) {
+  if (!trening.sesja) return kartaBezSesji(plany, dzis);
 
   return `
     <section class="karta">
@@ -1511,14 +1544,9 @@ async function odswiez() {
   }
 
   if (ekran === "trening") {
-    const [trening, plany, zdrowie] = await Promise.all([
-      api("/trening"),
-      api("/plany"),
-      fetch("/zdrowie").then((o) => o.json()),
-    ]);
-
-    // Dzień tygodnia liczony z daty serwera, żeby nie zależeć od zegara telefonu.
-    const numerDnia = ((new Date(`${zdrowie.dzisiaj}T12:00:00Z`).getUTCDay() + 6) % 7) + 1;
+    // Dzień na dziś przychodzi w `trening.dzis` gotowy z domeny — aplikacja nie
+    // liczy już kalendarza sama, więc czat i telefon nie mogą wskazać innego dnia.
+    const [trening, plany] = await Promise.all([api("/trening"), api("/plany")]);
 
     // Nakładka szuka dnia po id, więc dostaje dni ze wszystkich planów naraz.
     const wszystkieDni = plany.flatMap((p) => p.dni);
@@ -1530,7 +1558,7 @@ async function odswiez() {
       if (c.propozycja) propozycje.set(c.nazwa, c.propozycja);
     }
 
-    dataEkranu.textContent = zdrowie.dzisiaj;
+    dataEkranu.textContent = stanTreningu.dzis?.data ?? "";
 
     const otwarte = otwarteCwiczenie && wszystkie.find((c) => c.nazwa === otwarteCwiczenie);
     if (otwarte) {
@@ -1544,7 +1572,7 @@ async function odswiez() {
     }
 
     otwarteCwiczenie = null;
-    widok.innerHTML = ekranTrening(stanTreningu, plany, numerDnia);
+    widok.innerHTML = ekranTrening(stanTreningu, plany, stanTreningu.dzis);
 
     // Tylko po odhaczeniu: przewijanie przy każdym odświeżeniu wyrywałoby ekran
     // spod palca również wtedy, gdy użytkownik tylko czyta.

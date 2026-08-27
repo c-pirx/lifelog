@@ -263,6 +263,20 @@ export type StanTreningu = {
   pozostalo: string[];
 };
 
+/**
+ * Odpowiedź na jedyne pytanie, z jakim wchodzi się na ekran Trening: co dziś
+ * przewiduje harmonogram i czy to już za nami.
+ *
+ * `dzien` równy null znaczy dzień wolny — plan nie przewiduje dziś treningu.
+ * `zrealizowany` mówi wyłącznie o TYM dniu: trening bez planu ani inny dzień
+ * odpalony ręcznie nie gaszą dzisiejszego zadania, bo go nie wykonały.
+ */
+export type PlanNaDzis = {
+  data: string;
+  dzien: DzienPlanu | null;
+  zrealizowany: boolean;
+};
+
 // === AKTYWNOŚCI =========================================================
 
 /**

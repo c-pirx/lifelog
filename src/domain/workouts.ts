@@ -22,6 +22,7 @@ import type {
   NowaSeria,
   CwiczenieWSesji,
   Plan,
+  PlanNaDzis,
   PostepCwiczenia,
   Propozycja,
   Seria,
@@ -320,6 +321,26 @@ export type OpcjeStartu = Opcje & {
 };
 
 /**
+ * Dzień, który harmonogram przewiduje na daną chwilę.
+ *
+ * Jedno wywołanie dla dwóch pytań: „co otworzyć" przy starcie sesji i „co dziś"
+ * na ekranie Trening. Dwie kopie tego wyboru rozjechałyby się przy pierwszej
+ * poprawce, a użytkownik zobaczyłby komunikat o innym dniu, niż odpaliłby
+ * przycisk. Harmonogram czyta wyłącznie plan domyślny — szablon z ustawionym
+ * dniem tygodnia nie ma prawa przejąć poniedziałku.
+ */
+function dzienZHarmonogramu(
+  db: Baza,
+  ts: string,
+  strefa: string,
+): repo.WierszDniaPlanu | undefined {
+  const domyslny = repo.planDomyslny(db);
+  return domyslny
+    ? repo.dzienPlanuNaDzienTygodnia(db, dzienTygodnia(ts, strefa), domyslny.id)
+    : undefined;
+}
+
+/**
  * Który dzień otwiera sesja. Kolejność jest tu całą regułą: jawne wskazanie
  * bije domyślanie się, a `bez_planu` bije wszystko.
  */
@@ -360,12 +381,7 @@ function dzienNaStart(
     return dzien;
   }
 
-  // Harmonogram czyta wyłącznie plan domyślny — szablon z ustawionym dniem
-  // tygodnia nie ma prawa przejąć poniedziałku.
-  const domyslny = repo.planDomyslny(db);
-  return domyslny
-    ? repo.dzienPlanuNaDzienTygodnia(db, dzienTygodnia(ts, strefa), domyslny.id)
-    : undefined;
+  return dzienZHarmonogramu(db, ts, strefa);
 }
 
 export function rozpocznijTrening(db: Baza, opcje: OpcjeStartu = {}): Sesja {
@@ -715,6 +731,41 @@ export function stanTreningu(db: Baza): StanTreningu {
     wszystkich_cwiczen: wgPlanu.length,
     pozostalo: wgPlanu.filter((c) => !c.ukonczone).map((c) => c.nazwa),
   };
+}
+
+// === CO DZIŚ ============================================================
+
+/**
+ * Co harmonogram przewiduje na dziś i czy to już za nami.
+ *
+ * Dzień wybierany jest tą samą drogą, którą otwiera go start treningu
+ * (`dzienZHarmonogramu`) — komunikat i przycisk mają dotyczyć tego samego dnia.
+ *
+ * Realizację czyta `historiaSesji`, ta sama, którą pokazuje zakładka
+ * Aktywności. Niesie już obie potrzebne reguły: liczy wyłącznie sesje
+ * ZAKOŃCZONE i mające choć jedną serię. Porzucona sesja mówi wprost, że
+ * treningu nie było, a pusta jest śladem po otwarciu i zamknięciu ekranu.
+ *
+ * `ts` w opcjach jest po to, żeby testy nie zależały od dzisiejszej daty.
+ */
+export function planNaDzis(db: Baza, opcje: Opcje = {}): PlanNaDzis {
+  const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
+  const ts = opcje.ts ?? terazUtc();
+  const data = dataLokalna(ts, strefa);
+
+  const wiersz = dzienZHarmonogramu(db, ts, strefa);
+  if (!wiersz) return { data, dzien: null, zrealizowany: false };
+
+  const dzien = zbudujDzien(wiersz, repo.cwiczeniaWDniu(db, wiersz.id));
+
+  // Porównanie po `dzien_id`, a nie po kodzie: kod jest unikalny w obrębie
+  // planu, więc trening z szablonu o tym samym kodzie zgasiłby dzisiejszy dzień,
+  // choć go nie wykonał.
+  const zrealizowany = historiaSesji(db, data, data, { strefa }).some(
+    (sesja) => sesja.dzien_id === dzien.id,
+  );
+
+  return { data, dzien, zrealizowany };
 }
 
 // === ODHACZANIE CAŁEGO ĆWICZENIA ========================================

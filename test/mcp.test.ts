@@ -14,6 +14,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { utworzApp } from "../src/app.js";
 import { otworzBaze, type Baza } from "../src/db/index.js";
+import type { DzienPlanu, StanTreningu } from "../src/domain/typy.js";
+import { stanTreninguWTekscie } from "../src/mcp/formatowanie.js";
 
 const TOKEN = "testowy-token-o-wystarczajacej-dlugosci";
 
@@ -582,5 +584,63 @@ describe("notatki", () => {
     expect(await wywolaj("notatki", { akcja: "pokaz", kategoria: "praca" })).toMatch(
       /żadnej notatki/i,
     );
+  });
+});
+
+/**
+ * Jedyny fragment tego pliku sprawdzany bez serwera. Zdanie o dzisiejszym dniu
+ * bierze się z harmonogramu, więc przez `stan_treningu` zależałoby od dnia
+ * tygodnia, w którym akurat biegną testy — a testy nie mogą zależeć od daty.
+ */
+describe("stan treningu bez otwartej sesji", () => {
+  const PUSTY: StanTreningu = {
+    sesja: null,
+    wg_planu: [],
+    poza_planem: [],
+    ukonczone_cwiczen: 0,
+    wszystkich_cwiczen: 0,
+    pozostalo: [],
+  };
+
+  const dzienB: DzienPlanu = {
+    id: 4,
+    plan_id: 1,
+    kod: "B",
+    nazwa: "Plecy",
+    dzien_tygodnia: 1,
+    aktywny: true,
+    cwiczenia: [],
+  };
+
+  it("dzień wolny mówi wprost, że plan nic dziś nie przewiduje", () => {
+    const tekst = stanTreninguWTekscie(PUSTY, {
+      data: "2026-08-25",
+      dzien: null,
+      zrealizowany: false,
+    });
+
+    expect(tekst).toMatch(/Plan nie przewiduje dziś treningu/);
+  });
+
+  it("dzień do zrobienia podaje kod i kieruje do rozpoczęcia", () => {
+    const tekst = stanTreninguWTekscie(PUSTY, {
+      data: "2026-08-24",
+      dzien: dzienB,
+      zrealizowany: false,
+    });
+
+    expect(tekst).toMatch(/B \(Plecy\)/);
+    expect(tekst).toMatch(/rozpocznij_trening/);
+  });
+
+  it("dzień zrobiony mówi to samo, co widać w aplikacji", () => {
+    const tekst = stanTreninguWTekscie(PUSTY, {
+      data: "2026-08-24",
+      dzien: dzienB,
+      zrealizowany: true,
+    });
+
+    expect(tekst).toMatch(/B \(Plecy\) jest już zrobiony/);
+    expect(tekst).not.toMatch(/rozpocznij_trening/);
   });
 });
