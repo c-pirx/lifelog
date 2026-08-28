@@ -370,6 +370,21 @@ section {
   color: var(--cichy);
 }
 
+/* Licznik zapisanych: ukryty, dopóki skrypt nie zna prawdziwej liczby.
+   Miętowa jest sama liczba — to ludzie, którzy ZAPISALI się na listę. */
+.licznik {
+  margin: 0;
+  font-family: var(--dziennik);
+  font-size: 0.8rem;
+  color: var(--cichy);
+}
+
+.licznik strong {
+  color: var(--akcent);
+  font-weight: 640;
+  font-variant-numeric: tabular-nums;
+}
+
 .komunikat {
   margin: 0;
   font-size: 0.9rem;
@@ -394,62 +409,6 @@ section {
   margin-top: 0.6rem;
   color: var(--cichy);
   font-size: 0.9rem;
-}
-
-/* === Dzień w dzienniku ================================================= */
-
-/* Rynna z godzinami zamiast numerków 01/02/03: to naprawdę jest przebieg dnia,
-   więc godzina niesie informację, której numer porządkowy by nie niósł. */
-.dzien {
-  display: grid;
-  gap: 0;
-}
-
-.wpis {
-  display: grid;
-  grid-template-columns: var(--rynna) 1fr;
-  gap: 0 1.25rem;
-  padding: 1.4rem 0;
-  border-top: 1px solid var(--linia);
-}
-
-.wpis:first-child {
-  border-top: 0;
-}
-
-.wpis .godzina {
-  font-family: var(--dziennik);
-  font-size: 0.85rem;
-  color: var(--cichy);
-  font-variant-numeric: tabular-nums;
-}
-
-.wpis p {
-  margin: 0;
-}
-
-.wpis .droga {
-  margin-top: 0.4rem;
-  font-family: var(--dziennik);
-  font-size: 0.78rem;
-  color: var(--cichy);
-}
-
-/* Kolor dostaje wyłącznie słowo źródła — te same dwie barwy, którymi mówi
-   hero: bursztyn to rozmowa, mięta to aplikacja. */
-.wpis .droga .zrodlo-czat {
-  color: var(--mowa);
-}
-
-.wpis .droga .zrodlo-telefon {
-  color: var(--akcent);
-}
-
-@media (max-width: 34rem) {
-  .wpis {
-    grid-template-columns: 1fr;
-    gap: 0.35rem;
-  }
 }
 
 /* === Podgląd aplikacji ================================================= */
@@ -629,54 +588,6 @@ section {
   }
 }
 
-/* === Jak dostać konto ================================================== */
-
-/* Ten sam rytm rynny co wpisy dnia i spis — kroki mają wyglądać jak kolejne
-   wiersze dziennika, nie jak obcy diagram. Tu numer niesie informację
-   (kolejność), więc zastępuje godzinę. */
-.kroki {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.kroki li {
-  display: grid;
-  grid-template-columns: var(--rynna) 1fr;
-  gap: 0 1.25rem;
-  padding: 1.4rem 0;
-  border-top: 1px solid var(--linia);
-}
-
-.kroki li:first-child {
-  border-top: 0;
-}
-
-.krok-nr {
-  font-family: var(--dziennik);
-  font-size: 0.85rem;
-  color: var(--cichy);
-  font-variant-numeric: tabular-nums;
-}
-
-.krok-tytul {
-  margin: 0 0 0.35rem;
-  font-weight: 600;
-}
-
-.krok-opis {
-  margin: 0;
-  max-width: 34rem;
-  color: var(--cichy);
-}
-
-@media (max-width: 34rem) {
-  .kroki li {
-    grid-template-columns: 1fr;
-    gap: 0.35rem;
-  }
-}
-
 /* === CTA w środku strony =============================================== */
 
 /* Link, nie przycisk: ma przypominać o formularzu, a nie z nim konkurować. */
@@ -701,50 +612,205 @@ section {
   transform: none;
 }
 
-/* === Co dostajesz ====================================================== */
+/* === Co jest w środku ================================================== */
 
-/* Lista definicji, nie kafelki: to jest spis rzeczy, które produkt umie,
-   a spis czyta się w kolumnie. */
-.spis {
-  margin: 0;
-}
-
-.spis div {
+/* Krótka lista z piktogramami obok wykresu z ekranu Postępy: jedno
+   spojrzenie zamiast pięciu akapitów. */
+.srodek-uklad {
   display: grid;
-  grid-template-columns: 12rem 1fr;
-  gap: 0 1.25rem;
-  padding: 1.1rem 0;
-  border-top: 1px solid var(--linia);
+  grid-template-columns: 1fr auto;
+  gap: 2.5rem;
+  align-items: center;
 }
 
-.spis dt {
-  font-family: var(--dziennik);
-  font-size: 0.9rem;
-  color: var(--tekst);
-}
-
-.spis dd {
+.mozliwosci {
+  display: grid;
+  gap: 1.1rem;
   margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mozliwosci li,
+.tarcze li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+}
+
+/* Wspólny język piktogramów: cienka kreska w kolorze cichym, bez wypełnień —
+   grafika ma podpowiadać, nie krzyczeć. */
+.mozliwosci svg,
+.tarcze svg {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 0.1rem;
+  fill: none;
+  stroke: var(--cichy);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mozliwosci svg .pelny {
+  fill: var(--cichy);
+  stroke: none;
+}
+
+.mozliwosci strong,
+.tarcze strong {
+  display: block;
+  font-weight: 600;
+}
+
+.mozliwosci li span,
+.tarcze li > div > span {
+  color: var(--cichy);
+  font-size: 0.95rem;
+}
+
+/* Panel wykresu — ta sama rama co przemiana w hero, żeby „podgląd produktu"
+   miał na całej stronie jeden kształt. */
+.wykres {
+  width: 19rem;
+  max-width: 100%;
+  margin: 0;
+  padding: 1rem 1.1rem 0.9rem;
+  background: var(--powierzchnia);
+  border: 1px solid var(--linia);
+  border-radius: 14px;
+}
+
+.wykres figcaption {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+  font-family: var(--dziennik);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   color: var(--cichy);
 }
 
+.wykres svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.wykres-linia {
+  fill: none;
+  stroke: var(--akcent);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.wykres-pole {
+  fill: var(--akcent);
+  opacity: 0.08;
+}
+
+.wykres-cel {
+  stroke: var(--cichy);
+  stroke-width: 1;
+  stroke-dasharray: 4 5;
+  opacity: 0.7;
+}
+
+.wykres-cel-podpis,
+.wykres-dni text {
+  font-family: var(--dziennik);
+  font-size: 9px;
+  fill: var(--cichy);
+}
+
+.wykres-dni text {
+  text-anchor: middle;
+}
+
+.wykres-wartosc {
+  font-family: var(--dziennik);
+  font-size: 10px;
+  fill: var(--akcent);
+  text-anchor: end;
+}
+
+.wykres-punkty circle {
+  fill: var(--tlo);
+  stroke: var(--akcent);
+  stroke-width: 1.6;
+}
+
+.wykres-punkty .ostatni {
+  fill: var(--akcent);
+}
+
+/* Linia rysuje się dopiero przy odsłonie sekcji. Stan ukryty istnieje tylko
+   pod klasą nadawaną skryptem, więc bez JS wykres jest narysowany od razu. */
+.do-odslony .wykres-linia {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.do-odslony .wykres-punkty,
+.do-odslony .wykres-pole {
+  opacity: 0;
+}
+
+.do-odslony.odsloniete .wykres-linia {
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 1s ease-out 0.2s;
+}
+
+.do-odslony.odsloniete .wykres-punkty {
+  opacity: 1;
+  transition: opacity 0.4s ease-out 0.9s;
+}
+
+.do-odslony.odsloniete .wykres-pole {
+  opacity: 0.08;
+  transition: opacity 0.6s ease-out 0.8s;
+}
+
 @media (max-width: 40rem) {
-  .spis div {
+  .srodek-uklad {
     grid-template-columns: 1fr;
-    gap: 0.3rem;
+    gap: 2rem;
+  }
+
+  .wykres {
+    width: 100%;
   }
 }
 
 /* === Dane ============================================================== */
 
-.dane li {
-  margin-bottom: 0.7rem;
-  color: var(--cichy);
+.tarcze {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.4rem 2.5rem;
+  margin: 0 0 1.5rem;
+  padding: 0;
+  list-style: none;
 }
 
-.dane li strong {
-  color: var(--tekst);
-  font-weight: 600;
+.tarcze svg {
+  width: 20px;
+  height: 20px;
+}
+
+.tarcze-stopka {
+  margin: 0;
+  color: var(--cichy);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 40rem) {
+  .tarcze {
+    grid-template-columns: 1fr;
+  }
 }
 
 /* === Pytania =========================================================== */
@@ -781,6 +847,138 @@ section {
   color: var(--cichy);
 }
 
+/* === Panel zapisu ====================================================== */
+
+/* Jedyna barwna płaszczyzna na całej stronie: mięta, kolor zapisu — bo zapis
+   jest dokładnie tym, o co tu prosimy. Wszystko w środku odwraca barwy:
+   ciemny tekst i ciemny przycisk na miętowym tle. */
+.cta-panel {
+  padding: clamp(1.75rem, 5vw, 3rem);
+  background: var(--akcent);
+  border-radius: 24px;
+  color: #0f1115;
+}
+
+.cta-licznik {
+  display: flex;
+  align-items: baseline;
+  gap: 0.7rem;
+  margin: -0.6rem 0 1.75rem;
+}
+
+.cta-licznik strong {
+  font-family: var(--dziennik);
+  font-size: clamp(2.4rem, 7vw, 3.4rem);
+  font-weight: 640;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.cta-licznik span {
+  font-size: 0.95rem;
+  color: rgba(15, 17, 21, 0.8);
+}
+
+.cta-panel .zapis-form {
+  max-width: 32rem;
+}
+
+.cta-panel input[type="email"],
+.cta-panel input[type="text"] {
+  background: #0f1115;
+  border-color: transparent;
+}
+
+.cta-panel input:focus {
+  border-color: rgba(15, 17, 21, 0.6);
+}
+
+.cta-panel button {
+  background: #0f1115;
+  color: var(--akcent);
+}
+
+.cta-panel button:hover {
+  background: #1b202a;
+}
+
+.cta-panel :focus-visible {
+  outline-color: #0f1115;
+}
+
+.cta-panel .zgoda {
+  color: rgba(15, 17, 21, 0.8);
+}
+
+.cta-panel .zgoda a {
+  color: #0f1115;
+}
+
+.cta-panel .zgoda input {
+  accent-color: #0f1115;
+}
+
+.cta-panel .obietnica {
+  color: rgba(15, 17, 21, 0.78);
+}
+
+/* Błąd na miętowym tle: ciemna czerwień zamiast pastelu z ciemnego motywu —
+   tamten na mięcie znika. */
+.cta-panel .komunikat.zly {
+  color: #6d1414;
+  font-weight: 600;
+}
+
+.cta-panel .gotowe {
+  background: #0f1115;
+  border-color: transparent;
+  color: var(--tekst);
+}
+
+/* Trzy kroki w jednej linijce — cała dawna sekcja „Jak dostać konto"
+   zmieściła się pod formularzem, przy którym jest potrzebna. */
+.stepper {
+  display: flex;
+  gap: 0.9rem;
+  margin: 1.75rem 0 0;
+  padding: 1.25rem 0 0;
+  border-top: 1px solid rgba(15, 17, 21, 0.25);
+  list-style: none;
+  font-size: 0.85rem;
+}
+
+.stepper li {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.stepper-nr {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border: 1.5px solid rgba(15, 17, 21, 0.55);
+  border-radius: 50%;
+  font-family: var(--dziennik);
+  font-size: 0.72rem;
+  font-weight: 640;
+}
+
+@media (max-width: 40rem) {
+  .stepper {
+    flex-direction: column;
+    gap: 0.7rem;
+  }
+
+  .stepper li {
+    flex: none;
+  }
+}
+
 /* === Stopka ============================================================ */
 
 footer {
@@ -815,6 +1013,21 @@ footer p {
   .do-odslony {
     opacity: 1;
     transform: none;
+    transition: none;
+  }
+
+  .do-odslony .wykres-linia {
+    stroke-dashoffset: 0;
+    transition: none;
+  }
+
+  .do-odslony .wykres-punkty {
+    opacity: 1;
+    transition: none;
+  }
+
+  .do-odslony .wykres-pole {
+    opacity: 0.08;
     transition: none;
   }
 }

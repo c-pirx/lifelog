@@ -23,6 +23,7 @@ import {
   type Konto,
 } from "../domain/konta.js";
 import {
+  liczbaZapisanych,
   tokenWypisu,
   wypiszZListy,
   zapiszNaListe,
@@ -271,6 +272,13 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
     // zdradzać, kto już jest na liście.
     return c.json({ ok: true }, 201);
   });
+
+  /**
+   * Publiczny licznik do strony powitalnej — sama liczba zapisanych, nic
+   * więcej. Wpisy (adresy, stany) celowo nie mają trasy GET i ogląda się je
+   * wyłącznie przez `npm run lista`; pilnuje tego test.
+   */
+  api.get("/lista/licznik", (c) => c.json({ zapisanych: liczbaZapisanych(rejestr) }));
 
   /**
    * Wypis z linku w stopce maila. Zawsze ta sama strona: gdyby nieznany token

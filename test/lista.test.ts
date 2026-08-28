@@ -25,6 +25,7 @@ import { utworzPule, type PulaBaz } from "../src/db/pula.js";
 import { czyBladDomeny } from "../src/domain/bledy.js";
 import { zaloguj } from "../src/domain/konta.js";
 import {
+  liczbaZapisanych,
   tokenWypisu,
   usunZListy,
   wpisyListy,
@@ -102,6 +103,18 @@ describe("zapis na listę", () => {
 
     expect(wynik.nowy).toBe(false);
     expect(wpisyListy(rejestr)).toHaveLength(0);
+  });
+
+  it("licznik rośnie z zapisem i maleje z wypisem — pokazuje stan, nie historię", () => {
+    const rejestr = otworzRejestr();
+    expect(liczbaZapisanych(rejestr)).toBe(0);
+
+    zapiszNaListe(rejestr, { email: "ania@przyklad.pl", zgoda: true });
+    zapiszNaListe(rejestr, { email: "bartek@przyklad.pl", zgoda: true });
+    expect(liczbaZapisanych(rejestr)).toBe(2);
+
+    usunZListy(rejestr, "ania@przyklad.pl");
+    expect(liczbaZapisanych(rejestr)).toBe(1);
   });
 
   it("odrzuca brak zgody i adres bez sensu — o tym mówimy wprost", () => {
@@ -366,6 +379,17 @@ describe("POST /api/lista", () => {
     // Listę ogląda się wyłącznie przez `npm run lista`. Gdyby kiedyś powstała
     // trasa GET, ten test ma o tym przypomnieć.
     expect((await fetch(`${adres}/api/lista`)).status).toBe(401);
+  });
+
+  it("licznik jest publiczny i zdradza wyłącznie liczbę", async () => {
+    await zapisz({ email: "ania@przyklad.pl", zgoda: true });
+    await zapisz({ email: "bartek@przyklad.pl", zgoda: true });
+
+    const odpowiedz = await fetch(`${adres}/api/lista/licznik`);
+    expect(odpowiedz.status).toBe(200);
+    // Dokładnie jeden klucz: gdyby odpowiedź kiedyś urosła, ten test ma
+    // zmusić do zastanowienia, czy nowe pole nie zdradza za dużo.
+    expect(await odpowiedz.json()).toEqual({ zapisanych: 2 });
   });
 });
 

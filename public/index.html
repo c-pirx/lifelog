@@ -56,9 +56,8 @@
         <p class="etykieta">Dziennik diety i treningu · wersja zamknięta</p>
         <h1>Mówisz zdaniem.<br />Wpis <em>robi się sam</em>.</h1>
         <p class="wstep">
-          Dwa wejścia do jednego dziennika: rozmowa z Claude'em, kiedy masz czas
-          mówić, i aplikacja w telefonie, kiedy stoisz pod sztangą i liczy się
-          jedno stuknięcie.
+          Rozmowa z Claude'em, kiedy masz czas mówić. Aplikacja w telefonie,
+          kiedy liczy się jedno stuknięcie.
         </p>
 
         <!-- Podpis strony: zdanie u góry, wiersz dziennika pod spodem.
@@ -99,6 +98,11 @@
             />
             <button type="submit" id="przycisk">Zapisz mnie</button>
           </div>
+          <!-- Licznik pokazuje się dopiero, gdy skrypt zna prawdziwą liczbę —
+               zero i zmyślone wartości nie mają prawa się tu pojawić. -->
+          <p class="licznik" data-licznik-blok hidden>
+            <strong data-liczba>0</strong> <span data-slowo>osób</span> już na liście
+          </p>
           <label class="zgoda">
             <input type="checkbox" id="zgoda" required />
             <span>
@@ -114,55 +118,15 @@
         </form>
       </section>
 
-      <section class="tresc">
-        <p class="etykieta">Zwykły dzień</p>
-        <h2>Cztery wpisy, żadnego formularza</h2>
-        <div class="dzien">
-          <div class="wpis">
-            <span class="godzina">07:10</span>
-            <div>
-              <p>„Owsianka na mleku z bananem i łyżką masła orzechowego."</p>
-              <p class="droga"><span class="zrodlo-czat">czat</span> → posiłek 520 kcal, makro oszacowane</p>
-            </div>
-          </div>
-          <div class="wpis">
-            <span class="godzina">13:40</span>
-            <div>
-              <p>Poprawka: to była półtorej porcji, nie jedna.</p>
-              <p class="droga"><span class="zrodlo-czat">czat</span> → ten sam wpis, przeliczony</p>
-            </div>
-          </div>
-          <div class="wpis">
-            <span class="godzina">18:05</span>
-            <div>
-              <p>Przycisk mówi wprost, co zapisze: <em>Odhacz serię 3 — 8 × 60 kg</em>.</p>
-              <p class="droga"><span class="zrodlo-telefon">telefon</span> → jedno stuknięcie, bez potwierdzania</p>
-            </div>
-          </div>
-          <div class="wpis">
-            <span class="godzina">22:30</span>
-            <div>
-              <p>Notatka podyktowana w drodze do domu, uporządkowana przed zapisem.</p>
-              <p class="droga"><span class="zrodlo-czat">czat</span> → dziennik, z transkrypcją co do słowa obok</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section class="tresc aplikacja">
         <p class="etykieta">Na siłowni</p>
         <h2>Telefon robi tylko jedno</h2>
         <div class="aplikacja-uklad">
           <div class="aplikacja-tekst">
             <p>
-              Między seriami nie ma czasu na formularze. Karta ćwiczenia pokazuje
-              jeden przycisk, który mówi wprost, co zapisze — stuknięcie i wracasz
-              pod sztangę.
-            </p>
-            <p>
-              W piwnicy siłowni często nie ma zasięgu. Aplikacja i tak się
-              otwiera i zapisuje: wpisy czekają w kolejce i wychodzą same,
-              gdy wróci sieć.
+              Jeden przycisk mówi wprost, co zapisze — stukasz i wracasz pod
+              sztangę. Bez zasięgu też działa: wpisy czekają w kolejce
+              i wychodzą same, gdy wróci sieć.
             </p>
           </div>
           <!-- Makieta jest czystą dekoracją: wszystko, co pokazuje, stoi
@@ -199,91 +163,91 @@
       <section class="tresc">
         <p class="etykieta">Co jest w środku</p>
         <h2>Pięć rzeczy, których używa się codziennie</h2>
-        <dl class="spis">
-          <div>
-            <dt>Dieta</dt>
-            <dd>
-              Kalorie i makro, cel dzienny z datą wejścia w życie. Posiłek ma sumę
-              i — jeśli chcesz — pozycje składowe.
-            </dd>
-          </div>
-          <div>
-            <dt>Trening</dt>
-            <dd>
-              Plan ułożony w rozmowie, harmonogram tygodniowy, propozycja ciężaru
-              z ostatniej serii. Słabszą serię system oznacza, ale progresji nie narzuca.
-            </dd>
-          </div>
-          <div>
-            <dt>Ruch poza planem</dt>
-            <dd>Bieg, rower, spacer, basen — dystans i czas. Bez zmyślonych kalorii.</dd>
-          </div>
-          <div>
-            <dt>Notatki</dt>
-            <dd>
-              Dyktowane głosem i porządkowane przed zapisem. Oryginalna transkrypcja
-              zostaje obok, nietknięta.
-            </dd>
-          </div>
-          <div>
-            <dt>Raport tygodnia</dt>
-            <dd>
-              W niedzielę rano liczby za miniony tydzień — zamrożone, więc poprawka
-              sprzed miesiąca ich nie zmieni.
-            </dd>
-          </div>
-        </dl>
+        <div class="srodek-uklad">
+          <ul class="mozliwosci">
+            <li>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" /></svg>
+              <div><strong>Dieta</strong><span>kalorie i makro, cel dzienny</span></div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6M21 9v6M7 6v12M17 6v12M7 12h10" /></svg>
+              <div><strong>Trening</strong><span>plan, harmonogram, propozycja ciężaru</span></div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19c5 0 3-7 8-7s3-5 8-5" /><circle cx="20" cy="7" r="1.8" class="pelny" /></svg>
+              <div><strong>Ruch poza planem</strong><span>bieg, rower, spacer — dystans i czas</span></div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M6 11a6 6 0 0 0 12 0M12 17v4" /></svg>
+              <div><strong>Notatki</strong><span>dyktowane głosem, porządkowane przed zapisem</span></div>
+            </li>
+            <li>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-8M12 20V6M19 20v-5" /></svg>
+              <div><strong>Raport tygodnia</strong><span>w niedzielę rano, liczby zamrożone</span></div>
+            </li>
+          </ul>
+
+          <!-- Wykres jak z ekranu Postępy: linia wagi i przerywany cel.
+               Liczby są przykładowe, więc sam rysunek jest dekoracją
+               (aria-hidden), a podpis zostaje widoczny dla czytnika. -->
+          <figure class="wykres">
+            <figcaption><span>postępy</span><span>waga · 7 dni</span></figcaption>
+            <svg viewBox="0 0 280 132" aria-hidden="true">
+              <line class="wykres-cel" x1="14" y1="100" x2="266" y2="100" />
+              <text class="wykres-cel-podpis" x="16" y="94">cel 83,0</text>
+              <polygon
+                class="wykres-pole"
+                points="20,32 60,26 100,49 140,43 180,60 220,72 260,77 260,112 20,112"
+              />
+              <polyline
+                class="wykres-linia"
+                pathLength="1"
+                points="20,32 60,26 100,49 140,43 180,60 220,72 260,77"
+              />
+              <g class="wykres-punkty">
+                <circle cx="20" cy="32" r="2.6" />
+                <circle cx="60" cy="26" r="2.6" />
+                <circle cx="100" cy="49" r="2.6" />
+                <circle cx="140" cy="43" r="2.6" />
+                <circle cx="180" cy="60" r="2.6" />
+                <circle cx="220" cy="72" r="2.6" />
+                <circle cx="260" cy="77" r="3.6" class="ostatni" />
+                <text class="wykres-wartosc" x="256" y="66">83,4</text>
+              </g>
+              <g class="wykres-dni">
+                <text x="20" y="128">pn</text><text x="60" y="128">wt</text><text x="100" y="128">śr</text><text x="140" y="128">cz</text><text x="180" y="128">pt</text><text x="220" y="128">so</text><text x="260" y="128">nd</text>
+              </g>
+            </svg>
+          </figure>
+        </div>
         <p class="cta-srodek"><a href="#lista">Brzmi dobrze? Zostaw adres →</a></p>
       </section>
 
       <section class="tresc dane">
         <p class="etykieta">Twoje dane</p>
         <h2>Dziennik zdrowotny to nie jest zwykła aplikacja</h2>
-        <ul>
-          <li><strong>Osobny plik bazy na osobę.</strong> Nie ma zapytania, które mogłoby sięgnąć do cudzych wpisów — pilnują tego testy.</li>
-          <li><strong>Hasła tylko jako skrót</strong> (scrypt z solą). Nie ma ich nigdzie w jawnej postaci, także w kopiach zapasowych.</li>
-          <li><strong>Zero reklam, zero analityki, zero odsprzedaży.</strong> Ta strona nie wysyła żądań do obcych serwerów.</li>
-          <li><strong>Kod jest otwarty</strong> — <a href="https://github.com/c-pirx/lifelog" rel="noopener">możesz sprawdzić, co robi serwer</a>.</li>
-          <li><strong>Wypisujesz się jednym kliknięciem</strong> z linku w stopce każdego maila. Wpis znika, nie zostaje oznaczony.</li>
+        <ul class="tarcze">
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" /></svg>
+            <div><strong>Osobny plik bazy na osobę</strong><span>nie ma zapytania do cudzych wpisów — pilnują tego testy</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="3.5" /><path d="M11.5 12H21M18 12v3.5M14.5 12v2.5" /></svg>
+            <div><strong>Hasła tylko jako skrót</strong><span>scrypt z solą — nigdzie nie leżą jawnie</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" /><circle cx="12" cy="12" r="2.5" /><path d="M4 4l16 16" /></svg>
+            <div><strong>Zero reklam i analityki</strong><span>ta strona nie wysyła żądań do obcych serwerów</span></div>
+          </li>
+          <li>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5" /></svg>
+            <div><strong>Kod jest otwarty</strong><span><a href="https://github.com/c-pirx/lifelog" rel="noopener">sprawdź, co robi serwer</a></span></div>
+          </li>
         </ul>
-        <p><a href="/polityka.html">Pełny opis: jak działają twoje dane</a></p>
-      </section>
-
-      <section class="tresc">
-        <p class="etykieta">Jak dostać konto</p>
-        <h2>Trzy kroki, zero niespodzianek</h2>
-        <ol class="kroki">
-          <li>
-            <span class="krok-nr">01</span>
-            <div>
-              <p class="krok-tytul">Zostawiasz adres</p>
-              <p class="krok-opis">
-                Trafia na listę oczekujących, a do skrzynki od razu wychodzi
-                potwierdzenie — pierwszy z dokładnie dwóch maili.
-              </p>
-            </div>
-          </li>
-          <li>
-            <span class="krok-nr">02</span>
-            <div>
-              <p class="krok-tytul">Czekasz na swoją partię</p>
-              <p class="krok-opis">
-                Zapraszamy małymi partiami, w kolejności zapisu. Nic nie musisz
-                robić i nic w tym czasie nie przyjdzie.
-              </p>
-            </div>
-          </li>
-          <li>
-            <span class="krok-nr">03</span>
-            <div>
-              <p class="krok-tytul">Klikasz w zaproszenie</p>
-              <p class="krok-opis">
-                Drugi mail niesie jednorazowy kod ważny czternaście dni.
-                Zakładasz konto i kod gaśnie — przekazany dalej nikomu nie zadziała.
-              </p>
-            </div>
-          </li>
-        </ol>
+        <p class="tarcze-stopka">
+          Wypisujesz się jednym kliknięciem, wpis znika.
+          <a href="/polityka.html">Pełny opis: jak działają twoje dane</a>
+        </p>
       </section>
 
       <section class="tresc">
@@ -293,17 +257,16 @@
         <details class="pytanie">
           <summary>Potrzebuję subskrypcji Claude?</summary>
           <p>
-            Do dyktowania zdaniem — tak, konektor podpina się do twojej własnej
-            subskrypcji. Aplikacja w telefonie działa niezależnie i sama wystarczy
-            do prowadzenia dziennika.
+            Do dyktowania — tak, konektor podpina się do twojej subskrypcji.
+            Sama aplikacja działa bez niej i wystarczy do prowadzenia dziennika.
           </p>
         </details>
 
         <details class="pytanie">
           <summary>Ile to kosztuje?</summary>
           <p>
-            Nic. Lifelog powstał jako narzędzie dla jednej osoby i jest otwierany
-            dla wąskiego grona — nie jest usługą komercyjną i nie ma planów płatnych.
+            Nic. Lifelog nie jest usługą komercyjną — powstał dla jednej osoby
+            i jest otwierany wąskiemu gronu. Planów płatnych nie ma.
           </p>
         </details>
 
@@ -324,46 +287,58 @@
         </details>
       </section>
 
+      <!-- Jedyna barwna płaszczyzna na stronie — mięta, kolor zapisu,
+           bo zapis jest dokładnie tym, o co tu prosimy. -->
       <section class="tresc" id="lista">
-        <p class="etykieta">Lista oczekujących</p>
-        <h2>Zostaw adres — odezwiemy się</h2>
-        <form class="zapis-form" id="formularz-stopka" novalidate>
-          <div class="para">
-            <label class="pulapka">
-              Nie wypełniaj tego pola
-              <input
-                type="text"
-                name="firma"
-                id="pulapka-stopka"
-                tabindex="-1"
-                autocomplete="off"
-              />
-            </label>
-            <input
-              type="email"
-              id="email-stopka"
-              name="email"
-              placeholder="twoj@adres.pl"
-              autocomplete="email"
-              autocapitalize="none"
-              spellcheck="false"
-              required
-              aria-label="Adres e-mail"
-            />
-            <button type="submit" id="przycisk-stopka">Zapisz mnie</button>
-          </div>
-          <label class="zgoda">
-            <input type="checkbox" id="zgoda-stopka" required />
-            <span>
-              Zgadzam się, żeby mój adres trafił na listę oczekujących —
-              <a href="/polityka.html">co robimy z danymi</a>.
-            </span>
-          </label>
-          <p class="obietnica">
-            Dokładnie dwa maile: potwierdzenie i zaproszenie. Nic więcej.
+        <div class="cta-panel">
+          <h2>Zostaw adres — odezwiemy się</h2>
+          <p class="cta-licznik" data-licznik-blok hidden>
+            <strong data-liczba>0</strong>
+            <span><span data-slowo>osób</span> już na liście</span>
           </p>
-          <p class="komunikat" id="komunikat-stopka" role="status"></p>
-        </form>
+          <form class="zapis-form" id="formularz-stopka" novalidate>
+            <div class="para">
+              <label class="pulapka">
+                Nie wypełniaj tego pola
+                <input
+                  type="text"
+                  name="firma"
+                  id="pulapka-stopka"
+                  tabindex="-1"
+                  autocomplete="off"
+                />
+              </label>
+              <input
+                type="email"
+                id="email-stopka"
+                name="email"
+                placeholder="twoj@adres.pl"
+                autocomplete="email"
+                autocapitalize="none"
+                spellcheck="false"
+                required
+                aria-label="Adres e-mail"
+              />
+              <button type="submit" id="przycisk-stopka">Zapisz mnie</button>
+            </div>
+            <label class="zgoda">
+              <input type="checkbox" id="zgoda-stopka" required />
+              <span>
+                Zgadzam się, żeby mój adres trafił na listę oczekujących —
+                <a href="/polityka.html">co robimy z danymi</a>.
+              </span>
+            </label>
+            <p class="obietnica">
+              Dokładnie dwa maile: potwierdzenie i zaproszenie. Nic więcej.
+            </p>
+            <p class="komunikat" id="komunikat-stopka" role="status"></p>
+          </form>
+          <ol class="stepper">
+            <li><span class="stepper-nr">1</span>zostawiasz adres</li>
+            <li><span class="stepper-nr">2</span>mail z potwierdzeniem</li>
+            <li><span class="stepper-nr">3</span>zaproszenie: kod na 14 dni</li>
+          </ol>
+        </div>
       </section>
     </main>
 

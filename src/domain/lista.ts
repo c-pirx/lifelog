@@ -261,6 +261,15 @@ export function zarejestrujZKodem(
   });
 }
 
+/**
+ * Ilu ludzi jest na liście — jedyna rzecz o liście widoczna publicznie.
+ * Strona powitalna pokazuje tę liczbę przy formularzu zapisu; wpisy same
+ * (adresy, stany) pozostają dostępne wyłącznie przez `npm run lista`.
+ */
+export function liczbaZapisanych(rejestr: Baza): number {
+  return policzWpisyListy(rejestr);
+}
+
 // === Administracja z wiersza poleceń =====================================
 
 export function wpisyListy(rejestr: Baza): WpisListy[] {

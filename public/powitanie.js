@@ -157,6 +157,59 @@ if (przemiana && !PREFERUJE_SPOKOJ) {
   void karuzela();
 }
 
+// === Licznik zapisanych =================================================
+
+/**
+ * Prawdziwa liczba z rejestru — nigdy zmyślona i nigdy zero: bloki licznika
+ * są ukryte w HTML-u i pokazują się dopiero, gdy serwer odpowie liczbą
+ * większą od zera. Brak sieci czy błąd oznacza po prostu stronę bez licznika.
+ */
+function odmienOsoby(ile) {
+  if (ile === 1) return "osoba";
+  const dziesiatki = ile % 10;
+  const setki = ile % 100;
+  if (dziesiatki >= 2 && dziesiatki <= 4 && (setki < 12 || setki > 14)) return "osoby";
+  return "osób";
+}
+
+function doliczDo(element, cel) {
+  // Karta w tle dostaje finalną liczbę od razu: wstrzymana animacja
+  // zostawiłaby na ekranie zero — czyli kłamstwo gorsze od braku ruchu.
+  if (PREFERUJE_SPOKOJ || cel < 2 || document.hidden) {
+    element.textContent = String(cel);
+    return;
+  }
+  const start = performance.now();
+  const trwanie = 900;
+  const tyk = setInterval(() => {
+    const postep = Math.min(1, (performance.now() - start) / trwanie);
+    // Szybki start, spokojne dojście — jak licznik, nie jak stoper.
+    element.textContent = String(Math.round(cel * (1 - (1 - postep) ** 3)));
+    if (postep >= 1) clearInterval(tyk);
+  }, 40);
+}
+
+async function pokazLicznik() {
+  try {
+    const odpowiedz = await fetch("/api/lista/licznik");
+    if (!odpowiedz.ok) return;
+    const { zapisanych } = await odpowiedz.json();
+    if (typeof zapisanych !== "number" || zapisanych < 1) return;
+
+    for (const blok of document.querySelectorAll("[data-licznik-blok]")) {
+      const slowo = blok.querySelector("[data-slowo]");
+      if (slowo) slowo.textContent = odmienOsoby(zapisanych);
+      blok.hidden = false;
+      const liczba = blok.querySelector("[data-liczba]");
+      if (liczba) doliczDo(liczba, zapisanych);
+    }
+  } catch {
+    // Brak sieci — strona bez licznika jest kompletna.
+  }
+}
+
+void pokazLicznik();
+
 // === Odsłony sekcji przy przewijaniu ====================================
 
 /**
