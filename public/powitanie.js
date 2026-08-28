@@ -63,6 +63,47 @@ const przemiana = document.getElementById("przemiana");
 const mowa = document.getElementById("mowa");
 const zapis = document.getElementById("zapis");
 
+// Miarka dostaje najdłuższe zdanie i rezerwuje wysokość ramy — bez niej
+// każda zmiana przykładu szarpałaby formularzem tuż pod spodem.
+const miarka = document.getElementById("miarka");
+if (miarka) {
+  miarka.textContent = PRZYKLADY.map((p) => p.mowa).reduce((a, b) =>
+    b.length > a.length ? b : a,
+  );
+}
+
+/**
+ * Karuzela staje, gdy hero zjedzie poza ekran albo karta trafi do tła —
+ * pisanie zdań, których nikt nie widzi, kosztuje tylko baterię telefonu.
+ * Sprawdzenie stoi na początku iteracji: bieżące zdanie zawsze się
+ * dokańcza, a wznowienie zaczyna od czystego przykładu.
+ */
+let heroWidoczne = true;
+const wznowienia = [];
+
+function ruszDalej() {
+  if (heroWidoczne && !document.hidden) {
+    while (wznowienia.length) wznowienia.shift()();
+  }
+}
+
+function czekajAzWidoczna() {
+  if (heroWidoczne && !document.hidden) return Promise.resolve();
+  return new Promise((gotowe) => wznowienia.push(gotowe));
+}
+
+if (przemiana && "IntersectionObserver" in window) {
+  new IntersectionObserver(
+    ([wpis]) => {
+      heroWidoczne = wpis.isIntersecting;
+      ruszDalej();
+    },
+    { threshold: 0.15 },
+  ).observe(przemiana);
+}
+
+document.addEventListener("visibilitychange", ruszDalej);
+
 function pokazZapis(przyklad) {
   zapis.replaceChildren(
     ...przyklad.pola.map(([etykieta, wartosc], i) => {
@@ -99,6 +140,7 @@ async function napisz(tekst) {
 async function karuzela() {
   let i = 0;
   for (;;) {
+    await czekajAzWidoczna();
     const przyklad = PRZYKLADY[i % PRZYKLADY.length];
     zapis.replaceChildren();
     await napisz(przyklad.mowa);
@@ -113,6 +155,33 @@ if (przemiana && !PREFERUJE_SPOKOJ) {
   // Stan początkowy jest już w HTML-u, więc przy wyłączonym JS-ie strona
   // pokazuje kompletny przykład, tylko bez ruchu.
   void karuzela();
+}
+
+// === Odsłony sekcji przy przewijaniu ====================================
+
+/**
+ * Sekcje spod dolnej krawędzi wjeżdżają przy pierwszym pokazaniu.
+ * Ukrywa je wyłącznie ten skrypt — bez JS strona jest widoczna w całości —
+ * i wyłącznie te, których jeszcze nie widać, więc nic nie mryga przy
+ * wejściu w środek strony (np. z kotwicy #lista).
+ */
+if (!PREFERUJE_SPOKOJ && "IntersectionObserver" in window) {
+  const obserwator = new IntersectionObserver(
+    (wpisy) => {
+      for (const wpis of wpisy) {
+        if (!wpis.isIntersecting) continue;
+        wpis.target.classList.add("odsloniete");
+        obserwator.unobserve(wpis.target);
+      }
+    },
+    { rootMargin: "0px 0px -10% 0px" },
+  );
+
+  for (const sekcja of document.querySelectorAll("main section:not(.hero)")) {
+    if (sekcja.getBoundingClientRect().top < innerHeight) continue;
+    sekcja.classList.add("do-odslony");
+    obserwator.observe(sekcja);
+  }
 }
 
 // === Zapis na listę =====================================================

@@ -4,6 +4,9 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#0f1115" />
+    <!-- Natywne kontrolki (checkbox, pole e-mail) w ciemnej wersji od razu,
+         bez błysku jasnego stylu systemowego. -->
+    <meta name="color-scheme" content="dark" />
     <title>Lifelog — dziennik diety i treningu, który słucha</title>
     <meta
       name="description"
@@ -15,6 +18,10 @@
       content="Jedno zdanie zamiast formularza. Zapisz się na listę oczekujących."
     />
     <meta property="og:type" content="website" />
+    <!-- Ścieżka względna świadomie: repozytorium jest publiczne i nie zna
+         domeny. Część komunikatorów rozwiąże ją względem adresu strony,
+         reszta pominie — gorzej nie będzie. -->
+    <meta property="og:image" content="/icons/ikona-512.png" />
     <link rel="icon" href="/icons/ikona-192.png" />
     <link rel="stylesheet" href="/powitanie.css" />
   </head>
@@ -56,9 +63,15 @@
 
         <!-- Podpis strony: zdanie u góry, wiersz dziennika pod spodem.
              Treść i sterowanie w powitanie.js — tu zostaje stan początkowy,
-             widoczny także wtedy, gdy skrypt się nie wykona. -->
+             widoczny także wtedy, gdy skrypt się nie wykona.
+             Miarka to druga kopia zdania w tym samym polu siatki: skrypt
+             wpisuje do niej najdłuższy przykład, więc rama nie skacze,
+             gdy karuzela pisze krótsze i dłuższe zdania. -->
         <div class="przemiana" id="przemiana" aria-hidden="true">
-          <p class="mowa" id="mowa">zjadłem dwa jajka na maśle i tosta</p>
+          <div class="mowa-rzad">
+            <p class="mowa miarka" id="miarka"></p>
+            <p class="mowa" id="mowa">zjadłem dwa jajka na maśle i tosta</p>
+          </div>
           <hr class="strzalka" />
           <p class="zapis" id="zapis">
             <span class="pole"><span>posiłek</span>jajecznica z tostem</span>
@@ -94,6 +107,9 @@
               <a href="/polityka.html">co robimy z danymi</a>.
             </span>
           </label>
+          <p class="obietnica">
+            Dokładnie dwa maile: potwierdzenie i zaproszenie. Nic więcej.
+          </p>
           <p class="komunikat" id="komunikat" role="status"></p>
         </form>
       </section>
@@ -106,28 +122,75 @@
             <span class="godzina">07:10</span>
             <div>
               <p>„Owsianka na mleku z bananem i łyżką masła orzechowego."</p>
-              <p class="droga">czat → posiłek 520 kcal, makro oszacowane</p>
+              <p class="droga"><span class="zrodlo-czat">czat</span> → posiłek 520 kcal, makro oszacowane</p>
             </div>
           </div>
           <div class="wpis">
             <span class="godzina">13:40</span>
             <div>
               <p>Poprawka: to była półtorej porcji, nie jedna.</p>
-              <p class="droga">czat → ten sam wpis, przeliczony</p>
+              <p class="droga"><span class="zrodlo-czat">czat</span> → ten sam wpis, przeliczony</p>
             </div>
           </div>
           <div class="wpis">
             <span class="godzina">18:05</span>
             <div>
               <p>Przycisk mówi wprost, co zapisze: <em>Odhacz serię 3 — 8 × 60 kg</em>.</p>
-              <p class="droga">telefon → jedno stuknięcie, bez potwierdzania</p>
+              <p class="droga"><span class="zrodlo-telefon">telefon</span> → jedno stuknięcie, bez potwierdzania</p>
             </div>
           </div>
           <div class="wpis">
             <span class="godzina">22:30</span>
             <div>
               <p>Notatka podyktowana w drodze do domu, uporządkowana przed zapisem.</p>
-              <p class="droga">czat → dziennik, z transkrypcją co do słowa obok</p>
+              <p class="droga"><span class="zrodlo-czat">czat</span> → dziennik, z transkrypcją co do słowa obok</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="tresc aplikacja">
+        <p class="etykieta">Na siłowni</p>
+        <h2>Telefon robi tylko jedno</h2>
+        <div class="aplikacja-uklad">
+          <div class="aplikacja-tekst">
+            <p>
+              Między seriami nie ma czasu na formularze. Karta ćwiczenia pokazuje
+              jeden przycisk, który mówi wprost, co zapisze — stuknięcie i wracasz
+              pod sztangę.
+            </p>
+            <p>
+              W piwnicy siłowni często nie ma zasięgu. Aplikacja i tak się
+              otwiera i zapisuje: wpisy czekają w kolejce i wychodzą same,
+              gdy wróci sieć.
+            </p>
+          </div>
+          <!-- Makieta jest czystą dekoracją: wszystko, co pokazuje, stoi
+               w prozie obok, więc czytnik ekranu niczego nie traci. Dlatego
+               aria-hidden i dlatego „przycisk" jest divem — element
+               fokusowalny wewnątrz aria-hidden byłby błędem dostępności. -->
+          <div class="telefon" aria-hidden="true">
+            <div class="telefon-ekran">
+              <div class="ekran-pasek">
+                <span>trening · wtorek</span>
+                <span class="ekran-offline">offline</span>
+              </div>
+              <div class="karta-cwiczenia">
+                <p class="cw-nazwa">Wyciskanie sztangi</p>
+                <p class="cw-meta">seria 3 z 5 · poprzednio 8 × 57,5 kg</p>
+                <div class="serie">
+                  <span class="seria"><span class="ok">✓</span> 8 × 60</span>
+                  <span class="seria"><span class="ok">✓</span> 8 × 60</span>
+                </div>
+                <p class="kolejka">⏳ 2 serie czekają na sieć</p>
+                <div class="odhacz">Odhacz serię 3 — 8 × 60 kg</div>
+              </div>
+              <div class="ekran-nawigacja">
+                <span>dziś</span>
+                <span class="teraz">trening</span>
+                <span>dieta</span>
+                <span>więcej</span>
+              </div>
             </div>
           </div>
         </div>
@@ -135,7 +198,7 @@
 
       <section class="tresc">
         <p class="etykieta">Co jest w środku</p>
-        <h2>Sześć rzeczy, których używa się codziennie</h2>
+        <h2>Pięć rzeczy, których używa się codziennie</h2>
         <dl class="spis">
           <div>
             <dt>Dieta</dt>
@@ -169,14 +232,8 @@
               sprzed miesiąca ich nie zmieni.
             </dd>
           </div>
-          <div>
-            <dt>Bez zasięgu</dt>
-            <dd>
-              W piwnicy siłowni aplikacja otwiera się i zapisuje. Wpisy czekają
-              w kolejce i wychodzą, gdy wróci sieć.
-            </dd>
-          </div>
         </dl>
+        <p class="cta-srodek"><a href="#lista">Brzmi dobrze? Zostaw adres →</a></p>
       </section>
 
       <section class="tresc dane">
@@ -190,6 +247,43 @@
           <li><strong>Wypisujesz się jednym kliknięciem</strong> z linku w stopce każdego maila. Wpis znika, nie zostaje oznaczony.</li>
         </ul>
         <p><a href="/polityka.html">Pełny opis: jak działają twoje dane</a></p>
+      </section>
+
+      <section class="tresc">
+        <p class="etykieta">Jak dostać konto</p>
+        <h2>Trzy kroki, zero niespodzianek</h2>
+        <ol class="kroki">
+          <li>
+            <span class="krok-nr">01</span>
+            <div>
+              <p class="krok-tytul">Zostawiasz adres</p>
+              <p class="krok-opis">
+                Trafia na listę oczekujących, a do skrzynki od razu wychodzi
+                potwierdzenie — pierwszy z dokładnie dwóch maili.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="krok-nr">02</span>
+            <div>
+              <p class="krok-tytul">Czekasz na swoją partię</p>
+              <p class="krok-opis">
+                Zapraszamy małymi partiami, w kolejności zapisu. Nic nie musisz
+                robić i nic w tym czasie nie przyjdzie.
+              </p>
+            </div>
+          </li>
+          <li>
+            <span class="krok-nr">03</span>
+            <div>
+              <p class="krok-tytul">Klikasz w zaproszenie</p>
+              <p class="krok-opis">
+                Drugi mail niesie jednorazowy kod ważny czternaście dni.
+                Zakładasz konto i kod gaśnie — przekazany dalej nikomu nie zadziała.
+              </p>
+            </div>
+          </li>
+        </ol>
       </section>
 
       <section class="tresc">
@@ -216,8 +310,8 @@
         <details class="pytanie">
           <summary>Kiedy dostanę zaproszenie?</summary>
           <p>
-            Zapraszamy małymi partiami, w kolejności zapisu. Dostaniesz jeden mail
-            z linkiem ważnym czternaście dni — po jego użyciu link przestaje działać.
+            Konkretnej daty nie obiecujemy — partie są małe, żeby każdemu nowemu
+            kontu móc się przyjrzeć. Lista idzie ściśle w kolejności zapisu.
           </p>
         </details>
 
@@ -230,7 +324,7 @@
         </details>
       </section>
 
-      <section class="tresc">
+      <section class="tresc" id="lista">
         <p class="etykieta">Lista oczekujących</p>
         <h2>Zostaw adres — odezwiemy się</h2>
         <form class="zapis-form" id="formularz-stopka" novalidate>
@@ -265,6 +359,9 @@
               <a href="/polityka.html">co robimy z danymi</a>.
             </span>
           </label>
+          <p class="obietnica">
+            Dokładnie dwa maile: potwierdzenie i zaproszenie. Nic więcej.
+          </p>
           <p class="komunikat" id="komunikat-stopka" role="status"></p>
         </form>
       </section>

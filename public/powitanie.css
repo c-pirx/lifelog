@@ -61,10 +61,13 @@ a {
   border-radius: 4px;
 }
 
+/* Tylko oś pozioma — skrót `padding` wygrywałby specyficznością klasy
+   z pionowymi odstępami `section` i `footer` i zerowałby je po cichu
+   (dokładnie tak się działo: sekcje sklejały się z liniami granic). */
 .tresc {
   max-width: var(--szerokosc);
   margin: 0 auto;
-  padding: 0 1.25rem;
+  padding-inline: 1.25rem;
 }
 
 /* Etykieta sekcji: krój dziennika, wersaliki, rozstrzelenie. Jedyna ozdoba,
@@ -138,7 +141,7 @@ section {
 
 .hero h1 {
   margin: 0 0 1.25rem;
-  font-size: clamp(2.1rem, 7vw, 3.4rem);
+  font-size: clamp(2.2rem, 7vw, 3.9rem);
   font-weight: 640;
   line-height: 1.05;
   letter-spacing: -0.035em;
@@ -167,6 +170,21 @@ section {
   background: var(--powierzchnia);
   border: 1px solid var(--linia);
   border-radius: 14px;
+}
+
+/* Zdanie i miarka leżą w tym samym polu siatki: rama jest zawsze tak
+   wysoka jak najdłuższy przykład (skrypt wpisuje go do miarki), więc
+   pisanie krótszych zdań niczym nie szarpie. */
+.przemiana .mowa-rzad {
+  display: grid;
+}
+
+.przemiana .mowa-rzad .mowa {
+  grid-area: 1 / 1;
+}
+
+.przemiana .miarka {
+  visibility: hidden;
 }
 
 .przemiana .mowa {
@@ -201,6 +219,14 @@ section {
   font-family: var(--dziennik);
   font-size: 0.95rem;
   color: var(--akcent);
+}
+
+/* Na wąskim ekranie przykład z czterema polami łamie się na dwa wiersze —
+   rezerwa musi je mieścić, inaczej rama skacze przy zmianie przykładu. */
+@media (max-width: 34rem) {
+  .przemiana .zapis {
+    min-height: 4.2rem;
+  }
 }
 
 .przemiana .pole {
@@ -335,6 +361,15 @@ section {
   overflow: hidden;
 }
 
+/* Obietnica pod formularzem: głos dziennika, bo to zobowiązanie produktu,
+   nie marketing. Jedno zdanie, które zdejmuje strach przed spamem. */
+.obietnica {
+  margin: 0;
+  font-family: var(--dziennik);
+  font-size: 0.75rem;
+  color: var(--cichy);
+}
+
 .komunikat {
   margin: 0;
   font-size: 0.9rem;
@@ -400,11 +435,270 @@ section {
   color: var(--cichy);
 }
 
+/* Kolor dostaje wyłącznie słowo źródła — te same dwie barwy, którymi mówi
+   hero: bursztyn to rozmowa, mięta to aplikacja. */
+.wpis .droga .zrodlo-czat {
+  color: var(--mowa);
+}
+
+.wpis .droga .zrodlo-telefon {
+  color: var(--akcent);
+}
+
 @media (max-width: 34rem) {
   .wpis {
     grid-template-columns: 1fr;
     gap: 0.35rem;
   }
+}
+
+/* === Podgląd aplikacji ================================================= */
+
+/* Jedyne miejsce, w którym coś staje obok kolumny prozy — telefon ma być
+   przerwą w rytmie czytania, nie kolejnym akapitem. */
+.aplikacja-uklad {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3rem;
+  align-items: center;
+}
+
+.aplikacja-tekst p {
+  margin: 0 0 1rem;
+  max-width: 26rem;
+  color: var(--cichy);
+}
+
+.aplikacja-tekst p:last-child {
+  margin-bottom: 0;
+}
+
+/* Ramka telefonu w czystym CSS: żadnych obrazków, więc makieta nigdy nie
+   rozjedzie się z barwami strony i nic nie waży. */
+.telefon {
+  position: relative;
+  width: clamp(12.5rem, 30vw, 14.5rem);
+  aspect-ratio: 9 / 19;
+  padding: 0.45rem;
+  background: #0b0d11;
+  border: 1px solid var(--linia);
+  border-radius: 2.4rem;
+}
+
+/* Głośnik. */
+.telefon::before {
+  content: "";
+  position: absolute;
+  top: 0.95rem;
+  left: 50%;
+  translate: -50%;
+  width: 3.2rem;
+  height: 0.32rem;
+  border-radius: 999px;
+  background: var(--linia);
+  z-index: 1;
+}
+
+/* Boczny przycisk. */
+.telefon::after {
+  content: "";
+  position: absolute;
+  top: 5rem;
+  right: -3px;
+  width: 3px;
+  height: 3rem;
+  border-radius: 2px;
+  background: var(--linia);
+}
+
+.telefon-ekran {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  border-radius: 1.95rem;
+  background: var(--tlo);
+  overflow: hidden;
+}
+
+.ekran-pasek {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 2rem 1rem 0.8rem;
+  border-bottom: 1px solid var(--linia);
+  font-family: var(--dziennik);
+  font-size: 0.68rem;
+  color: var(--cichy);
+}
+
+.ekran-offline {
+  padding: 1px 7px;
+  border: 1px solid var(--linia);
+  border-radius: 999px;
+}
+
+.karta-cwiczenia {
+  margin: 0.9rem 0.8rem;
+  padding: 0.9rem;
+  background: var(--powierzchnia);
+  border: 1px solid var(--linia);
+  border-radius: 14px;
+}
+
+.cw-nazwa {
+  margin: 0 0 0.15rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.cw-meta {
+  margin: 0 0 0.75rem;
+  font-family: var(--dziennik);
+  font-size: 0.66rem;
+  color: var(--cichy);
+}
+
+.serie {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.6rem;
+}
+
+.seria {
+  padding: 0.25rem 0.55rem;
+  background: var(--tlo);
+  border: 1px solid var(--linia);
+  border-radius: 8px;
+  font-family: var(--dziennik);
+  font-size: 0.7rem;
+}
+
+/* Mięta wyłącznie na tym, co zostało zapisane — jak wszędzie na stronie. */
+.seria .ok {
+  color: var(--akcent);
+}
+
+.kolejka {
+  margin: 0 0 0.75rem;
+  font-family: var(--dziennik);
+  font-size: 0.64rem;
+  color: var(--cichy);
+}
+
+.odhacz {
+  padding: 0.65rem 0.8rem;
+  background: var(--akcent);
+  border-radius: 11px;
+  color: #0f1115;
+  font-size: 0.78rem;
+  font-weight: 640;
+  text-align: center;
+}
+
+/* Dolny pasek jak w aplikacji — bieżąca zakładka jaśniejsza, bez mięty:
+   ta zostaje zarezerwowana dla zapisu. */
+.ekran-nawigacja {
+  display: flex;
+  justify-content: space-around;
+  margin-top: auto;
+  padding: 0.7rem 0.5rem 1.1rem;
+  border-top: 1px solid var(--linia);
+  font-family: var(--dziennik);
+  font-size: 0.62rem;
+  color: var(--cichy);
+}
+
+.ekran-nawigacja .teraz {
+  color: var(--tekst);
+}
+
+@media (max-width: 40rem) {
+  .aplikacja-uklad {
+    grid-template-columns: 1fr;
+    gap: 2.25rem;
+    justify-items: center;
+  }
+
+  .aplikacja-tekst {
+    justify-self: stretch;
+  }
+
+  .telefon {
+    width: 13rem;
+  }
+}
+
+/* === Jak dostać konto ================================================== */
+
+/* Ten sam rytm rynny co wpisy dnia i spis — kroki mają wyglądać jak kolejne
+   wiersze dziennika, nie jak obcy diagram. Tu numer niesie informację
+   (kolejność), więc zastępuje godzinę. */
+.kroki {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kroki li {
+  display: grid;
+  grid-template-columns: var(--rynna) 1fr;
+  gap: 0 1.25rem;
+  padding: 1.4rem 0;
+  border-top: 1px solid var(--linia);
+}
+
+.kroki li:first-child {
+  border-top: 0;
+}
+
+.krok-nr {
+  font-family: var(--dziennik);
+  font-size: 0.85rem;
+  color: var(--cichy);
+  font-variant-numeric: tabular-nums;
+}
+
+.krok-tytul {
+  margin: 0 0 0.35rem;
+  font-weight: 600;
+}
+
+.krok-opis {
+  margin: 0;
+  max-width: 34rem;
+  color: var(--cichy);
+}
+
+@media (max-width: 34rem) {
+  .kroki li {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+}
+
+/* === CTA w środku strony =============================================== */
+
+/* Link, nie przycisk: ma przypominać o formularzu, a nie z nim konkurować. */
+.cta-srodek {
+  margin: 2rem 0 0;
+  font-family: var(--dziennik);
+  font-size: 0.9rem;
+}
+
+/* === Odsłony przy przewijaniu ========================================== */
+
+/* Klasę nadaje wyłącznie skrypt (i tylko sekcjom spod dolnej krawędzi),
+   więc bez JS nic nie jest ukryte. Animowane tylko transform i opacity. */
+.do-odslony {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+
+.do-odslony.odsloniete {
+  opacity: 1;
+  transform: none;
 }
 
 /* === Co dostajesz ====================================================== */
@@ -514,5 +808,13 @@ footer p {
 
   .przemiana.pisze .mowa::after {
     animation: none;
+  }
+
+  /* Skrypt przy ograniczonym ruchu w ogóle nie nadaje tych klas — to pas
+     bezpieczeństwa na wypadek, gdyby preferencja zmieniła się po załadowaniu. */
+  .do-odslony {
+    opacity: 1;
+    transform: none;
+    transition: none;
   }
 }
