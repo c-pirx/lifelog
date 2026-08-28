@@ -30,9 +30,28 @@ istniejących sekretów ani danych.
 | Ścieżka | Zawartość | Właściciel |
 |---|---|---|
 | `/opt/asystent` | kod, tylko do odczytu dla aplikacji | root |
-| `/var/lib/asystent` | baza SQLite | asystent |
+| `/var/lib/asystent/rejestr.db` | konta: hasze haseł, hasze tokenów | asystent |
+| `/var/lib/asystent/uzytkownicy/` | dziennik SQLite na użytkownika (`<id>.db`) | asystent |
 | `/etc/asystent/env` | sekrety produkcyjne | root, odczyt dla grupy |
 | `/var/backups/asystent` | kopie zapasowe, 14 dni wstecz | root |
+
+### Przejście z instalacji jednoosobowej
+
+Serwer z bazą `asystent.db` po wdrożeniu wersji wielodostępowej **odmówi
+startu** z komunikatem wskazującym przeniesienie. To zapora, nie awaria:
+
+```bash
+ssh asystent
+sudo systemctl stop asystent
+cd /opt/asystent
+sudo DANE_KATALOG=/var/lib/asystent node tools/przenies-do-wielu.mjs --login twoj-login --haslo twoje-nowe-haslo
+sudo chown -R asystent:asystent /var/lib/asystent
+sudo systemctl start asystent
+```
+
+Skrypt robi kopię (`asystent.db.przed-przeniesieniem`), zakłada konto nr 1
+i przenosi dziennik pod `uzytkownicy/1.db`. Wypisany adres konektora wklej
+na claude.ai — stary przestał działać. Drugie uruchomienie odmawia.
 
 Aplikacja działa jako konto systemowe `asystent` bez powłoki. Nasłuchuje
 wyłącznie na `127.0.0.1:3000`; do internetu wystawia ją nginx.
@@ -61,49 +80,55 @@ Warto powtarzać co jakiś czas — sprawdza **dzisiejszą** kopię, a nie to, �
 procedura zadziałała kiedyś. Nie zatrzymuje usługi i nie dotyka żywej bazy.
 
 ```bash
-ssh asystent 'D=$(ls -t /var/backups/asystent/*.db.gz | head -1); \
-  gunzip -c "$D" > /tmp/proba.db && \
-  echo "kopia: $D" && \
-  sqlite3 /tmp/proba.db "PRAGMA integrity_check;" && \
-  sqlite3 /tmp/proba.db "SELECT (SELECT COUNT(*) FROM posilki) AS posilki, (SELECT COUNT(*) FROM serie) AS serie, (SELECT MAX(data_lokalna) FROM posilki) AS ostatni_dzien;"; \
-  rm -f /tmp/proba.db'
+ssh asystent 'D=$(ls -t /var/backups/asystent/asystent-*.tar.gz | head -1); \
+  rm -rf /tmp/proba && mkdir -p /tmp/proba && tar -xzf "$D" -C /tmp/proba && \
+  echo "kopia: $D" && ls /tmp/proba && \
+  for B in /tmp/proba/*.db; do echo "$B: $(sqlite3 "$B" "PRAGMA integrity_check;")"; done && \
+  sqlite3 /tmp/proba/1.db "SELECT (SELECT COUNT(*) FROM posilki) AS posilki, (SELECT COUNT(*) FROM serie) AS serie, (SELECT MAX(data_lokalna) FROM posilki) AS ostatni_dzien;"; \
+  rm -rf /tmp/proba'
 ```
 
-Oczekiwany wynik: `ok`, liczby porównywalne z produkcją i `ostatni_dzien`
-z wczoraj albo z dzisiaj. Liczby z produkcji do porównania:
+Oczekiwany wynik: komplet plików (`rejestr.db` i dziennik na każde konto),
+`ok` przy każdym, liczby porównywalne z produkcją i `ostatni_dzien` z wczoraj
+albo z dzisiaj. Liczby z produkcji do porównania:
 
 ```bash
-ssh asystent 'sudo -u asystent sqlite3 /var/lib/asystent/asystent.db "SELECT (SELECT COUNT(*) FROM posilki), (SELECT COUNT(*) FROM serie);"'
+ssh asystent 'sudo -u asystent sqlite3 /var/lib/asystent/uzytkownicy/1.db "SELECT (SELECT COUNT(*) FROM posilki), (SELECT COUNT(*) FROM serie);"'
 ```
 
 Jeżeli `ostatni_dzien` jest sprzed kilku dni, to nie jest problem z kopią, tylko
 sygnał, że timer `asystent-kopia.timer` przestał chodzić — sprawdź
 `systemctl list-timers asystent-kopia`.
 
-## Odtworzenie bazy z kopii
+## Odtworzenie baz z kopii
+
+Kopia to jeden spójny komplet z tej samej chwili — odtwarzamy go w całości,
+nie pojedyncze pliki, żeby rejestr i dzienniki do siebie pasowały.
 
 ```bash
 ssh asystent
 sudo systemctl stop asystent
 
-# Bieżąca baza idzie na bok, a nie do kosza — gdyby kopia okazała się gorsza
+# Bieżące bazy idą na bok, a nie do kosza — gdyby kopia okazała się gorsza
 # niż to, co jest, bez tego kroku nie ma już do czego wrócić.
-sudo mv /var/lib/asystent/asystent.db /var/lib/asystent/asystent.db.przed-odtworzeniem
+sudo mv /var/lib/asystent /var/lib/asystent.przed-odtworzeniem
+sudo mkdir -p /var/lib/asystent/uzytkownicy
 
-# Pliki WAL należą do STAREJ bazy. Zostawione obok nowej, SQLite spróbuje je
-# do niej doczytać — usuwamy je razem z nią.
-sudo rm -f /var/lib/asystent/asystent.db-wal /var/lib/asystent/asystent.db-shm
+sudo tar -xzf /var/backups/asystent/asystent-RRRR-MM-DD.tar.gz -C /var/lib/asystent
+# Dzienniki (pliki liczbowe) wracają do podkatalogu uzytkownicy/.
+cd /var/lib/asystent && for B in [0-9]*.db; do sudo mv "$B" uzytkownicy/; done
 
-sudo gunzip -c /var/backups/asystent/asystent-RRRR-MM-DD.db.gz \
-  | sudo tee /var/lib/asystent/asystent.db >/dev/null
-sudo chown asystent:asystent /var/lib/asystent/asystent.db
-sudo -u asystent sqlite3 /var/lib/asystent/asystent.db "PRAGMA integrity_check;"
+sudo chown -R asystent:asystent /var/lib/asystent
+sudo chmod 750 /var/lib/asystent
+for B in /var/lib/asystent/rejestr.db /var/lib/asystent/uzytkownicy/*.db; do
+  sudo -u asystent sqlite3 "$B" "PRAGMA integrity_check;"
+done
 
 sudo systemctl start asystent
 ```
 
-Plik `.przed-odtworzeniem` kasujemy dopiero po sprawdzeniu, że aplikacja wstała
-i pokazuje spodziewane dane.
+Katalog `.przed-odtworzeniem` kasujemy dopiero po sprawdzeniu, że aplikacja
+wstała i pokazuje spodziewane dane.
 
 Kopie powstają przez `sqlite3 .backup`, a nie przez kopiowanie pliku — baza
 działa w trybie WAL, w którym część zapisów siedzi w osobnym pliku `-wal`,

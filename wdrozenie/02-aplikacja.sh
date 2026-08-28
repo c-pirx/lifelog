@@ -47,9 +47,10 @@ if sudo test -f "$KATALOG_KONFIGURACJI/env"; then
 else
   # Sekrety produkcyjne generujemy na miejscu i nigdy nie przenosimy
   # z maszyny deweloperskiej — tamte służą wyłącznie do pracy lokalnej.
-  MCP_TOKEN=$(openssl rand -hex 32)
+  # Tokeny konektorów żyją teraz w rejestrze użytkowników (per konto),
+  # więc w env zostały tylko sekrety wspólne dla całej instancji.
   SESSION_SECRET=$(openssl rand -hex 32)
-  APP_PASSWORD=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)
+  REJESTRACJA_HASLO=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)
 
   sudo tee "$KATALOG_KONFIGURACJI/env" >/dev/null <<KONIEC
 # Konfiguracja produkcyjna. Wygenerowana $(date -Iseconds).
@@ -57,18 +58,16 @@ NODE_ENV=production
 PORT=3000
 # Nasłuch wyłącznie lokalny — do internetu wystawia dopiero nginx.
 HOST=127.0.0.1
-DB_PATH=$KATALOG_DANYCH/asystent.db
+# Katalog danych: rejestr.db i podkatalog uzytkownicy/ z dziennikami.
+DANE_KATALOG=$KATALOG_DANYCH
 TZ_APP=Europe/Warsaw
-MCP_TOKEN=$MCP_TOKEN
 SESSION_SECRET=$SESSION_SECRET
-APP_PASSWORD=$APP_PASSWORD
+REJESTRACJA_HASLO=$REJESTRACJA_HASLO
 KONIEC
   echo
   echo "    !!! WYGENEROWANO NOWE SEKRETY !!!"
-  echo "    Token konektora, hasło do aplikacji i klucz sesji ZMIENIŁY SIĘ."
-  echo "    Jeśli to nie jest pierwsza instalacja, konektor na claude.ai"
-  echo "    przestał działać — trzeba wkleić tam nowy adres."
-  echo "    Odczyt nowych wartości: patrz INSTRUKCJA.md, część 5."
+  echo "    Hasło bramy rejestracji i klucz sesji ZMIENIŁY SIĘ."
+  echo "    Odczyt wartości: sudo cat $KATALOG_KONFIGURACJI/env"
   echo
 fi
 
@@ -87,6 +86,15 @@ sudo chown -R root:root "$KATALOG_KODU"
 # Kod jest tylko do odczytu dla konta aplikacji — proces nie może
 # nadpisać własnych plików, nawet gdyby został przejęty.
 sudo chmod -R a+rX "$KATALOG_KODU"
+
+echo "==> Kopia zapasowa przed restartem"
+# Kopia z timera powstaje o 3:30 — wdrożenie o czternastej miałoby
+# zabezpieczenie sprzed jedenastu godzin. Przy cudzych danych to za mało.
+if [ -x /usr/local/bin/asystent-kopia ]; then
+  sudo /usr/local/bin/asystent-kopia
+else
+  echo "    (skrypt kopii jeszcze nie zainstalowany — pomijam; patrz 04-kopie.sh)"
+fi
 
 echo "==> Usługa systemd"
 sudo cp "$KATALOG_KODU/wdrozenie/asystent.service" /etc/systemd/system/asystent.service
