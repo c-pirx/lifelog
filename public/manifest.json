@@ -2,7 +2,7 @@
   "name": "Lifelog — dziennik diety i treningów",
   "short_name": "Lifelog",
   "description": "Dziennik posiłków i treningów",
-  "start_url": "/",
+  "start_url": "/app",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",

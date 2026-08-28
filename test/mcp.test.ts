@@ -20,7 +20,7 @@ import { fileURLToPath } from "node:url";
 import { utworzApp } from "../src/app.js";
 import { otworzBaze } from "../src/db/index.js";
 import { utworzPule, type PulaBaz } from "../src/db/pula.js";
-import { zarejestruj } from "../src/domain/konta.js";
+import { utworzKonto } from "../src/domain/konta.js";
 import type { DzienPlanu, StanTreningu } from "../src/domain/typy.js";
 import { stanTreninguWTekscie } from "../src/mcp/formatowanie.js";
 
@@ -48,18 +48,15 @@ beforeAll(async () => {
   katalogPuli = mkdtempSync(join(tmpdir(), "mcp-test-"));
   pula = utworzPule({ katalog: katalogPuli });
 
-  TOKEN = zarejestruj(rejestr, {
-    kod: "kod-bramy",
+  TOKEN = utworzKonto(rejestr, {
     login: "tester-mcp",
     haslo: "haslo-testowe-mcp",
     zgoda: true,
-    kodOczekiwany: "kod-bramy",
   }).tokenKonektora;
 
   const app = utworzApp(
     { rejestr, pula },
     {
-      rejestracjaHaslo: "kod-bramy",
       sekretSesji: "nieuzywany-w-tym-tescie",
       strefa: "Europe/Warsaw",
     },

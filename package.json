@@ -19,6 +19,7 @@
     "reset": "node tools/wyczysc.mjs",
     "przenies": "node tools/przenies-do-wielu.mjs",
     "konta": "node tools/konta.mjs",
+    "lista": "node tools/lista.mjs",
     "ikony": "node tools/generuj-ikony.mjs",
     "rozszerzenie": "node tools/zbuduj-rozszerzenie.mjs"
   },

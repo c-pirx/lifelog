@@ -74,15 +74,20 @@ HTTPS address, which in practice means a small VPS and a domain you control.
 git clone <your-fork>
 cd <repo>
 npm install
-npm run setup      # generates .env with fresh secrets, prints the registration gate password
+npm run setup      # generates .env with fresh secrets
+npm run build
+npm run konta -- utworz twoj-login twoje-haslo   # accounts are invite-only
 npm run dev
 ```
 
-Open http://localhost:3000, pick "Załóż konto" and use the gate password
-`npm run setup` printed as the access code.
+Open http://localhost:3000/app and log in. The root address shows the waiting
+list landing page — that is how everyone else gets in: they leave an e-mail,
+you invite them with `npm run lista -- zapros <address>`, and the single-use
+code from that invitation is what opens registration.
 
 To see the screens with content, leave the server running and, in a second
-terminal, run `npm run demo` — it fills the database with a sample day.
+terminal, run `npm run demo` — it fills the database with a sample day
+(it needs a `demo` account; the command tells you how to create one).
 
 ## Connecting Claude
 

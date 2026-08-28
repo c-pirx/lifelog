@@ -50,7 +50,6 @@ else
   # Tokeny konektorów żyją teraz w rejestrze użytkowników (per konto),
   # więc w env zostały tylko sekrety wspólne dla całej instancji.
   SESSION_SECRET=$(openssl rand -hex 32)
-  REJESTRACJA_HASLO=$(openssl rand -base64 18 | tr -d '/+=' | cut -c1-20)
 
   sudo tee "$KATALOG_KONFIGURACJI/env" >/dev/null <<KONIEC
 # Konfiguracja produkcyjna. Wygenerowana $(date -Iseconds).
@@ -61,13 +60,21 @@ HOST=127.0.0.1
 # Katalog danych: rejestr.db i podkatalog uzytkownicy/ z dziennikami.
 DANE_KATALOG=$KATALOG_DANYCH
 TZ_APP=Europe/Warsaw
+# Podpisuje ciasteczka sesji ORAZ linki „wypisz mnie" ze stopki maili.
 SESSION_SECRET=$SESSION_SECRET
-REJESTRACJA_HASLO=$REJESTRACJA_HASLO
+
+# Poczta wychodząca (Resend). Uzupełnij ręcznie — komplet czterech albo żadnej.
+# Bez nich aplikacja działa i zapisy na listę oczekujących też, ale maile
+# powitalne i powiadomienia nie wychodzą (widać to w /zdrowie jako poczta:false).
+RESEND_API_KEY=
+MAIL_OD=
+MAIL_GOSPODARZ=
+PUBLICZNY_ADRES=
 KONIEC
   echo
-  echo "    !!! WYGENEROWANO NOWE SEKRETY !!!"
-  echo "    Hasło bramy rejestracji i klucz sesji ZMIENIŁY SIĘ."
-  echo "    Odczyt wartości: sudo cat $KATALOG_KONFIGURACJI/env"
+  echo "    !!! WYGENEROWANO NOWY KLUCZ SESJI !!!"
+  echo "    Wszyscy zostali wylogowani, a linki wypisu z wysłanych maili wygasły."
+  echo "    Uzupełnij jeszcze zmienne poczty: sudo nano $KATALOG_KONFIGURACJI/env"
   echo
 fi
 

@@ -1,6 +1,9 @@
 /**
- * Konta użytkowników: rejestracja za wspólnym hasłem bramy, logowanie,
- * token konektora, zmiana hasła.
+ * Konta użytkowników: zakładanie, logowanie, token konektora, zmiana hasła.
+ *
+ * O tym, KTO ma prawo założyć konto, ten plik nic nie wie — wpuszczaniem
+ * zajmuje się `lista.ts` (jednorazowe kody zaproszeń). Zależność idzie
+ * wyłącznie w tamtą stronę.
  *
  * Kryptografia w całości z `node:crypto` — tym samym duchem, w którym
  * `auth.ts` używa HMAC zamiast biblioteki od sesji: mniej ruchomych części.
@@ -15,7 +18,6 @@
 
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 
-import { hasloPoprawne } from "../auth.js";
 import type { Baza } from "../db/index.js";
 import {
   odnotujUzycieKonektora,
@@ -40,15 +42,13 @@ export type Konto = {
   ostatnie_uzycie_konektora: string | null;
 };
 
-export type DaneRejestracji = {
-  /** Kod bramy podany przez rejestrującego. */
-  kod: string;
+export type DaneKonta = {
   login: string;
   haslo: string;
   zgoda: boolean;
-  /** Kod bramy z konfiguracji (REJESTRACJA_HASLO). */
-  kodOczekiwany: string;
   strefa?: string;
+  /** Wstrzykiwany czas — testy nie mają zależeć od zegara. */
+  teraz?: Date;
 };
 
 // === Kryptografia ========================================================
@@ -63,21 +63,14 @@ function hasloZgodne(haslo: string, wiersz: WierszUzytkownika): boolean {
   return podany.length === zapisany.length && timingSafeEqual(podany, zapisany);
 }
 
-function haszTokenu(token: string): string {
-  return createHash("sha256").update(token).digest("hex");
-}
-
-// === Brama rejestracji ===================================================
-
 /**
- * Jedyne miejsce, w którym rozstrzyga się wpuszczenie do rejestracji.
- * Przejście na jednorazowe kody w tabeli to podmiana ciała tej funkcji —
- * reszta ścieżki rejestracji nie wie, skąd bierze się werdykt.
+ * SHA-256 sekretu, który w bazie ma leżeć wyłącznie jako hasz: token
+ * konektora, kod zaproszenia, token wypisu z listy. Eksportowane, bo `lista.ts`
+ * hasuje swoje sekrety tak samo — dwie kopie tej samej funkcji rozjechałyby się
+ * przy pierwszej zmianie algorytmu.
  */
-export function sprawdzKodRejestracji(podany: string, oczekiwany: string): boolean {
-  // Pusty kod oczekiwany = brak konfiguracji. Brama zostaje zamknięta,
-  // bo otwarcie jej przez przeoczenie zmiennej byłoby cichą katastrofą.
-  return hasloPoprawne(podany, oczekiwany);
+export function haszTokenu(token: string): string {
+  return createHash("sha256").update(token).digest("hex");
 }
 
 // === Operacje na kontach =================================================
@@ -97,13 +90,16 @@ function sprawdzDlugoscHasla(haslo: string): void {
   }
 }
 
-export function zarejestruj(
+/**
+ * Samo założenie konta — bez pytania, skąd wzięło się prawo do tego.
+ * Ścieżka webowa woła to przez `zarejestrujZKodem` z `lista.ts`; narzędzia
+ * z wiersza poleceń (przeniesienie bazy jednoosobowej, dane poglądowe) wołają
+ * wprost, bo tam zaproszenie nie ma sensu.
+ */
+export function utworzKonto(
   rejestr: Baza,
-  dane: DaneRejestracji,
+  dane: DaneKonta,
 ): { id: number; tokenKonektora: string } {
-  if (!sprawdzKodRejestracji(dane.kod, dane.kodOczekiwany)) {
-    throw new BladDomeny("Nieprawidłowy kod rejestracji", "zly_kod_rejestracji");
-  }
   if (dane.zgoda !== true) {
     throw new BladDomeny("Rejestracja wymaga zgody na przetwarzanie danych", "brak_zgody");
   }
@@ -122,7 +118,7 @@ export function zarejestruj(
 
   const sol = randomBytes(16).toString("hex");
   const tokenKonektora = randomBytes(32).toString("hex");
-  const teraz = new Date().toISOString();
+  const teraz = (dane.teraz ?? new Date()).toISOString();
 
   const id = wstawUzytkownika(rejestr, {
     login,

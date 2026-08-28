@@ -49,10 +49,6 @@ if (existsSync(PLIK)) {
 
 const sekret = () => randomBytes(32).toString("hex");
 
-// Hasło bramy rejestracji: krótsze niż token, bo podajesz je znajomym
-// i wpisuje się je z klawiatury telefonu, ale wciąż ponad 100 bitów entropii.
-const haslo = randomBytes(15).toString("base64url");
-
 const tresc = `# Konfiguracja lokalna. Ten plik jest w .gitignore i nigdy nie trafia do repozytorium.
 # Wygenerowano: ${new Date().toISOString()}
 
@@ -65,19 +61,24 @@ HOST=
 DANE_KATALOG=./dane
 TZ_APP=Europe/Warsaw
 
-# Wspólne hasło bramy rejestracji — podajesz je osobom, które zapraszasz.
-REJESTRACJA_HASLO=${haslo}
-
-# Klucz do podpisywania ciasteczka sesji.
+# Klucz do podpisywania ciasteczka sesji. Podpisuje też linki „wypisz mnie"
+# ze stopki maili — jego wymiana wylogowuje wszystkich i unieważnia te linki.
 SESSION_SECRET=${sekret()}
+
+# Poczta wychodząca (Resend). Komplet czterech albo żadnej: bez nich aplikacja
+# działa, zapisy na listę oczekujących też, tylko maile nie wychodzą.
+RESEND_API_KEY=
+MAIL_OD=Lifelog <powitanie@twojadomena.pl>
+MAIL_GOSPODARZ=
+PUBLICZNY_ADRES=http://localhost:3000
 `;
 
 writeFileSync(PLIK, tresc, "utf8");
 
 console.log(`Utworzono ${PLIK}\n`);
-console.log("Hasło bramy rejestracji (podasz je przy zakładaniu konta):");
-console.log(`  ${haslo}\n`);
-console.log("Zapisz je — drugi raz nie zostanie pokazane (choć zawsze możesz zajrzeć do .env).\n");
+console.log("Rejestracja jest zamknięta — konta powstają z zaproszeń z listy oczekujących.");
+console.log("Pierwsze konto dla siebie załóż poleceniem:");
+console.log("  npm run build && npm run konta -- utworz <login> <haslo>\n");
 console.log("Dalej:");
 console.log("  npm run dev     — uruchom serwer, potem otwórz http://localhost:3000");
 console.log("  npm run demo    — dane poglądowe (opcjonalnie, przy działającym serwerze)");

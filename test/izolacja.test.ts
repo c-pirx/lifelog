@@ -21,12 +21,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { utworzApp } from "../src/app.js";
 import { otworzBaze } from "../src/db/index.js";
 import { utworzPule, type PulaBaz } from "../src/db/pula.js";
-import { zarejestruj } from "../src/domain/konta.js";
+import { zapiszNaListe, zapros } from "../src/domain/lista.js";
 import type { PodsumowanieDnia } from "../src/domain/typy.js";
 
 const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
-const KOD = "kod-bramy-izolacja";
 
+let rejestr: ReturnType<typeof otworzBaze>;
 let katalogPuli: string;
 let pula: PulaBaz;
 let serwer: ReturnType<typeof serve>;
@@ -37,11 +37,16 @@ let ania: Osoba;
 let tomek: Osoba;
 let idPosilkuAni = 0;
 
+/** Pełna droga do konta: zapis na listę, zaproszenie, rejestracja z kodu. */
 async function zaloz(login: string): Promise<Osoba> {
+  const email = `${login}@przyklad.pl`;
+  zapiszNaListe(rejestr, { email, zgoda: true });
+  const { kod } = zapros(rejestr, email);
+
   const odpowiedz = await fetch(`${adres}/api/rejestracja`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ kod: KOD, login, haslo: `haslo-${login}-123`, zgoda: true }),
+    body: JSON.stringify({ kod, login, haslo: `haslo-${login}-123`, zgoda: true }),
   });
   const { token_konektora } = (await odpowiedz.json()) as { token_konektora: string };
   return {
@@ -76,14 +81,13 @@ async function narzedziem(
 }
 
 beforeAll(async () => {
-  const rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
+  rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
   katalogPuli = mkdtempSync(join(tmpdir(), "izolacja-test-"));
   pula = utworzPule({ katalog: katalogPuli });
 
   const app = utworzApp(
     { rejestr, pula },
     {
-      rejestracjaHaslo: KOD,
       sekretSesji: "sekret-sesji-izolacja",
       strefa: "Europe/Warsaw",
       ciasteczkoTylkoHttps: false,

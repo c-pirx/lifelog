@@ -182,15 +182,26 @@ ssh asystent 'bash /opt/asystent/wdrozenie/04-kopie.sh'
 
 ## Krok 4. Konto i podłączenie konektora
 
-Odczytaj hasło bramy rejestracji:
+Rejestracja jest zamknięta: konta powstają wyłącznie z **jednorazowych kodów
+zaproszeń**. Pierwsze konto — swoje — załóż z pominięciem tej drogi:
 
 ```bash
-ssh asystent 'sudo grep "^REJESTRACJA_HASLO=" /etc/asystent/env'
+ssh asystent 'cd /opt/asystent && sudo -u asystent node tools/konta.mjs utworz twoj-login twoje-haslo'
 ```
 
-Otwórz `https://asystent.twojadomena.pl`, wybierz **Załóż konto** i podaj
-to hasło jako kod dostępu. Zapraszając znajomego, wyślij mu link
-`https://asystent.twojadomena.pl/?kod=<hasło-bramy>` — kod wypełni się sam.
+Otwórz `https://asystent.twojadomena.pl/app` i zaloguj się.
+
+Znajomi zostawiają adres na stronie powitalnej (`https://asystent.twojadomena.pl`),
+a Ty zapraszasz ich pojedynczo:
+
+```bash
+ssh asystent 'cd /opt/asystent && sudo -u asystent node tools/lista.mjs lista'
+ssh asystent 'cd /opt/asystent && sudo -u asystent node tools/lista.mjs zapros ktos@przyklad.pl'
+```
+
+Przy skonfigurowanej poczcie zaproszenie idzie mailem samo; bez niej polecenie
+wypisuje link `…/app?kod=…` do przesłania ręcznie. Kod działa **14 dni i tylko
+raz** — przekazany dalej nikomu nie pomoże.
 
 Adres konektora bierze się **z aplikacji, nie z serwera**: szuflada →
 **Konto** → **Wygeneruj i pokaż adres konektora** (każde konto ma własny;
@@ -463,8 +474,8 @@ Reset przez ssh, bez żadnych e-maili:
 ssh asystent 'cd /opt/asystent && sudo node tools/konta.mjs haslo twoj-login nowe-haslo'
 ```
 
-Hasło bramy rejestracji (do zakładania kont):
-`ssh asystent 'sudo grep REJESTRACJA_HASLO /etc/asystent/env'`.
+Nowe konto zakłada się z zaproszenia (`node tools/lista.mjs zapros <email>`)
+albo, dla siebie, wprost: `node tools/konta.mjs utworz <login> <hasło>`.
 
 **Chcę wymienić token konektora.**
 W aplikacji: szuflada → **Konto** → **Wygeneruj i pokaż adres konektora**.

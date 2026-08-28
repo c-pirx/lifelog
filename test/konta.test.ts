@@ -17,48 +17,26 @@ import {
   nowyTokenKonektora,
   odnotujKonektor,
   sekretSesjiDla,
-  sprawdzKodRejestracji,
+  utworzKonto,
   uzytkownikPoTokenie,
   zaloguj,
-  zarejestruj,
   zmienHaslo,
 } from "../src/domain/konta.js";
 
 /** Katalog migracji rejestru liczony od tego pliku — cwd bywa gdzie indziej. */
 const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
 
-const KOD_BRAMY = "wspolne-haslo-bramy";
-
 function otworzRejestr(): Baza {
   return otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
 }
 
 function zarejestrujTestowo(rejestr: Baza, login = "ania") {
-  return zarejestruj(rejestr, {
-    kod: KOD_BRAMY,
-    login,
-    haslo: "sekretne-haslo-anny",
-    zgoda: true,
-    kodOczekiwany: KOD_BRAMY,
-  });
+  return utworzKonto(rejestr, { login, haslo: "sekretne-haslo-anny", zgoda: true });
 }
 
-describe("brama rejestracji", () => {
-  it("przyjmuje poprawny kod", () => {
-    expect(sprawdzKodRejestracji(KOD_BRAMY, KOD_BRAMY)).toBe(true);
-  });
-
-  it("odrzuca zły kod i pusty kod", () => {
-    expect(sprawdzKodRejestracji("zle-haslo", KOD_BRAMY)).toBe(false);
-    expect(sprawdzKodRejestracji("", KOD_BRAMY)).toBe(false);
-  });
-
-  it("odrzuca wszystko, gdy kod oczekiwany jest pusty — brak konfiguracji nie otwiera bramy", () => {
-    expect(sprawdzKodRejestracji("", "")).toBe(false);
-  });
-});
-
-describe("rejestracja", () => {
+// Wpuszczaniem do rejestracji zajmuje się lista oczekujących, nie ten plik —
+// jednorazowe kody mają własne testy w `lista.test.ts`.
+describe("zakładanie konta", () => {
   it("zakłada konto i oddaje token konektora dokładnie raz", () => {
     const rejestr = otworzRejestr();
     const wynik = zarejestrujTestowo(rejestr);
@@ -67,29 +45,10 @@ describe("rejestracja", () => {
     expect(wynik.tokenKonektora).toMatch(/^[0-9a-f]{64}$/);
   });
 
-  it("odrzuca zły kod bramy", () => {
+  it("odrzuca założenie konta bez zgody", () => {
     const rejestr = otworzRejestr();
     expect(() =>
-      zarejestruj(rejestr, {
-        kod: "zly",
-        login: "ania",
-        haslo: "cokolwiek-dlugiego",
-        zgoda: true,
-        kodOczekiwany: KOD_BRAMY,
-      }),
-    ).toThrowError(expect.objectContaining({ name: "BladDomeny" }));
-  });
-
-  it("odrzuca rejestrację bez zgody", () => {
-    const rejestr = otworzRejestr();
-    expect(() =>
-      zarejestruj(rejestr, {
-        kod: KOD_BRAMY,
-        login: "ania",
-        haslo: "cokolwiek-dlugiego",
-        zgoda: false,
-        kodOczekiwany: KOD_BRAMY,
-      }),
+      utworzKonto(rejestr, { login: "ania", haslo: "cokolwiek-dlugiego", zgoda: false }),
     ).toThrowError(expect.objectContaining({ name: "BladDomeny" }));
   });
 
@@ -108,13 +67,7 @@ describe("rejestracja", () => {
   it("odrzuca hasło krótsze niż 10 znaków", () => {
     const rejestr = otworzRejestr();
     expect(() =>
-      zarejestruj(rejestr, {
-        kod: KOD_BRAMY,
-        login: "ania",
-        haslo: "krotkie",
-        zgoda: true,
-        kodOczekiwany: KOD_BRAMY,
-      }),
+      utworzKonto(rejestr, { login: "ania", haslo: "krotkie", zgoda: true }),
     ).toThrowError(expect.objectContaining({ name: "BladDomeny" }));
   });
 

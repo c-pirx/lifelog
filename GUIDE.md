@@ -187,16 +187,26 @@ ssh asystent 'bash /opt/asystent/wdrozenie/04-kopie.sh'
 
 ## Step 4. Create an account and connect the connector
 
-Read the registration gate password:
+Registration is closed: accounts are created only from **single-use invite
+codes**. Create your own account directly, bypassing that path:
 
 ```bash
-ssh asystent 'sudo grep "^REJESTRACJA_HASLO=" /etc/asystent/env'
+ssh asystent 'cd /opt/asystent && sudo -u asystent node tools/konta.mjs utworz your-login your-password'
 ```
 
-Open `https://asystent.yourdomain.com`, pick **Załóż konto** (create account)
-and enter that password as the access code. To invite a friend, send them
-`https://asystent.yourdomain.com/?kod=<gate-password>` — the code fills in
-by itself.
+Open `https://asystent.yourdomain.com/app` and log in.
+
+Friends leave their address on the landing page
+(`https://asystent.yourdomain.com`) and you invite them one by one:
+
+```bash
+ssh asystent 'cd /opt/asystent && sudo -u asystent node tools/lista.mjs lista'
+ssh asystent 'cd /opt/asystent && sudo -u asystent node tools/lista.mjs zapros someone@example.com'
+```
+
+With mail configured the invitation is sent automatically; without it the
+command prints a `…/app?kod=…` link to pass along by hand. A code is valid for
+**14 days and one use only**, so forwarding it helps nobody.
 
 The connector URL comes **from the app, not from the server**: drawer →
 **Konto** → **Wygeneruj i pokaż adres konektora** (every account has its
@@ -386,8 +396,8 @@ Reset over ssh, no e-mail involved:
 ssh asystent 'cd /opt/asystent && sudo node tools/konta.mjs haslo your-login new-password'
 ```
 
-The registration gate password (for creating accounts):
-`ssh asystent 'sudo grep REJESTRACJA_HASLO /etc/asystent/env'`.
+A new account comes from an invitation (`node tools/lista.mjs zapros <email>`)
+or, for yourself, directly: `node tools/konta.mjs utworz <login> <password>`.
 
 **I want to rotate the connector token.**
 In the app: drawer → **Konto** → **Wygeneruj i pokaż adres konektora**.

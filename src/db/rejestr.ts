@@ -79,3 +79,110 @@ export function wszyscyAktywni(db: Baza): WierszUzytkownika[] {
 export function odnotujUzycieKonektora(db: Baza, id: number, ts: string): void {
   db.prepare("UPDATE uzytkownicy SET ostatnie_uzycie_konektora = ? WHERE id = ?").run(ts, id);
 }
+
+/**
+ * Atomowe złożenie kilku zapisów. Istnieje po to, żeby domena mogła zażądać
+ * transakcji, nie znając `better-sqlite3` — rejestracja z kodu zaproszenia
+ * musi utworzyć konto i zgasić kod w jednym kroku albo w żadnym.
+ */
+export function wTransakcji<T>(db: Baza, dzialanie: () => T): T {
+  return db.transaction(dzialanie)();
+}
+
+// === Lista oczekujących ==================================================
+
+export type WierszListy = {
+  id: number;
+  email: string;
+  imie: string | null;
+  zapisano: string;
+  zgoda_ts: string;
+  stan: string;
+  zaproszono: string | null;
+  wykorzystano: string | null;
+  uzytkownik_id: number | null;
+  kod_hasz: string | null;
+  kod_wygasa: string | null;
+};
+
+export type NowyWpisListy = {
+  email: string;
+  imie: string | null;
+  zapisano: string;
+  zgoda_ts: string;
+};
+
+export function wstawNaListe(db: Baza, dane: NowyWpisListy): number {
+  const wynik = db
+    .prepare(
+      `INSERT INTO lista_oczekujacych (email, imie, zapisano, zgoda_ts)
+       VALUES (@email, @imie, @zapisano, @zgoda_ts)`,
+    )
+    .run(dane);
+  return Number(wynik.lastInsertRowid);
+}
+
+export function wpisListyPoEmailu(db: Baza, email: string): WierszListy | undefined {
+  return db
+    .prepare<[string], WierszListy>("SELECT * FROM lista_oczekujacych WHERE email = ?")
+    .get(email);
+}
+
+export function wpisListyPoKodHasz(db: Baza, kodHasz: string): WierszListy | undefined {
+  return db
+    .prepare<[string], WierszListy>("SELECT * FROM lista_oczekujacych WHERE kod_hasz = ?")
+    .get(kodHasz);
+}
+
+export function wszystkieWpisyListy(db: Baza): WierszListy[] {
+  return db
+    .prepare<[], WierszListy>("SELECT * FROM lista_oczekujacych ORDER BY zapisano, id")
+    .all();
+}
+
+export function policzWpisyListy(db: Baza): number {
+  return (
+    db.prepare<[], { ile: number }>("SELECT COUNT(*) AS ile FROM lista_oczekujacych").get()?.ile ?? 0
+  );
+}
+
+export function zapiszKodZaproszenia(
+  db: Baza,
+  id: number,
+  kodHasz: string,
+  kodWygasa: string,
+  zaproszono: string,
+): void {
+  db.prepare(
+    `UPDATE lista_oczekujacych
+        SET kod_hasz = ?, kod_wygasa = ?, zaproszono = ?, stan = 'zaproszony'
+      WHERE id = ?`,
+  ).run(kodHasz, kodWygasa, zaproszono, id);
+}
+
+/**
+ * Zamknięcie zaproszenia: konto powstało, kod gaśnie. Zerowanie `kod_hasz`
+ * musi zajść w tej samej transakcji co utworzenie konta — inaczej dwa
+ * równoległe żądania założyłyby dwa konta z jednego zaproszenia.
+ */
+export function oznaczWykorzystanie(
+  db: Baza,
+  id: number,
+  uzytkownikId: number,
+  kiedy: string,
+): void {
+  db.prepare(
+    `UPDATE lista_oczekujacych
+        SET stan = 'zarejestrowany', uzytkownik_id = ?, wykorzystano = ?,
+            kod_hasz = NULL, kod_wygasa = NULL
+      WHERE id = ?`,
+  ).run(uzytkownikId, kiedy, id);
+}
+
+/**
+ * Wypis kasuje wiersz, a nie ustawia flagę. Prawo do bycia zapomnianym jest
+ * wtedy dosłowne, a ktoś, kto zmieni zdanie, zapisuje się po prostu na nowo.
+ */
+export function usunWpisListy(db: Baza, id: number): void {
+  db.prepare("DELETE FROM lista_oczekujacych WHERE id = ?").run(id);
+}

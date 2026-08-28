@@ -30,7 +30,7 @@ istniejących sekretów ani danych.
 | Ścieżka | Zawartość | Właściciel |
 |---|---|---|
 | `/opt/asystent` | kod, tylko do odczytu dla aplikacji | root |
-| `/var/lib/asystent/rejestr.db` | konta: hasze haseł, hasze tokenów | asystent |
+| `/var/lib/asystent/rejestr.db` | konta i lista oczekujących: hasze haseł, hasze tokenów i kodów | asystent |
 | `/var/lib/asystent/uzytkownicy/` | dziennik SQLite na użytkownika (`<id>.db`) | asystent |
 | `/etc/asystent/env` | sekrety produkcyjne | root, odczyt dla grupy |
 | `/var/backups/asystent` | kopie zapasowe, 14 dni wstecz | root |
@@ -52,6 +52,18 @@ sudo systemctl start asystent
 Skrypt robi kopię (`asystent.db.przed-przeniesieniem`), zakłada konto nr 1
 i przenosi dziennik pod `uzytkownicy/1.db`. Wypisany adres konektora wklej
 na claude.ai — stary przestał działać. Drugie uruchomienie odmawia.
+
+### Poczta wychodząca
+
+Cztery zmienne w `/etc/asystent/env`: `RESEND_API_KEY`, `MAIL_OD`,
+`MAIL_GOSPODARZ`, `PUBLICZNY_ADRES`. **Komplet albo żadna** — bez nich
+aplikacja wstaje i zapisy na listę oczekujących działają, ale maile powitalne
+i powiadomienia nie wychodzą. Sprawdzenie: `curl -s https://<domena>/zdrowie`
+pokazuje `"poczta": true`.
+
+`02-aplikacja.sh` wypisuje te zmienne do pliku env **wyłącznie przy pierwszej
+instalacji** (potem plik zostaje nietknięty), więc na działającym serwerze
+trzeba dopisać je ręcznie: `sudo nano /etc/asystent/env` i restart usługi.
 
 Aplikacja działa jako konto systemowe `asystent` bez powłoki. Nasłuchuje
 wyłącznie na `127.0.0.1:3000`; do internetu wystawia ją nginx.

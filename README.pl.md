@@ -69,15 +69,21 @@ adresu HTTPS, czyli w praktyce małego VPS-a i własnej domeny.
 git clone <twój-fork>
 cd <repozytorium>
 npm install
-npm run setup      # tworzy .env ze świeżymi sekretami, pokazuje hasło do aplikacji
+npm run setup      # tworzy .env ze świeżymi sekretami
+npm run build
+npm run konta -- utworz twoj-login twoje-haslo   # konta są tylko z zaproszeń
 npm run dev
 ```
 
-Wejdź na http://localhost:3000 i zaloguj się hasłem, które wypisał
-`npm run setup`.
+Wejdź na http://localhost:3000/app i zaloguj się. Pod adresem głównym stoi
+strona powitalna z listą oczekujących — i to jest droga dla wszystkich
+pozostałych: zostawiają adres, Ty zapraszasz przez
+`npm run lista -- zapros <adres>`, a jednorazowy kod z zaproszenia otwiera
+rejestrację.
 
 Żeby zobaczyć ekrany z zawartością, zostaw serwer uruchomiony i w drugim oknie
-terminala odpal `npm run demo` — wypełni bazę przykładowym dniem.
+terminala odpal `npm run demo` — wypełni bazę przykładowym dniem (potrzebuje
+konta `demo`; polecenie podpowie, jak je założyć).
 
 ## Podłączenie Claude'a
 

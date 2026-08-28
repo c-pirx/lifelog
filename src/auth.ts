@@ -30,6 +30,27 @@ function porownajBezpiecznie(a: string, b: string): boolean {
   return bufA.length === bufB.length && timingSafeEqual(bufA, bufB);
 }
 
+/**
+ * Podpisanie dowolnego krótkiego tekstu tym samym chwytem, co ciasteczko sesji:
+ * treść jawnie, obok HMAC. Służy linkom, które muszą działać bezterminowo
+ * i bez wiersza w bazie — dziś wypisowi z listy oczekujących.
+ *
+ * Bez daty ważności celowo: link „usuń mój adres" ma zadziałać także pół roku
+ * po mailu, w którym przyszedł.
+ */
+export function podpiszTekst(tekst: string, sekret: string): string {
+  const ladunek = base64url(tekst);
+  return `${ladunek}${ROZDZIELNIK}${hmac(ladunek, sekret)}`;
+}
+
+/** Odwrotność `podpiszTekst`. Null, gdy podpis się nie zgadza. */
+export function odczytajPodpisanyTekst(podpisany: string, sekret: string): string | null {
+  const [ladunek, sygnatura] = podpisany.split(ROZDZIELNIK);
+  if (!ladunek || !sygnatura) return null;
+  if (!porownajBezpiecznie(sygnatura, hmac(ladunek, sekret))) return null;
+  return Buffer.from(ladunek, "base64url").toString();
+}
+
 export function utworzToken(sekret: string, uzytkownikId: number, teraz: number = Date.now()): string {
   const ladunek = base64url(JSON.stringify({ wydano: teraz, uzytkownik: uzytkownikId }));
   return `${ladunek}${ROZDZIELNIK}${hmac(ladunek, sekret)}`;

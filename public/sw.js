@@ -10,13 +10,17 @@
  * umiałby najwyżej udać, że się udało.
  */
 
-const WERSJA = "v13";
+const WERSJA = "v14";
 const CACHE_POWLOKI = `powloka-${WERSJA}`;
 const CACHE_API = `api-${WERSJA}`;
 
+/** Plik powłoki. Serwer wystawia go pod /app; „/" należy do strony powitalnej. */
+const POWLOKA_HTML = "/aplikacja.html";
+
+// Strony powitalnej celowo NIE ma na tej liście: zmienia się częściej niż
+// aplikacja i ma być zawsze świeża. Ofline'u wymaga wyłącznie aplikacja.
 const POWLOKA = [
-  "/",
-  "/index.html",
+  POWLOKA_HTML,
   "/aktywnosci.js",
   "/app.js",
   "/dieta.js",
@@ -114,11 +118,27 @@ self.addEventListener("fetch", (zdarzenie) => {
     return;
   }
 
-  // Wejście do aplikacji z zakładki na ekranie głównym to nawigacja pod „/",
-  // ale po odświeżeniu potrafi przyjść pod dowolną ścieżką — obie mają dostać
-  // tę samą powłokę.
   if (zadanie.mode === "navigate") {
-    zdarzenie.respondWith(cachePotemSiec(new Request("/index.html")));
+    // Aplikacja: powłoka z cache, odświeżenie w tle. To ta gałąź sprawia,
+    // że w piwnicy siłowni cokolwiek się otwiera.
+    if (adres.pathname === "/app" || adres.pathname.startsWith("/app/")) {
+      zdarzenie.respondWith(cachePotemSiec(new Request(POWLOKA_HTML)));
+      return;
+    }
+
+    // „/" to strona powitalna — najpierw sieć, bo ma być świeża.
+    //
+    // Zapas z powłoki jest tu mimo to konieczny: kto zainstalował aplikację
+    // wcześniej, ma w skrócie na ekranie głównym jeszcze stare start_url „/".
+    // Bez tej gałęzi taka osoba straciłaby tryb offline — czyli aplikacja
+    // zepsułaby się dokładnie tam, po co ją w ogóle instalowała.
+    if (adres.pathname === "/") {
+      zdarzenie.respondWith(fetch(zadanie).catch(() => cachePotemSiec(new Request(POWLOKA_HTML))));
+      return;
+    }
+
+    // Reszta stron (polityka, potwierdzenie wypisu) idzie zwykłą drogą —
+    // podanie im powłoki aplikacji byłoby podmianą treści.
     return;
   }
 

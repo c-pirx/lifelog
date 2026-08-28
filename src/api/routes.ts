@@ -19,10 +19,17 @@ import {
   nowyTokenKonektora,
   sekretSesjiDla,
   zaloguj,
-  zarejestruj,
   zmienHaslo,
   type Konto,
 } from "../domain/konta.js";
+import {
+  tokenWypisu,
+  wypiszZListy,
+  zapiszNaListe,
+  zarejestrujZKodem,
+} from "../domain/lista.js";
+import { wiadomoscDlaGospodarza, wiadomoscPowitalna } from "../domain/wiadomosci.js";
+import type { Poczta, Wiadomosc } from "../lib/poczta.js";
 import {
   celeNaDzien,
   czestePosilki,
@@ -55,14 +62,27 @@ import { dzisiaj, parsujCzas, przesunDate } from "../lib/time.js";
 
 export const NAZWA_CIASTECZKA = "sesja";
 
+/**
+ * Poczta razem z tym, czego potrzebuje treść wiadomości: dokąd prowadzą linki
+ * i kto dostaje powiadomienia. Komplet albo nic — sam transport bez adresu
+ * publicznego wysyłałby maile z linkami donikąd.
+ */
+export type UslugaPoczty = {
+  transport: Poczta;
+  /** Publiczny adres aplikacji, bez ukośnika na końcu. */
+  adresPubliczny: string;
+  /** Adres gospodarza — tam idą powiadomienia o zapisach na listę. */
+  gospodarz: string;
+};
+
 export type UstawieniaApi = {
-  /** Wspólne hasło bramy rejestracji (REJESTRACJA_HASLO). */
-  rejestracjaHaslo: string;
   sekretSesji: string;
   /** Strefa domyślna — konta zakładane bez podania własnej. */
   strefa: string;
   /** Wyłączane w testach i przy pracy lokalnej po http. */
   ciasteczkoTylkoHttps?: boolean;
+  /** Brak = zapisy na listę działają, maile nie wychodzą. */
+  poczta?: UslugaPoczty;
 };
 
 /**
@@ -183,11 +203,89 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
     return true;
   };
 
+  // === Lista oczekujących ===============================================
+
+  /**
+   * Wysyłka poza cyklem żądania: zapis już się udał i nie ma powodu, żeby
+   * awaria Resendu zamieniła go w 500. Nieudany mail zostaje w dzienniku —
+   * źródłem prawdy jest wiersz w rejestrze.
+   */
+  const wyslijWTle = (wiadomosc: Wiadomosc): void => {
+    if (!ustawienia.poczta) return;
+    void ustawienia.poczta.transport.wyslij(wiadomosc).catch((blad: unknown) => {
+      console.error(`Nie udało się wysłać „${wiadomosc.temat}":`, blad);
+    });
+  };
+
+  // Przed bramą sesji — zapisujący się ze zdefiniowania nie ma konta.
+  // Napór z internetu dławi nginx (strefa `zapisy`), boty odsiewa domena.
+  api.post("/lista", async (c) => {
+    const dane = z
+      .object({
+        email: z.string().min(1),
+        imie: z.string().optional(),
+        zgoda: z.boolean(),
+        /** Honeypot — pole ukryte przed człowiekiem. */
+        pulapka: z.string().optional(),
+        /** Znacznik załadowania strony, do minimalnego czasu wypełnienia. */
+        otwarto: z.number().optional(),
+      })
+      .parse(await c.req.json());
+
+    const wynik = zapiszNaListe(rejestr, dane);
+
+    // Maile wychodzą WYŁĄCZNIE przy nowym wpisie. Przy duplikacie milczymy,
+    // bo inaczej formularz stałby się działkiem na cudzą skrzynkę: jeden
+    // adres dostaje od nas najwyżej jedno powitanie, kiedykolwiek.
+    if (wynik.nowy && wynik.wpis && !ustawienia.poczta) {
+      // Zapis się udał, ale nikt się o nim nie dowie. Bez tej linijki cisza
+      // po stronie poczty byłaby zupełnie niema.
+      console.warn(
+        `Poczta wyłączona — nie wysłano powitania do ${wynik.wpis.email} ani powiadomienia.`,
+      );
+    }
+
+    if (wynik.nowy && wynik.wpis && ustawienia.poczta) {
+      const adresy = { publiczny: ustawienia.poczta.adresPubliczny };
+      wyslijWTle(
+        wiadomoscPowitalna({
+          email: wynik.wpis.email,
+          imie: wynik.wpis.imie,
+          numer: wynik.lacznie,
+          tokenWypisu: tokenWypisu(wynik.wpis.email, ustawienia.sekretSesji),
+          adresy,
+        }),
+      );
+      wyslijWTle(
+        wiadomoscDlaGospodarza({
+          odbiorca: ustawienia.poczta.gospodarz,
+          email: wynik.wpis.email,
+          imie: wynik.wpis.imie,
+          numer: wynik.lacznie,
+          lacznie: wynik.lacznie,
+        }),
+      );
+    }
+
+    // Jedna odpowiedź na nowy adres, duplikat i bota — formularz nie ma
+    // zdradzać, kto już jest na liście.
+    return c.json({ ok: true }, 201);
+  });
+
+  /**
+   * Wypis z linku w stopce maila. Zawsze ta sama strona: gdyby nieznany token
+   * dawał inną odpowiedź, link służyłby do sprawdzania, czy ktoś jest na liście.
+   */
+  api.get("/lista/wypis/:token", (c) => {
+    wypiszZListy(rejestr, c.req.param("token"), ustawienia.sekretSesji);
+    return c.redirect("/wypisano.html", 302);
+  });
+
   // === Rejestracja ======================================================
 
-  // Przed bramą sesji — rejestrujący ze zdefiniowania nie ma jeszcze konta.
-  // Napór z internetu dławi nginx (strefa `rejestracja`), a wpuszcza dopiero
-  // wspólne hasło bramy sprawdzane w domenie.
+  // Rejestracja stoi już nie na wspólnym haśle, tylko na jednorazowym kodzie
+  // z maila zaproszenia — dostęp da się cofnąć jednej osobie, a kod nie krąży
+  // dalej między znajomymi.
   api.post("/rejestracja", async (c) => {
     const dane = z
       .object({
@@ -198,7 +296,7 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
       })
       .parse(await c.req.json());
 
-    const wynik = zarejestruj(rejestr, { ...dane, kodOczekiwany: ustawienia.rejestracjaHaslo });
+    const wynik = zarejestrujZKodem(rejestr, dane);
     wydajSesje(c, wynik.id);
 
     // Jawny token pojawia się wyłącznie tutaj i przy rotacji — rejestr trzyma

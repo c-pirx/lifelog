@@ -12,16 +12,17 @@ import type { HttpBindings } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 
-import { utworzRouterApi } from "./api/routes.js";
+import { utworzRouterApi, type UslugaPoczty } from "./api/routes.js";
 import type { ZrodlaDanych } from "./db/pula.js";
 import { dzisiaj } from "./lib/time.js";
 import { utworzRouterMcp } from "./mcp/server.js";
 
 export type { ZrodlaDanych } from "./db/pula.js";
 
+/** Powłoka PWA. Pod „/" stoi strona powitalna, aplikacja mieszka pod /app. */
+const PLIK_POWLOKI = "/aplikacja.html";
+
 export type UstawieniaApp = {
-  /** Wspólne hasło bramy rejestracji (REJESTRACJA_HASLO). */
-  rejestracjaHaslo: string;
   sekretSesji: string;
   /** Strefa domyślna: /zdrowie i konta zakładane bez podania strefy. */
   strefa: string;
@@ -29,13 +30,22 @@ export type UstawieniaApp = {
   katalogStatykow?: string;
   /** Wyłączane przy pracy lokalnej po http. */
   ciasteczkoTylkoHttps?: boolean;
+  /** Brak = aplikacja działa, maile nie wychodzą. Patrz `config.wczytajPoczte`. */
+  poczta?: UslugaPoczty;
 };
 
 export function utworzApp(zrodla: ZrodlaDanych, ustawienia: UstawieniaApp) {
   const app = new Hono<{ Bindings: HttpBindings }>();
 
   app.get("/zdrowie", (c) =>
-    c.json({ ok: true, dzisiaj: dzisiaj(ustawienia.strefa), strefa: ustawienia.strefa }),
+    c.json({
+      ok: true,
+      dzisiaj: dzisiaj(ustawienia.strefa),
+      strefa: ustawienia.strefa,
+      // Jedyny sygnał, że wysyłka jest nieskonfigurowana — brak maila
+      // sam z siebie nie rzuca się w oczy.
+      poczta: ustawienia.poczta?.transport.wlaczona ?? false,
+    }),
   );
 
   app.route("/mcp", utworzRouterMcp(zrodla));
@@ -43,10 +53,10 @@ export function utworzApp(zrodla: ZrodlaDanych, ustawienia: UstawieniaApp) {
   app.route(
     "/api",
     utworzRouterApi(zrodla, {
-      rejestracjaHaslo: ustawienia.rejestracjaHaslo,
       sekretSesji: ustawienia.sekretSesji,
       strefa: ustawienia.strefa,
       ciasteczkoTylkoHttps: ustawienia.ciasteczkoTylkoHttps,
+      ...(ustawienia.poczta ? { poczta: ustawienia.poczta } : {}),
     }),
   );
 
@@ -60,10 +70,20 @@ export function utworzApp(zrodla: ZrodlaDanych, ustawienia: UstawieniaApp) {
     // identyczny jak na telefonie, tylko trudniejszy do zauważenia lokalnie.
     app.use("/*", async (c, nastepny) => {
       await nastepny();
-      if (/\.(html|js|css|json|webmanifest)$/.test(new URL(c.req.url).pathname) || c.req.path === "/") {
+      const sciezka = new URL(c.req.url).pathname;
+      if (/\.(html|js|css|json|webmanifest)$/.test(sciezka) || sciezka === "/" || sciezka === "/app") {
         c.header("Cache-Control", "no-cache");
       }
     });
+
+    // Powłoka aplikacji pod jednym adresem bez rozszerzenia — „/" należy
+    // do strony powitalnej. Osobna trasa, a nie katalog `public/app/`:
+    // wszystkie zasoby ładują się ścieżkami bezwzględnymi, więc jeden plik
+    // wystarcza, a katalog kusiłby do rozjechania się z resztą statyków.
+    app.get(
+      "/app",
+      serveStatic({ root: ustawienia.katalogStatykow, rewriteRequestPath: () => PLIK_POWLOKI }),
+    );
 
     app.use("/*", serveStatic({ root: ustawienia.katalogStatykow }));
   }

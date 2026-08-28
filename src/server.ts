@@ -15,6 +15,7 @@ import { wczytajKonfiguracje, wczytajPlikEnv } from "./config.js";
 import { katalogMigracjiRejestru, otworzBaze } from "./db/index.js";
 import { utworzPule, zmigrujWszystkie } from "./db/pula.js";
 import { uruchomHarmonogram } from "./harmonogram.js";
+import { pocztaResend } from "./lib/poczta.js";
 
 wczytajPlikEnv();
 
@@ -49,13 +50,34 @@ console.log(`Dzienniki: baz ${migracja.baz}, zastosowanych migracji ${migracja.z
 const pula = utworzPule({ katalog: katalogUzytkownikow });
 const zrodla = { rejestr, pula };
 
+// Brak kompletu zmiennych poczty nie zatrzymuje startu — zapisy na listę mają
+// działać nawet wtedy, gdy maile nie wychodzą. Żeby cisza nie była niema,
+// mówimy o tym w dzienniku, a /zdrowie niesie `poczta: false`.
+if (!konfiguracja.poczta) {
+  console.warn(
+    "Poczta wyłączona — brak kompletu RESEND_API_KEY, MAIL_OD, MAIL_GOSPODARZ, PUBLICZNY_ADRES.\n" +
+      "Zapisy na listę oczekujących działają, ale maile powitalne i powiadomienia nie wyjdą.",
+  );
+}
+
 const app = utworzApp(zrodla, {
-  rejestracjaHaslo: konfiguracja.rejestracjaHaslo,
   sekretSesji: konfiguracja.sekretSesji,
   strefa: konfiguracja.strefa,
   katalogStatykow: "./public",
   // Na produkcji HTTPS zapewnia reverse proxy; lokalnie pracujemy po http.
   ciasteczkoTylkoHttps: process.env["NODE_ENV"] === "production",
+  ...(konfiguracja.poczta
+    ? {
+        poczta: {
+          transport: pocztaResend({
+            klucz: konfiguracja.poczta.klucz,
+            nadawca: konfiguracja.poczta.nadawca,
+          }),
+          adresPubliczny: konfiguracja.poczta.adresPubliczny,
+          gospodarz: konfiguracja.poczta.gospodarz,
+        },
+      }
+    : {}),
 });
 
 // Wołane tylko tutaj, nigdy z utworzApp() — inaczej każdy test stawiający

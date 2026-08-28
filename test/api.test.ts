@@ -21,17 +21,18 @@ import { fileURLToPath } from "node:url";
 import { utworzApp } from "../src/app.js";
 import { otworzBaze } from "../src/db/index.js";
 import { utworzPule, type PulaBaz } from "../src/db/pula.js";
-import { zarejestruj } from "../src/domain/konta.js";
+import { utworzKonto } from "../src/domain/konta.js";
+import { zapiszNaListe, zapros } from "../src/domain/lista.js";
 import type { PlanNaDzis, PodsumowanieDnia, StanTreningu } from "../src/domain/typy.js";
 
 const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
 
 const LOGIN = "tester";
 const HASLO = "tajne-haslo-testowe";
-const KOD_BRAMY = "kod-bramy-testowy";
 const SEKRET = "sekret-sesji-o-wystarczajacej-dlugosci";
 
 let TOKEN_MCP = "";
+let rejestr: ReturnType<typeof otworzBaze>;
 let katalogPuli: string;
 let pula: PulaBaz;
 let serwer: ReturnType<typeof serve>;
@@ -60,23 +61,16 @@ async function wyslij(sciezka: string, dane: unknown): Promise<Response> {
 }
 
 beforeAll(async () => {
-  const rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
+  rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
   katalogPuli = mkdtempSync(join(tmpdir(), "api-test-"));
   pula = utworzPule({ katalog: katalogPuli });
 
-  const konto = zarejestruj(rejestr, {
-    kod: KOD_BRAMY,
-    login: LOGIN,
-    haslo: HASLO,
-    zgoda: true,
-    kodOczekiwany: KOD_BRAMY,
-  });
+  const konto = utworzKonto(rejestr, { login: LOGIN, haslo: HASLO, zgoda: true });
   TOKEN_MCP = konto.tokenKonektora;
 
   const app = utworzApp(
     { rejestr, pula },
     {
-      rejestracjaHaslo: KOD_BRAMY,
       sekretSesji: SEKRET,
       strefa: "Europe/Warsaw",
       ciasteczkoTylkoHttps: false,
@@ -94,10 +88,16 @@ afterAll(() => {
   rmSync(katalogPuli, { recursive: true, force: true });
 });
 
-describe("rejestracja", () => {
+/** Adres przechodzi przez listę i wraca z jednorazowym kodem, jak w mailu. */
+function zaproszonyKod(email: string): string {
+  zapiszNaListe(rejestr, { email, zgoda: true });
+  return zapros(rejestr, email).kod;
+}
+
+describe("rejestracja z zaproszenia", () => {
   it("zakłada konto, loguje od razu i oddaje token konektora dokładnie raz", async () => {
     const odpowiedz = await wyslij("/api/rejestracja", {
-      kod: KOD_BRAMY,
+      kod: zaproszonyKod("nowa@osoba.pl"),
       login: "nowa-osoba",
       haslo: "haslo-nowej-osoby",
       zgoda: true,
@@ -115,7 +115,7 @@ describe("rejestracja", () => {
     expect(dzien.status).toBe(200);
   });
 
-  it("odrzuca zły kod bramy czytelnym błędem", async () => {
+  it("odrzuca zmyślony kod zaproszenia czytelnym błędem", async () => {
     const odpowiedz = await wyslij("/api/rejestracja", {
       kod: "zly-kod",
       login: "ktos",
@@ -126,9 +126,29 @@ describe("rejestracja", () => {
     expect(((await odpowiedz.json()) as { kod: string }).kod).toBe("zly_kod_rejestracji");
   });
 
+  it("zużywa kod tylko raz — drugie konto z tego samego zaproszenia nie powstaje", async () => {
+    const kod = zaproszonyKod("dwa.razy@osoba.pl");
+    const pierwszy = await wyslij("/api/rejestracja", {
+      kod,
+      login: "pierwszy",
+      haslo: "haslo-pierwsze-1",
+      zgoda: true,
+    });
+    expect(pierwszy.status).toBe(201);
+
+    const drugi = await wyslij("/api/rejestracja", {
+      kod,
+      login: "drugi",
+      haslo: "haslo-drugie-12",
+      zgoda: true,
+    });
+    expect(drugi.status).toBe(400);
+    expect(((await drugi.json()) as { kod: string }).kod).toBe("zly_kod_rejestracji");
+  });
+
   it("odrzuca zajęty login", async () => {
     const odpowiedz = await wyslij("/api/rejestracja", {
-      kod: KOD_BRAMY,
+      kod: zaproszonyKod("zajety@osoba.pl"),
       login: LOGIN,
       haslo: "jakies-haslo-123",
       zgoda: true,

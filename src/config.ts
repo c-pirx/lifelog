@@ -11,11 +11,25 @@ export type Konfiguracja = {
   host: string;
   /** Katalog danych: rejestr.db i podkatalog uzytkownicy/ z dziennikami. */
   katalogDanych: string;
-  /** Wspólne hasło bramy rejestracji. */
-  rejestracjaHaslo: string;
   sekretSesji: string;
   /** Strefa domyślna: /zdrowie i konta zakładane bez podania strefy. */
   strefa: string;
+  /**
+   * Poczta wychodząca. Wszystkie trzy pola albo żadne — komplet włącza wysyłkę,
+   * brak choćby jednego zostawia aplikację działającą, tylko bez maili.
+   */
+  poczta: KonfiguracjaPoczty | null;
+};
+
+export type KonfiguracjaPoczty = {
+  /** Klucz API Resendu. */
+  klucz: string;
+  /** Nadawca w formacie „Nazwa <adres@domena>". */
+  nadawca: string;
+  /** Adres, na który idą powiadomienia o zapisach na listę. */
+  gospodarz: string;
+  /** Publiczny adres aplikacji, bez ukośnika — do linków w mailach. */
+  adresPubliczny: string;
 };
 
 /**
@@ -61,6 +75,25 @@ function wymagana(nazwa: string, braki: string[]): string {
   return wartosc;
 }
 
+/**
+ * Poczta jest OPCJONALNA i to świadoma decyzja: gdyby jej zmienne były
+ * wymagane, jedno pole zapomniane w /etc/asystent/env kładłoby aplikację przy
+ * wdrożeniu — a systemd restartowałby ją w pętli. Brak maili jest kłopotem,
+ * brak aplikacji awarią. Widać to w /zdrowie i w logu przy starcie.
+ *
+ * Komplet albo nic: sam klucz bez adresu publicznego dawałby maile z linkami
+ * donikąd, czyli gorzej niż brak maila.
+ */
+function wczytajPoczte(): KonfiguracjaPoczty | null {
+  const klucz = process.env["RESEND_API_KEY"]?.trim();
+  const nadawca = process.env["MAIL_OD"]?.trim();
+  const gospodarz = process.env["MAIL_GOSPODARZ"]?.trim();
+  const adresPubliczny = process.env["PUBLICZNY_ADRES"]?.trim().replace(/\/+$/, "");
+
+  if (!klucz || !nadawca || !gospodarz || !adresPubliczny) return null;
+  return { klucz, nadawca, gospodarz, adresPubliczny };
+}
+
 export function wczytajKonfiguracje(): Konfiguracja {
   const braki: string[] = [];
 
@@ -72,9 +105,9 @@ export function wczytajKonfiguracje(): Konfiguracja {
     // "domyślnie", a `??` przepuściłoby pusty ciąg jako prawidłowy adres.
     host: process.env["HOST"] || "::",
     katalogDanych: process.env["DANE_KATALOG"] ?? "./dane",
-    rejestracjaHaslo: wymagana("REJESTRACJA_HASLO", braki),
     sekretSesji: wymagana("SESSION_SECRET", braki),
     strefa: process.env["TZ_APP"] ?? "Europe/Warsaw",
+    poczta: wczytajPoczte(),
   };
 
   if (braki.length > 0) {

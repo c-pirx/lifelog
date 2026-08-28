@@ -47,7 +47,13 @@ function dzienZSerwera() {
 function treningZSerwera() {
   return {
     sesja: { id: 7, dzien_id: 2, dzien_kod: "A", dzien_nazwa: "Nogi", status: "aktywna" },
-    dzis: { data: "2026-08-25", dzien: { id: 2, kod: "A", nazwa: "Nogi" }, zrealizowany: false },
+    // Jawny typ, bo część testów podmienia dzień na `null` (dzień wolny),
+    // a wywnioskowany kształt takiego przypisania by nie przyjął.
+    dzis: {
+      data: "2026-08-25",
+      dzien: { id: 2, kod: "A", nazwa: "Nogi" } as { id: number; kod: string; nazwa: string } | null,
+      zrealizowany: false,
+    },
     wg_planu: [
       {
         cwiczenie_id: 3,
@@ -375,7 +381,7 @@ describe("nakładka na stan treningu", () => {
 
     const przysiad = wynik.wg_planu[0];
     // Ile serii dopisze serwer — wie serwer. Nakładka renderuje, nie liczy.
-    expect(przysiad?.serie.filter((s) => s.oczekuje)).toHaveLength(1);
+    expect(przysiad?.serie.filter((s: { oczekuje?: boolean }) => s.oczekuje)).toHaveLength(1);
     expect(przysiad?.serie.at(-1)?.cale_cwiczenie).toBe(true);
   });
 
@@ -969,13 +975,13 @@ describe("historia ruchu w widoku", () => {
 });
 
 describe("skrót dnia w historii ruchu", () => {
-  const dzien = (treningi, aktywnosci = []) => ({
+  const dzien = (treningi: unknown[], aktywnosci: unknown[] = []) => ({
     od: "2026-08-12",
     do: "2026-08-25",
     dni: [{ data: "2026-08-25", dystans_m: 0, czas_s: 0, treningi, aktywnosci }],
   });
 
-  const sesja = (id, kod = "T", trwanie_s = 4500) => ({
+  const sesja = (id: number, kod = "T", trwanie_s = 4500) => ({
     id,
     dzien_kod: kod,
     dzien_nazwa: "Test",

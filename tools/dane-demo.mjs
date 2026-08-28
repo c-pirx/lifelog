@@ -26,12 +26,12 @@ if (existsSync(PLIK_ENV)) {
 }
 
 const ADRES = process.argv[2] ?? `http://localhost:${process.env.PORT || 3000}`;
-const HASLO = process.env.REJESTRACJA_HASLO;
 
-if (!HASLO) {
-  console.error("REJESTRACJA_HASLO jest puste w .env — uruchom: npm run setup");
-  process.exit(1);
-}
+// Konto poglądowe zakłada się poza listą oczekujących, bo rejestracja przez
+// HTTP wymaga dziś jednorazowego kodu z zaproszenia. Hasło jest jawne
+// i wpisane na stałe: to narzędzie deweloperskie, nie sekret.
+const LOGIN = "demo";
+const HASLO = "demo-dla-podgladu";
 
 let ciasteczko = "";
 
@@ -80,17 +80,15 @@ function przedDniami(data, dni) {
 const zdrowie = await (await wyslij("/zdrowie", undefined, "GET")).json();
 const DZIS = zdrowie.dzisiaj;
 
-// Dane poglądowe żyją na osobnym koncie „demo", zakładanym przy pierwszym
-// uruchomieniu — praca nad wyglądem nie miesza wtedy w prawdziwym dzienniku.
-// Hasłem konta jest hasło bramy: to narzędzie deweloperskie, nie sekret.
-let logowanie = await wyslij("/api/logowanie", { login: "demo", haslo: HASLO });
+// Dane poglądowe żyją na osobnym koncie „demo" — praca nad wyglądem nie miesza
+// wtedy w prawdziwym dzienniku.
+const logowanie = await wyslij("/api/logowanie", { login: LOGIN, haslo: HASLO });
 if (logowanie.status === 401) {
-  logowanie = await wyslij("/api/rejestracja", {
-    kod: HASLO,
-    login: "demo",
-    haslo: HASLO,
-    zgoda: true,
-  });
+  console.error(
+    `Konto „${LOGIN}" nie istnieje. Utwórz je raz:\n` +
+      `  npm run build && npm run konta -- utworz ${LOGIN} ${HASLO}`,
+  );
+  process.exit(1);
 }
 ciasteczko = (logowanie.headers.get("set-cookie") ?? "").split(";")[0];
 

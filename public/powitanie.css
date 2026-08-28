@@ -1,0 +1,518 @@
+/*
+ * Strona powitalna — jedyne, co widzi ktoś bez konta.
+ *
+ * Osobny arkusz, nie dopisek do style.css: tamten opisuje aplikację używaną
+ * kciukiem na siłowni, ten stronę czytaną na spokojnie. Wspólne zostają tylko
+ * barwy, żeby jedno i drugie było widocznie tym samym produktem.
+ *
+ * Dwie barwy niosą całą opowieść i są używane wyłącznie tak:
+ *   --mowa   (bursztyn) — to, co człowiek powiedział,
+ *   --akcent (mięta)    — to, co zostało zapisane w dzienniku.
+ * Nic innego nie dostaje koloru.
+ *
+ * Krój dziennika to monospace: etykiety, godziny, liczby i zapisy. Zwykły
+ * tekst czyta się krojem systemowym. Żadnych czcionek z zewnątrz — strona
+ * obiecuje brak żądań do obcych serwerów i ma tej obietnicy dotrzymać.
+ */
+
+:root {
+  --tlo: #0f1115;
+  --powierzchnia: #171a21;
+  --linia: #2a2f3a;
+  --tekst: #e8eaed;
+  --cichy: #9aa3b2;
+  --akcent: #7dd3a0;
+  --mowa: #f0b26b;
+  --blad: #e58b8b;
+
+  --dziennik: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", Menlo, Consolas, monospace;
+  --proza: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+
+  --rynna: 5.5rem;
+  --szerokosc: 46rem;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--tlo);
+  color: var(--tekst);
+  font-family: var(--proza);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--akcent);
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--akcent);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.tresc {
+  max-width: var(--szerokosc);
+  margin: 0 auto;
+  padding: 0 1.25rem;
+}
+
+/* Etykieta sekcji: krój dziennika, wersaliki, rozstrzelenie. Jedyna ozdoba,
+   jaką dostają nagłówki — reszta pracy należy do odstępów. */
+.etykieta {
+  margin: 0 0 0.75rem;
+  font-family: var(--dziennik);
+  font-size: 0.7rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cichy);
+}
+
+h2 {
+  margin: 0 0 1.5rem;
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+section {
+  padding: clamp(3.5rem, 9vw, 6rem) 0;
+  border-top: 1px solid var(--linia);
+}
+
+/* === Nagłówek strony =================================================== */
+
+.pasek {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  max-width: var(--szerokosc);
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.marka {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-family: var(--dziennik);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.marka svg {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+}
+
+.pasek a {
+  font-family: var(--dziennik);
+  font-size: 0.85rem;
+  color: var(--cichy);
+  text-decoration: none;
+}
+
+.pasek a:hover {
+  color: var(--tekst);
+}
+
+/* === Hero ============================================================== */
+
+.hero {
+  border-top: 0;
+  padding-top: clamp(2rem, 6vw, 3.5rem);
+}
+
+.hero h1 {
+  margin: 0 0 1.25rem;
+  font-size: clamp(2.1rem, 7vw, 3.4rem);
+  font-weight: 640;
+  line-height: 1.05;
+  letter-spacing: -0.035em;
+}
+
+.hero h1 em {
+  font-style: normal;
+  color: var(--akcent);
+}
+
+.wstep {
+  max-width: 34rem;
+  margin: 0 0 2.5rem;
+  color: var(--cichy);
+  font-size: 1.08rem;
+}
+
+/* === Podpis strony: zdanie zamienia się w zapis ========================= */
+
+/* Serce strony. Na górze to, co człowiek powiedział, pod spodem wiersz, który
+   z tego powstał w dzienniku. Cały produkt w jednym geście — dlatego jest to
+   jedyne miejsce z animacją. */
+.przemiana {
+  margin: 0 0 2.5rem;
+  padding: 1.1rem 1.25rem 1.25rem;
+  background: var(--powierzchnia);
+  border: 1px solid var(--linia);
+  border-radius: 14px;
+}
+
+.przemiana .mowa {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  min-height: 3.2rem;
+  color: var(--mowa);
+  font-size: 1.05rem;
+}
+
+.przemiana .mowa::before {
+  content: "„";
+  flex: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  opacity: 0.55;
+}
+
+.przemiana .strzalka {
+  margin: 0.85rem 0;
+  border: 0;
+  border-top: 1px dashed var(--linia);
+}
+
+.przemiana .zapis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 1.1rem;
+  min-height: 3.2rem;
+  font-family: var(--dziennik);
+  font-size: 0.95rem;
+  color: var(--akcent);
+}
+
+.przemiana .pole {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  opacity: 0;
+  transform: translateY(4px);
+  animation: wjazd 0.34s ease-out forwards;
+}
+
+.przemiana .pole span {
+  color: var(--cichy);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes wjazd {
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Kursor tylko wtedy, gdy zdanie jest w trakcie pisania. */
+.przemiana.pisze .mowa::after {
+  content: "";
+  display: inline-block;
+  width: 0.55em;
+  height: 1.1em;
+  translate: 0 0.15em;
+  background: var(--mowa);
+  animation: miganie 1s steps(2, jump-none) infinite;
+}
+
+@keyframes miganie {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* === Formularz zapisu ================================================== */
+
+.zapis-form {
+  display: grid;
+  gap: 0.75rem;
+  max-width: 30rem;
+}
+
+.zapis-form .para {
+  display: flex;
+  gap: 0.6rem;
+}
+
+/* Na telefonie pole obok przycisku zostawia na adres niecałe 200 px — długi
+   e-mail przestaje się mieścić w polu w chwili, gdy się go wpisuje. */
+@media (max-width: 34rem) {
+  .zapis-form .para {
+    flex-direction: column;
+  }
+}
+
+.zapis-form input[type="email"],
+.zapis-form input[type="text"] {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0.85rem 1rem;
+  background: var(--powierzchnia);
+  border: 1px solid var(--linia);
+  border-radius: 11px;
+  color: var(--tekst);
+  font-family: var(--proza);
+  font-size: 1rem;
+}
+
+.zapis-form input::placeholder {
+  color: #6e7789;
+}
+
+.zapis-form input:focus {
+  border-color: var(--akcent);
+  outline: none;
+}
+
+.zapis-form button {
+  flex: none;
+  padding: 0.85rem 1.4rem;
+  background: var(--akcent);
+  border: 0;
+  border-radius: 11px;
+  color: #0f1115;
+  font-family: var(--proza);
+  font-size: 1rem;
+  font-weight: 640;
+  cursor: pointer;
+}
+
+.zapis-form button:hover {
+  background: #93e0b3;
+}
+
+.zapis-form button[disabled] {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.zgoda {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  color: var(--cichy);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.zgoda input {
+  flex: none;
+  margin-top: 0.25rem;
+  width: 18px;
+  height: 18px;
+  accent-color: var(--akcent);
+}
+
+/* Pułapka na roboty: musi być niedostępna dla człowieka i dla czytnika
+   ekranu, ale wypełnialna przez skrypt, który czyta sam HTML. */
+.pulapka {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+.komunikat {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+.komunikat.zly {
+  color: var(--blad);
+}
+
+.gotowe {
+  padding: 1.25rem;
+  background: var(--powierzchnia);
+  border: 1px solid var(--akcent);
+  border-radius: 12px;
+}
+
+.gotowe p {
+  margin: 0;
+}
+
+.gotowe p + p {
+  margin-top: 0.6rem;
+  color: var(--cichy);
+  font-size: 0.9rem;
+}
+
+/* === Dzień w dzienniku ================================================= */
+
+/* Rynna z godzinami zamiast numerków 01/02/03: to naprawdę jest przebieg dnia,
+   więc godzina niesie informację, której numer porządkowy by nie niósł. */
+.dzien {
+  display: grid;
+  gap: 0;
+}
+
+.wpis {
+  display: grid;
+  grid-template-columns: var(--rynna) 1fr;
+  gap: 0 1.25rem;
+  padding: 1.4rem 0;
+  border-top: 1px solid var(--linia);
+}
+
+.wpis:first-child {
+  border-top: 0;
+}
+
+.wpis .godzina {
+  font-family: var(--dziennik);
+  font-size: 0.85rem;
+  color: var(--cichy);
+  font-variant-numeric: tabular-nums;
+}
+
+.wpis p {
+  margin: 0;
+}
+
+.wpis .droga {
+  margin-top: 0.4rem;
+  font-family: var(--dziennik);
+  font-size: 0.78rem;
+  color: var(--cichy);
+}
+
+@media (max-width: 34rem) {
+  .wpis {
+    grid-template-columns: 1fr;
+    gap: 0.35rem;
+  }
+}
+
+/* === Co dostajesz ====================================================== */
+
+/* Lista definicji, nie kafelki: to jest spis rzeczy, które produkt umie,
+   a spis czyta się w kolumnie. */
+.spis {
+  margin: 0;
+}
+
+.spis div {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0 1.25rem;
+  padding: 1.1rem 0;
+  border-top: 1px solid var(--linia);
+}
+
+.spis dt {
+  font-family: var(--dziennik);
+  font-size: 0.9rem;
+  color: var(--tekst);
+}
+
+.spis dd {
+  margin: 0;
+  color: var(--cichy);
+}
+
+@media (max-width: 40rem) {
+  .spis div {
+    grid-template-columns: 1fr;
+    gap: 0.3rem;
+  }
+}
+
+/* === Dane ============================================================== */
+
+.dane li {
+  margin-bottom: 0.7rem;
+  color: var(--cichy);
+}
+
+.dane li strong {
+  color: var(--tekst);
+  font-weight: 600;
+}
+
+/* === Pytania =========================================================== */
+
+.pytanie {
+  border-top: 1px solid var(--linia);
+}
+
+.pytanie summary {
+  padding: 1.1rem 0;
+  font-weight: 560;
+  cursor: pointer;
+  list-style: none;
+}
+
+.pytanie summary::-webkit-details-marker {
+  display: none;
+}
+
+.pytanie summary::after {
+  content: "+";
+  float: right;
+  font-family: var(--dziennik);
+  color: var(--cichy);
+}
+
+.pytanie[open] summary::after {
+  content: "−";
+}
+
+.pytanie p {
+  margin: 0 0 1.1rem;
+  max-width: 38rem;
+  color: var(--cichy);
+}
+
+/* === Stopka ============================================================ */
+
+footer {
+  padding: 2.5rem 0 3.5rem;
+  border-top: 1px solid var(--linia);
+  color: var(--cichy);
+  font-family: var(--dziennik);
+  font-size: 0.8rem;
+}
+
+footer p {
+  margin: 0 0 0.5rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .przemiana .pole {
+    opacity: 1;
+    transform: none;
+    animation: none;
+  }
+
+  .przemiana.pisze .mowa::after {
+    animation: none;
+  }
+}

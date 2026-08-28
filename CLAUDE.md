@@ -1,10 +1,14 @@
 # Lifelog — asystent diety i treningu
 
 Dziennik posiłków i treningów dla wąskiego kręgu użytkowników (gospodarz
-plus zaproszeni znajomi; rejestracja za wspólnym hasłem bramy). Dwa wejścia
-do tych samych danych: **Claude** (przez MCP — dyktowanie zdaniem, każdy
-użytkownik podpina własną subskrypcję swoim tokenem) oraz **aplikacja
-webowa PWA** (na siłowni, gdzie rozmowa jest za wolna).
+plus zaproszeni znajomi; rejestracja wyłącznie z jednorazowych kodów
+wysyłanych na adresy z listy oczekujących). Dwa wejścia do tych samych
+danych: **Claude** (przez MCP — dyktowanie zdaniem, każdy użytkownik podpina
+własną subskrypcję swoim tokenem) oraz **aplikacja webowa PWA** (na siłowni,
+gdzie rozmowa jest za wolna).
+
+Pod `/` stoi **strona powitalna** z formularzem zapisu na listę; aplikacja
+mieszka pod `/app`.
 
 Interfejs, komentarze, komunikaty i commity **po polsku**.
 
@@ -59,6 +63,79 @@ bo to jedyna realna droga powrotu po złym wdrożeniu. Przebudowa tabeli
 Wejście **stdio** (self-hosting) celowo zostaje jednoosobowe: `DB_PATH`
 wskazuje jedną bazę, bez rejestru.
 
+## Lista oczekujących: jedyna droga do konta
+
+Rejestracja nie stoi już na wspólnym haśle bramy. Kolejność jest teraz taka:
+adres trafia na listę (`POST /api/lista` ze strony powitalnej) → gospodarz
+zaprasza konkretny wpis (`npm run lista -- zapros`) → **jednorazowy kod**
+z maila zamienia się w konto i gaśnie. Dostęp da się cofnąć jednej osobie,
+a kod przekazany dalej nikomu nie pomaga.
+
+Trzecia dziedzina rejestru, obok kont: tabela `lista_oczekujacych`, SQL
+w `src/db/rejestr.ts`, logika w `src/domain/lista.ts`. Zależność idzie
+w jedną stronę — `lista.ts` woła `utworzKonto` z `konta.ts`, konta o liście
+nie wiedzą nic.
+
+**Jednorazowość kodu to zerowanie `kod_hasz` w tej samej transakcji**, w której
+powstaje konto (`zarejestrujZKodem`). Bez transakcji dwa równoległe żądania
+z tym samym kodem założyłyby dwa konta: oba znalazłyby wiersz przed zapisem
+drugiego.
+
+**Jeden adres dostaje najwyżej jeden mail powitalny, kiedykolwiek.** Duplikat
+zapisu zwraca tę samą odpowiedź co nowy adres, ale nie wysyła nic. To jedyna
+rzecz, która przy zapisie bez potwierdzania adresu (single opt-in) broni
+formularza przed zamienieniem go w działko na cudzą skrzynkę. Tą samą zasadą
+odpowiedź nie różni się dla bota, duplikatu i nowego zapisu — inaczej formularz
+zdradzałby, kto już jest na liście.
+
+**Token wypisu nie ma kolumny w bazie** — wyprowadza go HMAC z adresu
+(`podpiszTekst` w `auth.ts`, wariant sekretu `|wypis-z-listy`). Dzięki temu
+każdy kolejny mail może nieść działający link; hasz w jednej kolumnie
+unieważniałby link z poprzedniej wiadomości. Wypis **kasuje wiersz**, nie
+oznacza go.
+
+**Boty odsiewa honeypot i minimalny czas wypełnienia**, bez CAPTCHy i bez
+skryptów z obcych domen — strona powitalna obiecuje brak takich żądań i ma
+tej obietnicy dotrzymać. Napór z internetu dławi nginx (strefa `zapisy`).
+
+**Konto poza listą zakłada `npm run konta -- utworz`** — dla gospodarza, dla
+konta poglądowego (`npm run demo`) i gdyby mail uparcie nie docierał.
+
+### Poczta
+
+Transport w `src/lib/poczta.ts` (Resend przez `fetch`, zero nowych zależności),
+treść w `src/domain/wiadomosci.ts` — trzy wiadomości transakcyjne i ani jednej
+więcej. Poczta jest **wstrzykiwana** do `utworzApp`, więc testy podstawiają
+atrapę i żaden z nich nie dobija się do internetu.
+
+**Zmienne poczty są opcjonalne** (`RESEND_API_KEY`, `MAIL_OD`, `MAIL_GOSPODARZ`,
+`PUBLICZNY_ADRES` — komplet albo nic). Gdyby były wymagane, jedno pole
+zapomniane w `/etc/asystent/env` kładłoby aplikację przy wdrożeniu, a systemd
+restartowałby ją w pętli. Brak maili jest kłopotem, brak aplikacji awarią.
+Widać to w `/zdrowie` (`poczta: false`) i w dzienniku przy każdym zapisie.
+
+**Wysyłka nie blokuje odpowiedzi HTTP.** Trasa zwraca 201 od razu, maile idą
+obok, a niepowodzenie ląduje w dzienniku — źródłem prawdy jest wiersz
+w rejestrze, nie dostarczony mail.
+
+### Strona powitalna i rozdział `/` od `/app`
+
+`public/index.html` to strona powitalna (własny arkusz `powitanie.css`
+i `powitanie.js`), `public/aplikacja.html` to powłoka PWA wystawiona przez
+trasę `GET /app`. Konsekwencje, których nie wolno cofnąć:
+
+- `manifest.json` ma `start_url: "/app"`, ale `scope` zostaje `"/"` — scope
+  musi obejmować `/api/`, inaczej service worker przestałby buforować
+  odpowiedzi API i offline by padł;
+- w `sw.js` nawigacja pod `/app*` dostaje powłokę z cache, pod `/` idzie
+  **najpierw do sieci**, a przy jej braku spada na powłokę: kto zainstalował
+  aplikację wcześniej, ma w skrócie jeszcze stare `start_url: "/"` i bez tej
+  gałęzi straciłby tryb offline;
+- nawigacje pod inne strony (`polityka.html`, `wypisano.html`) idą zwykłą
+  drogą — podanie im powłoki aplikacji byłoby podmianą treści.
+
+Link zaproszenia prowadzi na `/app?kod=…`; kod znika z paska adresu.
+
 ## Polecenia
 
 ```bash
@@ -69,7 +146,8 @@ npm run build        # kompilacja do dist/
 npm run demo         # dane poglądowe na koncie "demo" (przy działającym dev)
 npm run reset -- --tak   # czyszczenie lokalnych baz (rejestr + dzienniki)
 npm run przenies -- --login x --haslo y   # jednorazowo: baza jednoosobowa → wielodostęp
-npm run konta -- lista   # administracja kontami (haslo/zablokuj/usun) — wymaga build
+npm run konta -- lista   # administracja kontami (utworz/haslo/zablokuj/usun) — wymaga build
+npm run lista            # lista oczekujących; `-- zapros <email>` wysyła kod
 npm run rozszerzenie # paczka .mcpb dla Claude Desktop
 ```
 
@@ -134,9 +212,10 @@ podmienia go na `[token-ukryty]`. Nie usuwaj przy edycji konfiguracji.
 uruchamiamy jako `ubuntu`, a `/etc/asystent` ma prawa `750 root:root`. Zwykłe
 `[ -f /etc/asystent/env ]` nie potrafi wejść do katalogu i odpowiada „pliku
 nie ma" — przez co `02-aplikacja.sh` uznawał serwer za świeży i przy **każdym**
-wdrożeniu generował nowe sekrety (dziś: hasło bramy rejestracji i klucz
-sesji — wymiana klucza wylogowałaby wszystkich ze wszystkich urządzeń).
-Bazy pozostają nietknięte, ale dostęp trzeba konfigurować od nowa.
+wdrożeniu generował nowe sekrety (dziś jest to klucz sesji — jego wymiana
+wylogowałaby wszystkich ze wszystkich urządzeń i unieważniła linki wypisu
+z już wysłanych maili). Bazy pozostają nietknięte, ale dostęp trzeba
+konfigurować od nowa.
 
 **Kolejność plików SSH.** Plik nazywa się `00-utwardzenie.conf`, nie `99-`:
 w SSH wygrywa **pierwsze** wystąpienie ustawienia, a obraz Ubuntu ma
@@ -505,12 +584,22 @@ sesji (`historiaSesji`, `zmien_wpis` z `typ='sesja'`), zakładka Notatki
 z czyszczeniem dyktowanej transkrypcji (narzędzie `notatki`,
 `GET/POST /notatki`, `zmien_wpis` z `typ='notatka'`), komunikat
 o zrealizowanym dniu na ekranie Trening (`planNaDzis` w `GET /trening`
-i w `stan_treningu`), a na koniec wielodostęp: rejestr kont, baza na
-użytkownika, rejestracja za hasłem bramy, ekran Konto z adresem konektora
-i zmianą hasła (sekcja „Wielodostęp" wyżej).
+i w `stan_treningu`), wielodostęp: rejestr kont, baza na użytkownika, ekran
+Konto z adresem konektora i zmianą hasła (sekcja „Wielodostęp" wyżej), a na
+koniec lista oczekujących: strona powitalna pod `/` z formularzem zapisu,
+aplikacja pod `/app`, jednorazowe kody zaproszeń zamiast wspólnego hasła
+bramy, maile przez Resend i `npm run lista` (sekcja „Lista oczekujących"
+wyżej).
 
 Z listy odłożonych spadło przez to „lista ostatnich sesji"; **poprawianie serii
 wstecz nadal czeka** — zakładka pokazuje wyniki, ale ich nie edytuje.
+
+Odłożone świadomie przy liście oczekujących: panel administracyjny w aplikacji
+(zapraszanie idzie przez CLI, tą samą drogą co `npm run konta` — zero nowych
+tras to zero nowej powierzchni ataku), ponawianie nieudanej wysyłki,
+potwierdzanie adresu klikiem w mail (double opt-in) oraz narzędzie MCP do
+listy — budżet 12 narzędzi jest wyczerpany, a lista nie jest dziedziną
+użytkownika.
 
 Odłożone świadomie przy notatkach: wyszukiwanie pełnotekstowe (trzy foldery
 i „Pokaż starsze" wystarczają, dopóki notatek są setki; FTS5 to osobna decyzja)

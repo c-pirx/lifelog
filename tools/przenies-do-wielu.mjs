@@ -61,7 +61,7 @@ if (!existsSync(join(DIST, "domain", "konta.js"))) {
 const { otworzBaze, katalogMigracjiRejestru } = await import(
   pathToFileURL(join(DIST, "db", "index.js"))
 );
-const { zarejestruj } = await import(pathToFileURL(join(DIST, "domain", "konta.js")));
+const { utworzKonto } = await import(pathToFileURL(join(DIST, "domain", "konta.js")));
 const Database = (await import("better-sqlite3")).default;
 
 // 1. Kopia przez API kopii SQLite, nie zwykłe skopiowanie pliku — baza mogła
@@ -84,9 +84,9 @@ if (zajete.ile > 0) {
   process.exit(1);
 }
 
-const wynik = zarejestruj(rejestr, {
-  kod: "przeniesienie",
-  kodOczekiwany: "przeniesienie",
+// Bez kodu zaproszenia: przeniesienie własnych danych nie przechodzi przez
+// listę oczekujących, więc idzie wprost do zakładania konta.
+const wynik = utworzKonto(rejestr, {
   login,
   haslo,
   zgoda: true,

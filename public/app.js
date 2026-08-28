@@ -2602,7 +2602,8 @@ document.getElementById("pokaz-logowanie")?.addEventListener("click", () => {
     document.getElementById("rejestracja-kod").value = kodZLinku;
     formularzLogowania.hidden = true;
     formularzRejestracji.hidden = false;
-    // Kod znika z paska adresu: to sekret bramy, a nie część adresu strony.
+    // Kod znika z paska adresu: to jednorazowy sekret z maila, a nie część
+    // adresu strony — nie ma go po co zostawiać w historii przeglądarki.
     history.replaceState(null, "", location.pathname);
   }
 }

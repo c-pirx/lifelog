@@ -4,6 +4,7 @@
  * jedyna ścieżka resetu hasła, zamiast wysyłki e-maili.
  *
  *   npm run konta -- lista
+ *   npm run konta -- utworz <login> <haslo>         # konto poza listą oczekujących
  *   npm run konta -- haslo <login> <nowe-haslo>     # reset hasła
  *   npm run konta -- zablokuj <login>               # konto i konektor gasną
  *   npm run konta -- odblokuj <login>
@@ -41,7 +42,7 @@ if (!existsSync(join(DIST, "domain", "konta.js"))) {
 const { otworzBaze, katalogMigracjiRejestru } = await import(
   pathToFileURL(join(DIST, "db", "index.js"))
 );
-const { zmienHaslo } = await import(pathToFileURL(join(DIST, "domain", "konta.js")));
+const { utworzKonto, zmienHaslo } = await import(pathToFileURL(join(DIST, "domain", "konta.js")));
 
 const rejestr = otworzBaze({ sciezka: REJESTR, katalogMigracji: katalogMigracjiRejestru() });
 
@@ -76,6 +77,22 @@ switch (polecenie) {
         : "konektor nieużywany";
       console.log(`  ${w.id}. ${w.login}  ${stan}  ${w.strefa}  ${konektor}`);
     }
+    break;
+  }
+
+  // Konto z pominięciem listy oczekujących: dla gospodarza, dla konta
+  // poglądowego (npm run demo) i na wypadek, gdyby mail z zaproszeniem
+  // uparcie nie docierał.
+  case "utworz": {
+    const haslo = reszta[0];
+    if (!login || !haslo) {
+      console.error("Użycie: npm run konta -- utworz <login> <haslo>");
+      process.exit(1);
+    }
+    const wynik = utworzKonto(rejestr, { login, haslo, zgoda: true });
+    console.log(`Konto ${login} utworzone (id ${wynik.id}).`);
+    console.log("Token konektora — widoczny TYLKO teraz, zapisz go:");
+    console.log(`  ${wynik.tokenKonektora}`);
     break;
   }
 
@@ -123,7 +140,8 @@ switch (polecenie) {
 
   default:
     console.error(
-      "Polecenia: lista | haslo <login> <nowe> | zablokuj <login> | odblokuj <login> | usun <login> --tak",
+      "Polecenia: lista | utworz <login> <haslo> | haslo <login> <nowe> | " +
+        "zablokuj <login> | odblokuj <login> | usun <login> --tak",
     );
     process.exit(1);
 }

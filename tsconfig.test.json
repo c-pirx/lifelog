@@ -10,5 +10,10 @@
     // logika offline nie została bez pokrycia. Build ich nie widzi.
     "allowJs": true
   },
+  // Bez własnego `exclude` katalog test/ wypadał tu z powrotem: pole
+  // dziedziczy się z tsconfig.json, gdzie „test" jest wykluczony na potrzeby
+  // builda, a wykluczenie wygrywa z `include`. Efekt był cichy — typecheck
+  // przechodził, mimo że nie sprawdzał ani jednego pliku testu.
+  "exclude": ["node_modules", "dist"],
   "include": ["src/**/*.ts", "test/**/*.ts", "vitest.config.ts"]
 }
