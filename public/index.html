@@ -80,6 +80,7 @@
         </div>
 
         <form class="zapis-form" id="formularz" novalidate>
+          <p class="zapis-kicker">Zapis na zamkniętą betę</p>
           <div class="para">
             <label class="pulapka">
               Nie wypełniaj tego pola
@@ -187,37 +188,17 @@
             </li>
           </ul>
 
-          <!-- Wykres jak z ekranu Postępy: linia wagi i przerywany cel.
-               Liczby są przykładowe, więc sam rysunek jest dekoracją
-               (aria-hidden), a podpis zostaje widoczny dla czytnika. -->
-          <figure class="wykres">
-            <figcaption><span>postępy</span><span>waga · 7 dni</span></figcaption>
-            <svg viewBox="0 0 280 132" aria-hidden="true">
-              <line class="wykres-cel" x1="14" y1="100" x2="266" y2="100" />
-              <text class="wykres-cel-podpis" x="16" y="94">cel 83,0</text>
-              <polygon
-                class="wykres-pole"
-                points="20,32 60,26 100,49 140,43 180,60 220,72 260,77 260,112 20,112"
-              />
-              <polyline
-                class="wykres-linia"
-                pathLength="1"
-                points="20,32 60,26 100,49 140,43 180,60 220,72 260,77"
-              />
-              <g class="wykres-punkty">
-                <circle cx="20" cy="32" r="2.6" />
-                <circle cx="60" cy="26" r="2.6" />
-                <circle cx="100" cy="49" r="2.6" />
-                <circle cx="140" cy="43" r="2.6" />
-                <circle cx="180" cy="60" r="2.6" />
-                <circle cx="220" cy="72" r="2.6" />
-                <circle cx="260" cy="77" r="3.6" class="ostatni" />
-                <text class="wykres-wartosc" x="256" y="66">83,4</text>
-              </g>
-              <g class="wykres-dni">
-                <text x="20" y="128">pn</text><text x="60" y="128">wt</text><text x="100" y="128">śr</text><text x="140" y="128">cz</text><text x="180" y="128">pt</text><text x="220" y="128">so</text><text x="260" y="128">nd</text>
-              </g>
-            </svg>
+          <!-- Prawdziwy zrzut zakładki Postępy z konta poglądowego (dane
+               przykładowe, nie cudze). Odświeżenie: npm run demo + skrypt
+               playwright ze scratchpada; nowa wersja pliku = nowa nazwa,
+               bo nginx trzyma PNG w cache 30 dni. -->
+          <figure class="zrzut">
+            <div class="telefon telefon-zrzut" aria-hidden="true">
+              <div class="telefon-ekran">
+                <img src="/zrzuty/postepy.png" width="750" height="1624" alt="" loading="lazy" />
+              </div>
+            </div>
+            <figcaption>zakładka Postępy · prawdziwy ekran</figcaption>
           </figure>
         </div>
         <p class="cta-srodek"><a href="#lista">Brzmi dobrze? Zostaw adres →</a></p>

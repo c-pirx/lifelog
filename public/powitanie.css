@@ -154,7 +154,7 @@ section {
 
 .wstep {
   max-width: 34rem;
-  margin: 0 0 2.5rem;
+  margin: 0 0 2rem;
   color: var(--cichy);
   font-size: 1.08rem;
 }
@@ -165,7 +165,7 @@ section {
    z tego powstał w dzienniku. Cały produkt w jednym geście — dlatego jest to
    jedyne miejsce z animacją. */
 .przemiana {
-  margin: 0 0 2.5rem;
+  margin: 0 0 2rem;
   padding: 1.1rem 1.25rem 1.25rem;
   background: var(--powierzchnia);
   border: 1px solid var(--linia);
@@ -275,6 +275,32 @@ section {
   display: grid;
   gap: 0.75rem;
   max-width: 30rem;
+}
+
+/* Formularz w hero dostaje własną ramę z miętowym obrysem: to najważniejsze
+   pole strony i ma być widoczne od pierwszego spojrzenia, nie doklejone pod
+   animacją. Panel na dole strony jest wersją wypełnioną tej samej ramy. */
+.hero .zapis-form {
+  max-width: 32rem;
+  padding: 1.4rem 1.4rem 1.2rem;
+  background: var(--powierzchnia);
+  border: 1px solid rgba(125, 211, 160, 0.4);
+  border-radius: 16px;
+}
+
+.zapis-kicker {
+  margin: 0;
+  font-family: var(--dziennik);
+  font-size: 0.68rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--akcent);
+}
+
+/* Pola na tle ramy: ciemniejsze niż jej powierzchnia, inaczej by się zlały. */
+.hero .zapis-form input[type="email"],
+.hero .zapis-form input[type="text"] {
+  background: var(--tlo);
 }
 
 .zapis-form .para {
@@ -670,22 +696,31 @@ section {
   font-size: 0.95rem;
 }
 
-/* Panel wykresu — ta sama rama co przemiana w hero, żeby „podgląd produktu"
-   miał na całej stronie jeden kształt. */
-.wykres {
-  width: 19rem;
-  max-width: 100%;
+/* Prawdziwy zrzut zakładki w tej samej ramce telefonu, co makieta wyżej —
+   jeden język „urządzenia" na całej stronie. */
+.zrzut {
   margin: 0;
-  padding: 1rem 1.1rem 0.9rem;
-  background: var(--powierzchnia);
-  border: 1px solid var(--linia);
-  border-radius: 14px;
+  justify-self: center;
 }
 
-.wykres figcaption {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 0.8rem;
+.telefon-zrzut {
+  width: clamp(13rem, 26vw, 15rem);
+  aspect-ratio: auto;
+}
+
+.telefon-zrzut .telefon-ekran {
+  height: auto;
+}
+
+.telefon-zrzut img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.zrzut figcaption {
+  margin-top: 0.8rem;
+  text-align: center;
   font-family: var(--dziennik);
   font-size: 0.66rem;
   letter-spacing: 0.14em;
@@ -693,95 +728,10 @@ section {
   color: var(--cichy);
 }
 
-.wykres svg {
-  display: block;
-  width: 100%;
-  height: auto;
-}
-
-.wykres-linia {
-  fill: none;
-  stroke: var(--akcent);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.wykres-pole {
-  fill: var(--akcent);
-  opacity: 0.08;
-}
-
-.wykres-cel {
-  stroke: var(--cichy);
-  stroke-width: 1;
-  stroke-dasharray: 4 5;
-  opacity: 0.7;
-}
-
-.wykres-cel-podpis,
-.wykres-dni text {
-  font-family: var(--dziennik);
-  font-size: 9px;
-  fill: var(--cichy);
-}
-
-.wykres-dni text {
-  text-anchor: middle;
-}
-
-.wykres-wartosc {
-  font-family: var(--dziennik);
-  font-size: 10px;
-  fill: var(--akcent);
-  text-anchor: end;
-}
-
-.wykres-punkty circle {
-  fill: var(--tlo);
-  stroke: var(--akcent);
-  stroke-width: 1.6;
-}
-
-.wykres-punkty .ostatni {
-  fill: var(--akcent);
-}
-
-/* Linia rysuje się dopiero przy odsłonie sekcji. Stan ukryty istnieje tylko
-   pod klasą nadawaną skryptem, więc bez JS wykres jest narysowany od razu. */
-.do-odslony .wykres-linia {
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-}
-
-.do-odslony .wykres-punkty,
-.do-odslony .wykres-pole {
-  opacity: 0;
-}
-
-.do-odslony.odsloniete .wykres-linia {
-  stroke-dashoffset: 0;
-  transition: stroke-dashoffset 1s ease-out 0.2s;
-}
-
-.do-odslony.odsloniete .wykres-punkty {
-  opacity: 1;
-  transition: opacity 0.4s ease-out 0.9s;
-}
-
-.do-odslony.odsloniete .wykres-pole {
-  opacity: 0.08;
-  transition: opacity 0.6s ease-out 0.8s;
-}
-
 @media (max-width: 40rem) {
   .srodek-uklad {
     grid-template-columns: 1fr;
     gap: 2rem;
-  }
-
-  .wykres {
-    width: 100%;
   }
 }
 
@@ -1016,18 +966,4 @@ footer p {
     transition: none;
   }
 
-  .do-odslony .wykres-linia {
-    stroke-dashoffset: 0;
-    transition: none;
-  }
-
-  .do-odslony .wykres-punkty {
-    opacity: 1;
-    transition: none;
-  }
-
-  .do-odslony .wykres-pole {
-    opacity: 0.08;
-    transition: none;
-  }
 }
