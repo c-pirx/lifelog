@@ -23,6 +23,7 @@ import {
   uzytkownikPoLoginie,
   uzytkownikPoTokenHasz,
   wstawUzytkownika,
+  wszyscyAktywni,
   zapiszHaslo,
   zapiszTokenHasz,
   type WierszUzytkownika,
@@ -150,6 +151,28 @@ export function uzytkownikPoTokenie(rejestr: Baza, token: string): Konto | null 
   const wiersz = uzytkownikPoTokenHasz(rejestr, haszTokenu(token));
   if (!wiersz || wiersz.aktywny !== 1) return null;
   return wierszNaKonto(wiersz);
+}
+
+/** Konta do obejścia w harmonogramie — każde z własną bazą i strefą. */
+export function aktywneKonta(rejestr: Baza): Konto[] {
+  return wszyscyAktywni(rejestr).map(wierszNaKonto);
+}
+
+export function kontoPoId(rejestr: Baza, id: number): Konto | null {
+  const wiersz = uzytkownikPoId(rejestr, id);
+  if (!wiersz || wiersz.aktywny !== 1) return null;
+  return wierszNaKonto(wiersz);
+}
+
+/**
+ * Sekret podpisu sesji: sekret bazowy sklejony z haszem hasła. Zmiana hasła
+ * zmienia sekret, więc unieważnia wszystkie stare sesje — bez tabeli sesji.
+ * Null dla konta nieznanego i zablokowanego: taka sesja po prostu wygasa.
+ */
+export function sekretSesjiDla(rejestr: Baza, id: number, sekretBazowy: string): string | null {
+  const wiersz = uzytkownikPoId(rejestr, id);
+  if (!wiersz || wiersz.aktywny !== 1) return null;
+  return sekretBazowy + wiersz.hasz_hasla;
 }
 
 /** Rotacja tokenu: stary adres konektora natychmiast przestaje działać. */

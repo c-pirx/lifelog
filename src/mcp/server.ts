@@ -4,6 +4,12 @@
  * Tryb bezstanowy: każde żądanie dostaje własną instancję serwera i transportu.
  * Nie ma sesji do wygaśnięcia ani stanu do zsynchronizowania między procesami —
  * cały stan aplikacji i tak żyje w bazie.
+ *
+ * Kolejność w `obsluz` jest gwarancją izolacji między użytkownikami i nie
+ * wolno jej odwrócić: najpierw token wskazuje konto w rejestrze, potem pula
+ * oddaje dziennik TEGO konta, i dopiero wtedy powstają narzędzia — z uchwytem
+ * zamkniętym w domknięciu. Żadne narzędzie nie przyjmuje parametru
+ * wskazującego użytkownika, więc rozmowa nie ma jak wskazać cudzej bazy.
  */
 
 import type { HttpBindings } from "@hono/node-server";
@@ -12,7 +18,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { Hono, type Context } from "hono";
 
-import type { Baza } from "../db/index.js";
+import type { ZrodlaDanych } from "../db/pula.js";
+import { odnotujKonektor, uzytkownikPoTokenie, type Konto } from "../domain/konta.js";
 import { zarejestrujNarzedzia } from "./tools.js";
 
 export type SrodowiskoMcp = { Bindings: HttpBindings };
@@ -20,41 +27,41 @@ export type SrodowiskoMcp = { Bindings: HttpBindings };
 const NAZWA_SERWERA = "asystent-diety-treningu";
 const WERSJA = "0.1.0";
 
-/**
- * Porównanie odporne na atak czasowy. Dla jednoosobowej aplikacji to ostrożność
- * na wyrost, ale kosztuje jedną funkcję.
- */
-function tokenPasuje(podany: string, oczekiwany: string): boolean {
-  if (podany.length !== oczekiwany.length) return false;
-  let roznica = 0;
-  for (let i = 0; i < podany.length; i += 1) {
-    roznica |= podany.charCodeAt(i) ^ oczekiwany.charCodeAt(i);
-  }
-  return roznica === 0;
-}
-
-export function utworzRouterMcp(db: Baza, token: string, strefa: string) {
+export function utworzRouterMcp(zrodla: ZrodlaDanych) {
+  const { rejestr, pula } = zrodla;
   const router = new Hono<SrodowiskoMcp>();
 
   // Token w ścieżce, bo konektor Claude przyjmuje tylko adres URL —
   // uwierzytelnianie nagłówkiem jest u Anthropic wciąż w wersji beta.
   // Nagłówek Authorization obsługujemy dodatkowo, dla klientów, które go potrafią.
-  const sprawdzToken = (c: Context<SrodowiskoMcp>): boolean => {
+  //
+  // W rejestrze leży wyłącznie SHA-256 tokenu, więc rozpoznanie to lookup
+  // po indeksie UNIQUE — bez porównywania jawnych sekretów, a więc i bez
+  // wycieku czasowego, który trzeba by neutralizować ręcznie.
+  const rozpoznajKonto = (c: Context<SrodowiskoMcp>): Konto | null => {
     const zeSciezki = c.req.param("token");
-    if (zeSciezki && tokenPasuje(zeSciezki, token)) return true;
+    if (zeSciezki) {
+      const konto = uzytkownikPoTokenie(rejestr, zeSciezki);
+      if (konto) return konto;
+    }
 
     const naglowek = c.req.header("authorization") ?? "";
     const zNaglowka = naglowek.replace(/^Bearer\s+/i, "");
-    return zNaglowka !== "" && tokenPasuje(zNaglowka, token);
+    return zNaglowka === "" ? null : uzytkownikPoTokenie(rejestr, zNaglowka);
   };
 
   const obsluz = async (c: Context<SrodowiskoMcp>) => {
-    if (!sprawdzToken(c)) {
+    const konto = rozpoznajKonto(c);
+    if (!konto) {
       return c.json({ error: "Brak dostępu" }, 401);
     }
 
+    // Zasila wskaźnik „✓ połączono" na ekranie Konto.
+    odnotujKonektor(rejestr, konto.id, new Date().toISOString());
+
+    const db = pula.daj(konto.id);
     const server = new McpServer({ name: NAZWA_SERWERA, version: WERSJA });
-    zarejestrujNarzedzia(server, db, strefa);
+    zarejestrujNarzedzia(server, db, konto.strefa);
 
     // Zwykły JSON zamiast strumienia SSE: żadne z narzędzi nie strumieniuje
     // wyników, a prostsza odpowiedź ułatwia napisanie własnego mostu stdio.

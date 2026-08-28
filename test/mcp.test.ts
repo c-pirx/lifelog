@@ -12,14 +12,23 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { utworzApp } from "../src/app.js";
-import { otworzBaze, type Baza } from "../src/db/index.js";
+import { otworzBaze } from "../src/db/index.js";
+import { utworzPule, type PulaBaz } from "../src/db/pula.js";
+import { zarejestruj } from "../src/domain/konta.js";
 import type { DzienPlanu, StanTreningu } from "../src/domain/typy.js";
 import { stanTreninguWTekscie } from "../src/mcp/formatowanie.js";
 
-const TOKEN = "testowy-token-o-wystarczajacej-dlugosci";
+const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
 
-let db: Baza;
+let TOKEN = "";
+let katalogPuli: string;
+let pula: PulaBaz;
 let serwer: ReturnType<typeof serve>;
 let klient: Client;
 let adres: string;
@@ -35,13 +44,26 @@ async function wywolaj(nazwa: string, argumenty: Record<string, unknown> = {}): 
 }
 
 beforeAll(async () => {
-  db = otworzBaze({ sciezka: ":memory:" });
-  const app = utworzApp(db, {
-    mcpToken: TOKEN,
-    haslo: "nieuzywane-w-tym-tescie",
-    sekretSesji: "nieuzywany-w-tym-tescie",
-    strefa: "Europe/Warsaw",
-  });
+  const rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
+  katalogPuli = mkdtempSync(join(tmpdir(), "mcp-test-"));
+  pula = utworzPule({ katalog: katalogPuli });
+
+  TOKEN = zarejestruj(rejestr, {
+    kod: "kod-bramy",
+    login: "tester-mcp",
+    haslo: "haslo-testowe-mcp",
+    zgoda: true,
+    kodOczekiwany: "kod-bramy",
+  }).tokenKonektora;
+
+  const app = utworzApp(
+    { rejestr, pula },
+    {
+      rejestracjaHaslo: "kod-bramy",
+      sekretSesji: "nieuzywany-w-tym-tescie",
+      strefa: "Europe/Warsaw",
+    },
+  );
 
   serwer = serve({ fetch: app.fetch, port: 0 });
   await new Promise((gotowe) => serwer.once("listening", gotowe));
@@ -56,6 +78,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await klient.close();
   serwer.close();
+  pula.zamknij();
+  rmSync(katalogPuli, { recursive: true, force: true });
 });
 
 describe("uwierzytelnianie", () => {

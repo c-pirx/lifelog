@@ -13,15 +13,27 @@ import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/
 import type { AddressInfo } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+
 import { utworzApp } from "../src/app.js";
-import { otworzBaze, type Baza } from "../src/db/index.js";
+import { otworzBaze } from "../src/db/index.js";
+import { utworzPule, type PulaBaz } from "../src/db/pula.js";
+import { zarejestruj } from "../src/domain/konta.js";
 import type { PlanNaDzis, PodsumowanieDnia, StanTreningu } from "../src/domain/typy.js";
 
+const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
+
+const LOGIN = "tester";
 const HASLO = "tajne-haslo-testowe";
-const TOKEN_MCP = "token-mcp-o-wystarczajacej-dlugosci";
+const KOD_BRAMY = "kod-bramy-testowy";
 const SEKRET = "sekret-sesji-o-wystarczajacej-dlugosci";
 
-let db: Baza;
+let TOKEN_MCP = "";
+let katalogPuli: string;
+let pula: PulaBaz;
 let serwer: ReturnType<typeof serve>;
 let adres: string;
 let ciasteczko = "";
@@ -48,14 +60,28 @@ async function wyslij(sciezka: string, dane: unknown): Promise<Response> {
 }
 
 beforeAll(async () => {
-  db = otworzBaze({ sciezka: ":memory:" });
-  const app = utworzApp(db, {
-    mcpToken: TOKEN_MCP,
+  const rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
+  katalogPuli = mkdtempSync(join(tmpdir(), "api-test-"));
+  pula = utworzPule({ katalog: katalogPuli });
+
+  const konto = zarejestruj(rejestr, {
+    kod: KOD_BRAMY,
+    login: LOGIN,
     haslo: HASLO,
-    sekretSesji: SEKRET,
-    strefa: "Europe/Warsaw",
-    ciasteczkoTylkoHttps: false,
+    zgoda: true,
+    kodOczekiwany: KOD_BRAMY,
   });
+  TOKEN_MCP = konto.tokenKonektora;
+
+  const app = utworzApp(
+    { rejestr, pula },
+    {
+      rejestracjaHaslo: KOD_BRAMY,
+      sekretSesji: SEKRET,
+      strefa: "Europe/Warsaw",
+      ciasteczkoTylkoHttps: false,
+    },
+  );
 
   serwer = serve({ fetch: app.fetch, port: 0 });
   await new Promise((gotowe) => serwer.once("listening", gotowe));
@@ -64,6 +90,8 @@ beforeAll(async () => {
 
 afterAll(() => {
   serwer.close();
+  pula.zamknij();
+  rmSync(katalogPuli, { recursive: true, force: true });
 });
 
 describe("logowanie", () => {
@@ -72,15 +100,22 @@ describe("logowanie", () => {
   });
 
   it("odrzuca błędne hasło", async () => {
-    expect((await wyslij("/api/logowanie", { haslo: "zle" })).status).toBe(401);
+    expect((await wyslij("/api/logowanie", { login: LOGIN, haslo: "zle" })).status).toBe(401);
   });
 
-  it("odrzuca puste hasło", async () => {
+  it("odrzuca nieznany login tą samą odpowiedzią co złe hasło", async () => {
+    const zlyLogin = await wyslij("/api/logowanie", { login: "nie-ma", haslo: HASLO });
+    const zleHaslo = await wyslij("/api/logowanie", { login: LOGIN, haslo: "zle" });
+    expect(zlyLogin.status).toBe(401);
+    expect(await zlyLogin.json()).toEqual(await zleHaslo.json());
+  });
+
+  it("odrzuca puste dane", async () => {
     expect((await wyslij("/api/logowanie", {})).status).toBe(401);
   });
 
   it("wydaje ciasteczko sesji po poprawnym haśle", async () => {
-    const odpowiedz = await wyslij("/api/logowanie", { haslo: HASLO });
+    const odpowiedz = await wyslij("/api/logowanie", { login: LOGIN, haslo: HASLO });
     expect(odpowiedz.status).toBe(200);
 
     const naglowek = odpowiedz.headers.get("set-cookie") ?? "";

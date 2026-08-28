@@ -12,8 +12,11 @@ import { describe, expect, it } from "vitest";
 import { otworzBaze, type Baza } from "../src/db/index.js";
 import { czyBladDomeny } from "../src/domain/bledy.js";
 import {
+  aktywneKonta,
+  kontoPoId,
   nowyTokenKonektora,
   odnotujKonektor,
+  sekretSesjiDla,
   sprawdzKodRejestracji,
   uzytkownikPoTokenie,
   zaloguj,
@@ -196,6 +199,53 @@ describe("token konektora", () => {
 
     const konto = uzytkownikPoTokenie(rejestr, tokenKonektora);
     expect(konto!.ostatnie_uzycie_konektora).toBe("2026-08-28T10:00:00.000Z");
+  });
+});
+
+describe("sekret sesji i odczyt konta", () => {
+  it("sekret sesji zawiera hasz hasła i zmienia się po zmianie hasła", () => {
+    const rejestr = otworzRejestr();
+    const { id } = zarejestrujTestowo(rejestr);
+
+    const przed = sekretSesjiDla(rejestr, id, "sekret-bazowy");
+    zmienHaslo(rejestr, id, "nowe-haslo-anny-123");
+    const po = sekretSesjiDla(rejestr, id, "sekret-bazowy");
+
+    expect(przed).not.toBeNull();
+    expect(po).not.toBeNull();
+    expect(po).not.toBe(przed);
+  });
+
+  it("oddaje null dla nieznanego i zablokowanego konta — sesja przestaje działać", () => {
+    const rejestr = otworzRejestr();
+    const { id } = zarejestrujTestowo(rejestr);
+
+    expect(sekretSesjiDla(rejestr, 999, "sekret-bazowy")).toBeNull();
+
+    rejestr.prepare("UPDATE uzytkownicy SET aktywny = 0 WHERE id = ?").run(id);
+    expect(sekretSesjiDla(rejestr, id, "sekret-bazowy")).toBeNull();
+  });
+
+  it("aktywneKonta pomija zablokowane — harmonogram nie generuje im raportów", () => {
+    const rejestr = otworzRejestr();
+    zarejestrujTestowo(rejestr, "ania");
+    const { id: idTomka } = zarejestrujTestowo(rejestr, "tomek");
+    rejestr.prepare("UPDATE uzytkownicy SET aktywny = 0 WHERE id = ?").run(idTomka);
+
+    expect(aktywneKonta(rejestr).map((k) => k.login)).toEqual(["ania"]);
+  });
+
+  it("kontoPoId oddaje konto ze strefą, a null dla zablokowanego", () => {
+    const rejestr = otworzRejestr();
+    const { id } = zarejestrujTestowo(rejestr);
+
+    const konto = kontoPoId(rejestr, id);
+    expect(konto).not.toBeNull();
+    expect(konto!.login).toBe("ania");
+    expect(konto!.strefa).toBe("Europe/Warsaw");
+
+    rejestr.prepare("UPDATE uzytkownicy SET aktywny = 0 WHERE id = ?").run(id);
+    expect(kontoPoId(rejestr, id)).toBeNull();
   });
 });
 

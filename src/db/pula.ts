@@ -28,6 +28,15 @@ export type PulaBaz = {
   zamknij(): void;
 };
 
+/**
+ * Dwa źródła danych aplikacji wielodostępowej — podawane razem wszystkim
+ * adapterom. Rejestr mówi, KTO pyta; pula oddaje JEGO dziennik.
+ */
+export type ZrodlaDanych = {
+  rejestr: Baza;
+  pula: PulaBaz;
+};
+
 const DOMYSLNY_LIMIT = 50;
 
 export function utworzPule(opcje: OpcjePuli): PulaBaz {

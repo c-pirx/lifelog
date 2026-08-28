@@ -9,10 +9,12 @@ import { Hono } from "hono";
 import { deleteCookie, getCookie, setCookie } from "hono/cookie";
 import { z } from "zod";
 
-import { hasloPoprawne, tokenWazny, utworzToken, WAZNOSC_SESJI_DNI } from "../auth.js";
+import { odczytajToken, utworzToken, WAZNOSC_SESJI_DNI } from "../auth.js";
 import type { Baza } from "../db/index.js";
+import type { ZrodlaDanych } from "../db/pula.js";
 import { aktywnosciZDnia, historiaRuchu, zapiszAktywnosc } from "../domain/aktywnosci.js";
 import { czyBladDomeny } from "../domain/bledy.js";
+import { kontoPoId, sekretSesjiDla, zaloguj, type Konto } from "../domain/konta.js";
 import {
   celeNaDzien,
   czestePosilki,
@@ -46,11 +48,26 @@ import { dzisiaj, parsujCzas, przesunDate } from "../lib/time.js";
 export const NAZWA_CIASTECZKA = "sesja";
 
 export type UstawieniaApi = {
-  haslo: string;
+  /** Wspólne hasło bramy rejestracji (REJESTRACJA_HASLO). */
+  rejestracjaHaslo: string;
   sekretSesji: string;
+  /** Strefa domyślna — konta zakładane bez podania własnej. */
   strefa: string;
   /** Wyłączane w testach i przy pracy lokalnej po http. */
   ciasteczkoTylkoHttps?: boolean;
+};
+
+/**
+ * Zmienne kontekstu ustawiane przez bramę sesji: dziennik i strefa
+ * zalogowanego użytkownika. Trasy nie wiedzą, że użytkowników jest wielu —
+ * dostają jedną bazę, dokładnie jak przed wielodostępem.
+ */
+type SrodowiskoApi = {
+  Variables: {
+    db: Baza;
+    strefa: string;
+    konto: Konto;
+  };
 };
 
 const schematPosilku = z.object({
@@ -138,26 +155,40 @@ const schematOdhaczenia = z.object({
   czas: z.string().optional(),
 });
 
-export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
-  const api = new Hono();
-  const czas = (podany?: string) => (podany ? parsujCzas(podany, ustawienia.strefa) : undefined);
+export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi) {
+  const { rejestr, pula } = zrodla;
+  const api = new Hono<SrodowiskoApi>();
+  const czas = (c: { var: { strefa: string } }, podany?: string) =>
+    podany ? parsujCzas(podany, c.var.strefa) : undefined;
 
-  // === Logowanie ========================================================
-
-  api.post("/logowanie", async (c) => {
-    const { haslo } = (await c.req.json().catch(() => ({}))) as { haslo?: string };
-
-    if (!haslo || !hasloPoprawne(haslo, ustawienia.haslo)) {
-      return c.json({ blad: "Nieprawidłowe hasło" }, 401);
-    }
-
-    setCookie(c, NAZWA_CIASTECZKA, utworzToken(ustawienia.sekretSesji), {
+  /** Ciasteczko sesji podpisane sekretem zależnym od hasza hasła użytkownika. */
+  const wydajSesje = (c: Parameters<typeof setCookie>[0], idUzytkownika: number): boolean => {
+    const sekret = sekretSesjiDla(rejestr, idUzytkownika, ustawienia.sekretSesji);
+    if (sekret === null) return false;
+    setCookie(c, NAZWA_CIASTECZKA, utworzToken(sekret, idUzytkownika), {
       httpOnly: true,
       sameSite: "Lax",
       secure: ustawienia.ciasteczkoTylkoHttps ?? true,
       path: "/",
       maxAge: WAZNOSC_SESJI_DNI * 24 * 60 * 60,
     });
+    return true;
+  };
+
+  // === Logowanie ========================================================
+
+  api.post("/logowanie", async (c) => {
+    const { login, haslo } = (await c.req.json().catch(() => ({}))) as {
+      login?: string;
+      haslo?: string;
+    };
+
+    const konto = login && haslo ? zaloguj(rejestr, login, haslo) : null;
+    if (!konto || !wydajSesje(c, konto.id)) {
+      // Jedna odpowiedź na złe hasło i nieznany login — formularz nie ma
+      // zdradzać, które konta istnieją.
+      return c.json({ blad: "Nieprawidłowy login lub hasło" }, 401);
+    }
 
     return c.json({ ok: true });
   });
@@ -171,9 +202,19 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
 
   api.use("/*", async (c, nastepny) => {
     const token = getCookie(c, NAZWA_CIASTECZKA);
-    if (!token || !tokenWazny(token, ustawienia.sekretSesji)) {
+    const id = token
+      ? odczytajToken(token, (kandydat) => sekretSesjiDla(rejestr, kandydat, ustawienia.sekretSesji))
+      : null;
+    const konto = id === null ? null : kontoPoId(rejestr, id);
+    if (!konto) {
       return c.json({ blad: "Wymagane logowanie" }, 401);
     }
+
+    // Od tego miejsca trasy widzą wyłącznie dziennik zalogowanego —
+    // uchwyt innej bazy nie istnieje w ich zasięgu.
+    c.set("db", pula.daj(konto.id));
+    c.set("strefa", konto.strefa);
+    c.set("konto", konto);
     return nastepny();
   });
 
@@ -191,30 +232,30 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   // to osobne byty i mają takie zostać. Ten sam chwyt co przy `/postepy`, które
   // dokłada tydzień — drugie żądanie to drugie czekanie na telefonie.
   api.get("/dzien", (c) => {
-    const dzien = podsumowanieDnia(db, c.req.query("data"), { strefa: ustawienia.strefa });
+    const dzien = podsumowanieDnia(c.var.db, c.req.query("data"), { strefa: c.var.strefa });
     return c.json({
       ...dzien,
-      aktywnosci: aktywnosciZDnia(db, dzien.data, { strefa: ustawienia.strefa }),
-      treningi: historiaSesji(db, dzien.data, dzien.data, { strefa: ustawienia.strefa }),
+      aktywnosci: aktywnosciZDnia(c.var.db, dzien.data, { strefa: c.var.strefa }),
+      treningi: historiaSesji(c.var.db, dzien.data, dzien.data, { strefa: c.var.strefa }),
     });
   });
 
   api.post("/posilki", async (c) => {
     const dane = schematPosilku.parse(await c.req.json());
     const posilek = zapiszPosilek(
-      db,
-      { ...dane, pora: dane.pora as never, ts: czas(dane.czas), zrodlo: "apka", pewnosc: "dokladne" },
-      { strefa: ustawienia.strefa },
+      c.var.db,
+      { ...dane, pora: dane.pora as never, ts: czas(c, dane.czas), zrodlo: "apka", pewnosc: "dokladne" },
+      { strefa: c.var.strefa },
     );
     return c.json(posilek, 201);
   });
 
   api.get("/posilki/czeste", (c) =>
     c.json(
-      czestePosilki(db, {
+      czestePosilki(c.var.db, {
         dni: Number(c.req.query("dni") ?? 30),
         limit: Number(c.req.query("limit") ?? 8),
-        strefa: ustawienia.strefa,
+        strefa: c.var.strefa,
       }),
     ),
   );
@@ -223,10 +264,10 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   // trzy miesiące posiłków z pozycjami to i tak sporo kilobajtów.
   api.get("/dieta", (c) =>
     c.json(
-      historiaDiety(db, {
+      historiaDiety(c.var.db, {
         dni: Math.min(Number(c.req.query("dni") ?? 14), 92),
         przed: c.req.query("przed"),
-        strefa: ustawienia.strefa,
+        strefa: c.var.strefa,
       }),
     ),
   );
@@ -238,13 +279,13 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   // Tak samo jak `/dzien` i `/dieta` dzielą się rolami po stronie diety.
   api.get("/aktywnosci", (c) => {
     const data = c.req.query("data");
-    if (data) return c.json(aktywnosciZDnia(db, data, { strefa: ustawienia.strefa }));
+    if (data) return c.json(aktywnosciZDnia(c.var.db, data, { strefa: c.var.strefa }));
 
     return c.json(
-      historiaRuchu(db, {
+      historiaRuchu(c.var.db, {
         dni: Math.min(Number(c.req.query("dni") ?? 14), 92),
         przed: c.req.query("przed"),
-        strefa: ustawienia.strefa,
+        strefa: c.var.strefa,
       }),
     );
   });
@@ -253,21 +294,21 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
     const { czas: kiedy, ...dane } = schematAktywnosci.parse(await c.req.json());
     return c.json(
       zapiszAktywnosc(
-        db,
-        { ...dane, ts: czas(kiedy), zrodlo: "apka" },
-        { strefa: ustawienia.strefa },
+        c.var.db,
+        { ...dane, ts: czas(c, kiedy), zrodlo: "apka" },
+        { strefa: c.var.strefa },
       ),
       201,
     );
   });
 
   api.get("/cele", (c) =>
-    c.json(celeNaDzien(db, c.req.query("data") ?? dzisiaj(ustawienia.strefa))),
+    c.json(celeNaDzien(c.var.db, c.req.query("data") ?? dzisiaj(c.var.strefa))),
   );
 
   api.post("/cele", async (c) => {
     const dane = schematCelow.parse(await c.req.json());
-    return c.json(ustawCele(db, dane, { strefa: ustawienia.strefa }), 201);
+    return c.json(ustawCele(c.var.db, dane, { strefa: c.var.strefa }), 201);
   });
 
   // === Notatki ==========================================================
@@ -277,9 +318,9 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   // tylko ten folder, który akurat był otwarty — ten sam chwyt co przy /raporty.
   api.get("/notatki", (c) =>
     c.json(
-      historiaNotatek(db, {
+      historiaNotatek(c.var.db, {
         ile: Number(c.req.query("ile") ?? 30),
-        strefa: ustawienia.strefa,
+        strefa: c.var.strefa,
       }),
     ),
   );
@@ -288,9 +329,9 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
     const { czas: kiedy, ...dane } = schematNotatki.parse(await c.req.json());
     return c.json(
       zapiszNotatke(
-        db,
-        { ...dane, kategoria: dane.kategoria as never, ts: czas(kiedy), zrodlo: "apka" },
-        { strefa: ustawienia.strefa },
+        c.var.db,
+        { ...dane, kategoria: dane.kategoria as never, ts: czas(c, kiedy), zrodlo: "apka" },
+        { strefa: c.var.strefa },
       ),
       201,
     );
@@ -300,25 +341,25 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
 
   // `/plan` to dni planu domyślnego — tyle, ile potrzebuje harmonogram.
   // `/plany` niesie komplet, bo zakładka Trening pokazuje też szablony.
-  api.get("/plan", (c) => c.json(planTreningowy(db)));
+  api.get("/plan", (c) => c.json(planTreningowy(c.var.db)));
 
-  api.get("/plany", (c) => c.json(plany(db)));
+  api.get("/plany", (c) => c.json(plany(c.var.db)));
 
   api.post("/plan", async (c) => {
     const dane = schematDniaPlanu.parse(await c.req.json());
-    return c.json(dodajDzienPlanu(db, dane as never), 201);
+    return c.json(dodajDzienPlanu(c.var.db, dane as never), 201);
   });
 
   api.post("/plan/domyslny", async (c) => {
     const { plan } = z.object({ plan: z.string().min(1) }).parse(await c.req.json());
-    return c.json(ustawPlanDomyslny(db, plan));
+    return c.json(ustawPlanDomyslny(c.var.db, plan));
   });
 
   // `dzis` dokładane w trasie, tak samo jak `/dzien` dokłada aktywności: stan
   // trwającej sesji i harmonogram to dwa osobne pytania, ale ekran Trening
   // zadaje oba naraz, a drugie żądanie to drugie czekanie na telefonie.
   api.get("/trening", (c) =>
-    c.json({ ...stanTreningu(db), dzis: planNaDzis(db, { strefa: ustawienia.strefa }) }),
+    c.json({ ...stanTreningu(c.var.db), dzis: planNaDzis(c.var.db, { strefa: c.var.strefa }) }),
   );
 
   // Pole `czas` w trzech trasach poniżej jest po to, żeby zapis odłożony
@@ -341,23 +382,23 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
     };
     // Aplikacja podaje `dzien_id`, bo kod dnia nie jest już jednoznaczny
     // między planami; czat nadal mówi kodem.
-    rozpocznijTrening(db, {
+    rozpocznijTrening(c.var.db, {
       kod,
       plan,
       dzien_id: dzienId,
       bez_planu: bezPlanu,
-      ts: czas(kiedy),
-      strefa: ustawienia.strefa,
+      ts: czas(c, kiedy),
+      strefa: c.var.strefa,
     });
-    return c.json(stanTreningu(db), 201);
+    return c.json(stanTreningu(c.var.db), 201);
   });
 
   api.post("/trening/seria", async (c) => {
     const dane = schematSerii.parse(await c.req.json());
-    zapiszSerie(db, { ...dane, typ: dane.typ as never, ts: czas(dane.czas) }, {
-      strefa: ustawienia.strefa,
+    zapiszSerie(c.var.db, { ...dane, typ: dane.typ as never, ts: czas(c, dane.czas) }, {
+      strefa: c.var.strefa,
     });
-    return c.json(stanTreningu(db), 201);
+    return c.json(stanTreningu(c.var.db), 201);
   });
 
   // Ciało nie niesie liczb wyniku: ile serii i z jakim obciążeniem — liczy
@@ -366,7 +407,7 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   api.post("/trening/cwiczenie/odhacz", async (c) => {
     const { czas: kiedy, ...dane } = schematOdhaczenia.parse(await c.req.json());
     return c.json(
-      odhaczCwiczenie(db, dane, { ts: czas(kiedy), strefa: ustawienia.strefa }),
+      odhaczCwiczenie(c.var.db, dane, { ts: czas(c, kiedy), strefa: c.var.strefa }),
       201,
     );
   });
@@ -377,19 +418,19 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
       czas?: string;
     };
     return c.json(
-      zakonczTrening(db, { notatki, ts: czas(kiedy), strefa: ustawienia.strefa }),
+      zakonczTrening(c.var.db, { notatki, ts: czas(c, kiedy), strefa: c.var.strefa }),
     );
   });
 
   api.get("/historia/:cwiczenie", (c) =>
-    c.json(historiaCwiczenia(db, c.req.param("cwiczenie"), Number(c.req.query("sesje") ?? 10))),
+    c.json(historiaCwiczenia(c.var.db, c.req.param("cwiczenie"), Number(c.req.query("sesje") ?? 10))),
   );
 
   // === Pomiary i poprawki ==============================================
 
   api.get("/waga", (c) => {
     const dni = Number(c.req.query("dni") ?? 90);
-    return c.json({ trend: trendWagi(db, dni, { strefa: ustawienia.strefa }), ostatnia: ostatniaWaga(db) });
+    return c.json({ trend: trendWagi(c.var.db, dni, { strefa: c.var.strefa }), ostatnia: ostatniaWaga(c.var.db) });
   });
 
   api.post("/waga", async (c) => {
@@ -398,18 +439,18 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
       notatka?: string;
       czas?: string;
     };
-    return c.json(zapiszWage(db, kg, { notatka, ts: czas(kiedy), strefa: ustawienia.strefa }), 201);
+    return c.json(zapiszWage(c.var.db, kg, { notatka, ts: czas(c, kiedy), strefa: c.var.strefa }), 201);
   });
 
   api.get("/postepy", (c) => {
     const dni = Number(c.req.query("dni") ?? 30);
-    const koniec = dzisiaj(ustawienia.strefa);
+    const koniec = dzisiaj(c.var.strefa);
     return c.json({
-      dni: sumyDzienne(db, przesunDate(koniec, -(dni - 1)), koniec),
-      waga: trendWagi(db, dni, { strefa: ustawienia.strefa }),
+      dni: sumyDzienne(c.var.db, przesunDate(koniec, -(dni - 1)), koniec),
+      waga: trendWagi(c.var.db, dni, { strefa: c.var.strefa }),
       // Tydzień w toku dokładamy tutaj zamiast robić osobną trasę: ekran
       // Postępy i tak ją woła, a drugie żądanie to drugie czekanie na telefonie.
-      tydzien: tydzienWToku(db, { strefa: ustawienia.strefa }),
+      tydzien: tydzienWToku(c.var.db, { strefa: c.var.strefa }),
     });
   });
 
@@ -423,16 +464,16 @@ export function utworzRouterApi(db: Baza, ustawienia: UstawieniaApi) {
   api.get("/raporty", (c) => {
     // Odczyt dogenerowuje zaległości — dzięki temu raport istnieje dokładnie
     // wtedy, kiedy ktoś po niego sięga, nawet po przestoju serwera.
-    zapewnijRaporty(db, { strefa: ustawienia.strefa });
+    zapewnijRaporty(c.var.db, { strefa: c.var.strefa });
 
     const ile = Math.min(Number(c.req.query("ile") ?? 12), 52);
-    return c.json(raporty(db, ile));
+    return c.json(raporty(c.var.db, ile));
   });
 
   api.post("/wpis", async (c) => {
     const dane = schematWpisu.parse(await c.req.json());
     // Strefa jest potrzebna do przeliczenia pola `czas` względem dnia wpisu.
-    return c.json(zmienWpis(db, dane as never, { strefa: ustawienia.strefa }));
+    return c.json(zmienWpis(c.var.db, dane as never, { strefa: c.var.strefa }));
   });
 
   return api;

@@ -1,6 +1,11 @@
 /**
  * Złożenie aplikacji z warstw. Wydzielone z `server.ts`, żeby testy mogły
- * postawić serwer bez wczytywania konfiguracji i otwierania pliku bazy.
+ * postawić serwer bez wczytywania konfiguracji i otwierania plików baz.
+ *
+ * Od wielodostępu aplikacja nie dostaje jednej bazy, tylko dwa źródła:
+ * rejestr (kto istnieje i jak się loguje) oraz pulę dzienników per użytkownik.
+ * Którą bazą obsłużyć żądanie, rozstrzyga sesja (REST) albo token konektora
+ * (MCP) — zawsze przed zbudowaniem czegokolwiek, co dotyka danych.
  */
 
 import type { HttpBindings } from "@hono/node-server";
@@ -8,14 +13,17 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 
 import { utworzRouterApi } from "./api/routes.js";
-import type { Baza } from "./db/index.js";
+import type { ZrodlaDanych } from "./db/pula.js";
 import { dzisiaj } from "./lib/time.js";
 import { utworzRouterMcp } from "./mcp/server.js";
 
+export type { ZrodlaDanych } from "./db/pula.js";
+
 export type UstawieniaApp = {
-  mcpToken: string;
-  haslo: string;
+  /** Wspólne hasło bramy rejestracji (REJESTRACJA_HASLO). */
+  rejestracjaHaslo: string;
   sekretSesji: string;
+  /** Strefa domyślna: /zdrowie i konta zakładane bez podania strefy. */
   strefa: string;
   /** Katalog z plikami PWA. Pomiń w testach, żeby nie serwować statyków. */
   katalogStatykow?: string;
@@ -23,19 +31,19 @@ export type UstawieniaApp = {
   ciasteczkoTylkoHttps?: boolean;
 };
 
-export function utworzApp(db: Baza, ustawienia: UstawieniaApp) {
+export function utworzApp(zrodla: ZrodlaDanych, ustawienia: UstawieniaApp) {
   const app = new Hono<{ Bindings: HttpBindings }>();
 
   app.get("/zdrowie", (c) =>
     c.json({ ok: true, dzisiaj: dzisiaj(ustawienia.strefa), strefa: ustawienia.strefa }),
   );
 
-  app.route("/mcp", utworzRouterMcp(db, ustawienia.mcpToken, ustawienia.strefa));
+  app.route("/mcp", utworzRouterMcp(zrodla));
 
   app.route(
     "/api",
-    utworzRouterApi(db, {
-      haslo: ustawienia.haslo,
+    utworzRouterApi(zrodla, {
+      rejestracjaHaslo: ustawienia.rejestracjaHaslo,
       sekretSesji: ustawienia.sekretSesji,
       strefa: ustawienia.strefa,
       ciasteczkoTylkoHttps: ustawienia.ciasteczkoTylkoHttps,

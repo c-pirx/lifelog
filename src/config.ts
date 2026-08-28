@@ -9,10 +9,12 @@ export type Konfiguracja = {
   port: number;
   /** Interfejs nasłuchu. Za reverse proxy ustawiamy 127.0.0.1. */
   host: string;
-  sciezkaBazy: string;
-  mcpToken: string;
-  hasloAplikacji: string;
+  /** Katalog danych: rejestr.db i podkatalog uzytkownicy/ z dziennikami. */
+  katalogDanych: string;
+  /** Wspólne hasło bramy rejestracji. */
+  rejestracjaHaslo: string;
   sekretSesji: string;
+  /** Strefa domyślna: /zdrowie i konta zakładane bez podania strefy. */
   strefa: string;
 };
 
@@ -69,9 +71,8 @@ export function wczytajKonfiguracje(): Konfiguracja {
     // Celowo `||`, a nie `??`: w pliku .env pusta wartość ma znaczyć
     // "domyślnie", a `??` przepuściłoby pusty ciąg jako prawidłowy adres.
     host: process.env["HOST"] || "::",
-    sciezkaBazy: process.env["DB_PATH"] ?? "./dane/asystent.db",
-    mcpToken: wymagana("MCP_TOKEN", braki),
-    hasloAplikacji: wymagana("APP_PASSWORD", braki),
+    katalogDanych: process.env["DANE_KATALOG"] ?? "./dane",
+    rejestracjaHaslo: wymagana("REJESTRACJA_HASLO", braki),
     sekretSesji: wymagana("SESSION_SECRET", braki),
     strefa: process.env["TZ_APP"] ?? "Europe/Warsaw",
   };

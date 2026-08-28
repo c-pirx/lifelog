@@ -27,6 +27,11 @@ function korzenProjektu(): string {
   throw new Error("Nie znaleziono katalogu projektu (brak package.json w górę drzewa)");
 }
 
+/** Zestaw migracji rejestru użytkowników — druga baza obok dzienników. */
+export function katalogMigracjiRejestru(): string {
+  return join(korzenProjektu(), "migrations-rejestr");
+}
+
 function wczytajMigracje(katalogMigracji?: string): { nazwa: string; sql: string }[] {
   const katalog = katalogMigracji ?? join(korzenProjektu(), "migrations");
   return readdirSync(katalog)

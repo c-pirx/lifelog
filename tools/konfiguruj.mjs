@@ -49,8 +49,8 @@ if (existsSync(PLIK)) {
 
 const sekret = () => randomBytes(32).toString("hex");
 
-// Hasło do aplikacji webowej: krótsze niż token, bo wpisujesz je z klawiatury
-// telefonu, ale wciąż ponad 100 bitów entropii.
+// Hasło bramy rejestracji: krótsze niż token, bo podajesz je znajomym
+// i wpisuje się je z klawiatury telefonu, ale wciąż ponad 100 bitów entropii.
 const haslo = randomBytes(15).toString("base64url");
 
 const tresc = `# Konfiguracja lokalna. Ten plik jest w .gitignore i nigdy nie trafia do repozytorium.
@@ -61,14 +61,12 @@ PORT=3000
 # Na serwerze ustaw 127.0.0.1 — do internetu wystawia wtedy dopiero reverse proxy.
 HOST=
 
-DB_PATH=./dane/asystent.db
+# Katalog danych: rejestr.db i podkatalog uzytkownicy/ z dziennikami.
+DANE_KATALOG=./dane
 TZ_APP=Europe/Warsaw
 
-# Token konektora MCP. Jest częścią adresu URL serwera.
-MCP_TOKEN=${sekret()}
-
-# Hasło do aplikacji webowej.
-APP_PASSWORD=${haslo}
+# Wspólne hasło bramy rejestracji — podajesz je osobom, które zapraszasz.
+REJESTRACJA_HASLO=${haslo}
 
 # Klucz do podpisywania ciasteczka sesji.
 SESSION_SECRET=${sekret()}
@@ -77,7 +75,7 @@ SESSION_SECRET=${sekret()}
 writeFileSync(PLIK, tresc, "utf8");
 
 console.log(`Utworzono ${PLIK}\n`);
-console.log("Hasło do aplikacji webowej:");
+console.log("Hasło bramy rejestracji (podasz je przy zakładaniu konta):");
 console.log(`  ${haslo}\n`);
 console.log("Zapisz je — drugi raz nie zostanie pokazane (choć zawsze możesz zajrzeć do .env).\n");
 console.log("Dalej:");

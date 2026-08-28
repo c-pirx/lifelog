@@ -70,6 +70,12 @@ export function zapiszTokenHasz(db: Baza, id: number, tokenHasz: string): void {
   db.prepare("UPDATE uzytkownicy SET token_hasz = ? WHERE id = ?").run(tokenHasz, id);
 }
 
+export function wszyscyAktywni(db: Baza): WierszUzytkownika[] {
+  return db
+    .prepare<[], WierszUzytkownika>("SELECT * FROM uzytkownicy WHERE aktywny = 1 ORDER BY id")
+    .all();
+}
+
 export function odnotujUzycieKonektora(db: Baza, id: number, ts: string): void {
   db.prepare("UPDATE uzytkownicy SET ostatnie_uzycie_konektora = ? WHERE id = ?").run(ts, id);
 }
