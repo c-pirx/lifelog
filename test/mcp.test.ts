@@ -118,6 +118,23 @@ describe("lista narzędzi", () => {
     expect(tools.length).toBeLessThanOrEqual(12);
   });
 
+  it("żadne narzędzie nie przyjmuje parametru wskazującego użytkownika", async () => {
+    // Strażnik izolacji. Dziennik wybiera token konektora PRZED zbudowaniem
+    // narzędzi — parametr w rodzaju "uzytkownik" czy "login" byłby drugą,
+    // konkurencyjną drogą wyboru i pierwszym krokiem do sięgnięcia w cudzą
+    // bazę. Ta sama zasada zakazuje narzędzia wykonującego dowolny SQL.
+    const { tools } = await klient.listTools();
+    const zakazane = /uzytkownik|użytkownik|\blogin\b|\buser/i;
+    for (const narzedzie of tools) {
+      const pola = Object.keys(
+        (narzedzie.inputSchema as { properties?: Record<string, unknown> }).properties ?? {},
+      );
+      for (const pole of pola) {
+        expect(pole, `${narzedzie.name} ma podejrzany parametr: ${pole}`).not.toMatch(zakazane);
+      }
+    }
+  });
+
   it("każde narzędzie ma opis", async () => {
     const { tools } = await klient.listTools();
     for (const narzedzie of tools) {

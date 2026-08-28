@@ -1,7 +1,9 @@
 # Lifelog — asystent diety i treningu
 
-Osobisty dziennik posiłków i treningów jednego użytkownika. Dwa wejścia do
-jednej bazy: **Claude** (przez MCP — dyktowanie zdaniem) oraz **aplikacja
+Dziennik posiłków i treningów dla wąskiego kręgu użytkowników (gospodarz
+plus zaproszeni znajomi; rejestracja za wspólnym hasłem bramy). Dwa wejścia
+do tych samych danych: **Claude** (przez MCP — dyktowanie zdaniem, każdy
+użytkownik podpina własną subskrypcję swoim tokenem) oraz **aplikacja
 webowa PWA** (na siłowni, gdzie rozmowa jest za wolna).
 
 Interfejs, komentarze, komunikaty i commity **po polsku**.
@@ -12,22 +14,62 @@ Interfejs, komentarze, komunikaty i commity **po polsku**.
    cienkie adaptery. Funkcja dopisana tylko po jednej stronie to błąd — czat
    i aplikacja pokażą wtedy różne dane.
 2. **Cały SQL siedzi w `src/db/repo.ts`.** To granica, dzięki której wymiana
-   bazy jest przepisaniem jednego pliku.
+   bazy jest przepisaniem jednego pliku. Rejestr użytkowników powiela tę
+   zasadę dla drugiej dziedziny: jego SQL siedzi w `src/db/rejestr.ts`.
 
 Trzecia, prawie tak samo ważna: **konwersje czasu tylko przez `src/lib/time.ts`**.
-Doba użytkownika liczona jest w `Europe/Warsaw`, serwer stoi w UTC. Nigdy
-`getDate()` ani arytmetyka stref w SQL — kolumny `data_lokalna` przechowują
-gotowe `YYYY-MM-DD`.
+Doba użytkownika liczona jest w jego strefie (kolumna `strefa` w rejestrze,
+domyślnie `Europe/Warsaw`), serwer stoi w UTC. Nigdy `getDate()` ani
+arytmetyka stref w SQL — kolumny `data_lokalna` przechowują gotowe `YYYY-MM-DD`.
+
+## Wielodostęp: baza na użytkownika, izolacja strukturalna
+
+Każdy użytkownik ma **własny plik SQLite** (`dane/uzytkownicy/<id>.db`);
+wspólny jest tylko **rejestr** (`dane/rejestr.db`: konta, hasze haseł scrypt,
+hasze SHA-256 tokenów konektorów). Kolumny `uzytkownik_id` świadomie nie ma:
+globalne więzy schematu (`idx_sesja_aktywna`, `waga_ciala.data_lokalna
+UNIQUE`, `cwiczenia.nazwa UNIQUE`…) są poprawne per osoba, a `repo.ts` nie
+zna pojęcia użytkownika. Uchwyty wydaje pula LRU (`src/db/pula.ts`) — jedyne
+miejsce, w którym dałoby się pomylić konta, dlatego ma własne testy.
+
+**Izolacja jest strukturalna, nie regulaminowa.** Kolejność w
+`utworzRouterMcp` i w bramie REST to gwarancja, której nie wolno odwrócić:
+najpierw token/ciasteczko wskazuje konto w rejestrze, potem pula oddaje
+dziennik TEGO konta, dopiero wtedy powstają narzędzia i wykonuje się trasa.
+Stąd dwa zakazy, których pilnuje test w `test/mcp.test.ts`:
+
+- **żadne narzędzie MCP nie przyjmuje parametru wskazującego użytkownika**,
+- **żadne narzędzie nie wykonuje dowolnego SQL**.
+
+Dowód izolacji między kontami: `test/izolacja.test.ts` — przy każdej zmianie
+w adapterach ma przechodzić w całości.
+
+**Sesja aplikacji** to ciasteczko podpisane HMAC sekretem
+`SESSION_SECRET + hasz_hasla` — zmiana hasła unieważnia wszystkie stare
+sesje bez tabeli sesji. Jawny token konektora istnieje tylko w odpowiedzi
+rejestracji i rotacji (`POST /api/konektor/nowy`); rejestr zna sam hasz.
+
+**Migracje schematu dziennika mnożą się przez liczbę baz** i biegną przy
+starcie procesu (`zmigrujWszystkie`). Każdy patch ma być **addytywny**
+(`ADD COLUMN`, `CREATE TABLE`, `CREATE INDEX`) i **zgodny wstecz przez jeden
+cykl wdrożenia** — poprzednia wersja kodu musi działać na nowym schemacie,
+bo to jedyna realna droga powrotu po złym wdrożeniu. Przebudowa tabeli
+(wzorzec 0005) pozostaje dopuszczalna wyłącznie jako świadoma decyzja.
+
+Wejście **stdio** (self-hosting) celowo zostaje jednoosobowe: `DB_PATH`
+wskazuje jedną bazę, bez rejestru.
 
 ## Polecenia
 
 ```bash
 npm run dev          # serwer deweloperski (port 3000)
-npm test             # 447 testów
+npm test             # ponad 500 testów
 npm run typecheck    # kontrola typów, obejmuje też katalog test/
 npm run build        # kompilacja do dist/
-npm run demo         # dane poglądowe do pracy nad wyglądem (przy działającym dev)
-npm run reset -- --tak   # czyszczenie lokalnej bazy
+npm run demo         # dane poglądowe na koncie "demo" (przy działającym dev)
+npm run reset -- --tak   # czyszczenie lokalnych baz (rejestr + dzienniki)
+npm run przenies -- --login x --haslo y   # jednorazowo: baza jednoosobowa → wielodostęp
+npm run konta -- lista   # administracja kontami (haslo/zablokuj/usun) — wymaga build
 npm run rozszerzenie # paczka .mcpb dla Claude Desktop
 ```
 
@@ -92,9 +134,9 @@ podmienia go na `[token-ukryty]`. Nie usuwaj przy edycji konfiguracji.
 uruchamiamy jako `ubuntu`, a `/etc/asystent` ma prawa `750 root:root`. Zwykłe
 `[ -f /etc/asystent/env ]` nie potrafi wejść do katalogu i odpowiada „pliku
 nie ma" — przez co `02-aplikacja.sh` uznawał serwer za świeży i przy **każdym**
-wdrożeniu generował nowy token konektora, hasło i klucz sesji. Objaw: po
-wdrożeniu konektor na claude.ai przestaje działać, a hasło do aplikacji jest
-nieaktualne. Baza pozostaje nietknięta, ale dostęp trzeba konfigurować od nowa.
+wdrożeniu generował nowe sekrety (dziś: hasło bramy rejestracji i klucz
+sesji — wymiana klucza wylogowałaby wszystkich ze wszystkich urządzeń).
+Bazy pozostają nietknięte, ale dostęp trzeba konfigurować od nowa.
 
 **Kolejność plików SSH.** Plik nazywa się `00-utwardzenie.conf`, nie `99-`:
 w SSH wygrywa **pierwsze** wystąpienie ustawienia, a obraz Ubuntu ma
@@ -194,7 +236,7 @@ Port 80 musi zostać otwarty na stałe — odnowienia idą co 60 dni.
 |---|---|
 | Claude Code | `claude mcp add --scope user asystent-diety -- node <ścieżka>/dist/mcp/stdio.js` |
 | Claude Desktop | `npm run rozszerzenie`, potem Ustawienia → Extensions → Install Extension |
-| claude.ai i telefon | konektor na adres `https://asystent.twojadomena.pl/mcp/<token>` |
+| claude.ai i telefon | konektor na adres `https://asystent.twojadomena.pl/mcp/<token>` — token per użytkownik, z ekranu Konto (rotacja: „Wygeneruj i pokaż adres") |
 
 Wejście **stdio** (`dist/mcp/stdio.js`) sięga prosto do bazy i nie wymaga
 działającego serwera HTTP. Po zmianie kodu serwera trzeba `npm run build` —
@@ -461,9 +503,11 @@ poziom pewności estymacji (`niepewne`), aktywności poza planem
 oraz historia odbytych treningów w tej samej zakładce wraz z usuwaniem całej
 sesji (`historiaSesji`, `zmien_wpis` z `typ='sesja'`), zakładka Notatki
 z czyszczeniem dyktowanej transkrypcji (narzędzie `notatki`,
-`GET/POST /notatki`, `zmien_wpis` z `typ='notatka'`), a na koniec komunikat
+`GET/POST /notatki`, `zmien_wpis` z `typ='notatka'`), komunikat
 o zrealizowanym dniu na ekranie Trening (`planNaDzis` w `GET /trening`
-i w `stan_treningu`).
+i w `stan_treningu`), a na koniec wielodostęp: rejestr kont, baza na
+użytkownika, rejestracja za hasłem bramy, ekran Konto z adresem konektora
+i zmianą hasła (sekcja „Wielodostęp" wyżej).
 
 Z listy odłożonych spadło przez to „lista ostatnich sesji"; **poprawianie serii
 wstecz nadal czeka** — zakładka pokazuje wyniki, ale ich nie edytuje.
