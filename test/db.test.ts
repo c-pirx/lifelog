@@ -1,5 +1,7 @@
 import Database from "better-sqlite3";
-import { readdirSync, readFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -56,6 +58,47 @@ describe("migracje", () => {
   it("są idempotentne — drugi start nie stosuje ich ponownie", () => {
     const db = otworzBaze({ sciezka: ":memory:" });
     expect(uruchomMigracje(db)).toEqual([]);
+  });
+});
+
+describe("migracje z własnego katalogu", () => {
+  /** Katalog tymczasowy z jednym plikiem migracji — schemat inny niż aplikacji. */
+  function katalogZWlasnaMigracja(): string {
+    const katalog = mkdtempSync(join(tmpdir(), "migracje-test-"));
+    writeFileSync(
+      join(katalog, "0001_proba.sql"),
+      "CREATE TABLE proba (id INTEGER PRIMARY KEY, nazwa TEXT NOT NULL);",
+    );
+    return katalog;
+  }
+
+  it("otworzBaze stosuje wskazany zestaw zamiast domyślnego", () => {
+    const katalog = katalogZWlasnaMigracja();
+    try {
+      const db = otworzBaze({ sciezka: ":memory:", katalogMigracji: katalog });
+
+      const tabele = db
+        .prepare<[], { name: string }>("SELECT name FROM sqlite_master WHERE type = 'table'")
+        .all()
+        .map((w) => w.name);
+
+      expect(tabele).toContain("proba");
+      // Dowód, że domyślny zestaw NIE poszedł w ruch — inaczej rejestr
+      // dostawałby po cichu wszystkie tabele dziennika.
+      expect(tabele).not.toContain("posilki");
+    } finally {
+      rmSync(katalog, { recursive: true, force: true });
+    }
+  });
+
+  it("uruchomMigracje z katalogiem jest idempotentne", () => {
+    const katalog = katalogZWlasnaMigracja();
+    try {
+      const db = otworzBaze({ sciezka: ":memory:", katalogMigracji: katalog });
+      expect(uruchomMigracje(db, katalog)).toEqual([]);
+    } finally {
+      rmSync(katalog, { recursive: true, force: true });
+    }
   });
 });
 

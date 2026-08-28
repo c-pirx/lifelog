@@ -27,15 +27,15 @@ function korzenProjektu(): string {
   throw new Error("Nie znaleziono katalogu projektu (brak package.json w górę drzewa)");
 }
 
-function wczytajMigracje(): { nazwa: string; sql: string }[] {
-  const katalog = join(korzenProjektu(), "migrations");
+function wczytajMigracje(katalogMigracji?: string): { nazwa: string; sql: string }[] {
+  const katalog = katalogMigracji ?? join(korzenProjektu(), "migrations");
   return readdirSync(katalog)
     .filter((nazwa) => nazwa.endsWith(".sql"))
     .sort()
     .map((nazwa) => ({ nazwa, sql: readFileSync(join(katalog, nazwa), "utf8") }));
 }
 
-export function uruchomMigracje(db: Baza): string[] {
+export function uruchomMigracje(db: Baza, katalogMigracji?: string): string[] {
   db.exec(`
     CREATE TABLE IF NOT EXISTS _migracje (
       nazwa      TEXT PRIMARY KEY,
@@ -64,7 +64,7 @@ export function uruchomMigracje(db: Baza): string[] {
   if (kluczeWlaczone) db.pragma("foreign_keys = OFF");
 
   try {
-    for (const migracja of wczytajMigracje()) {
+    for (const migracja of wczytajMigracje(katalogMigracji)) {
       if (juzZastosowane.has(migracja.nazwa)) continue;
 
       // Każda migracja jest atomowa: albo przechodzi w całości, albo wcale.
@@ -98,6 +98,11 @@ export function uruchomMigracje(db: Baza): string[] {
 export type OpcjeBazy = {
   /** Ścieżka do pliku bazy albo ":memory:" w testach. */
   sciezka?: string;
+  /**
+   * Katalog z plikami .sql. Domyślnie `migrations/` w korzeniu projektu —
+   * schemat dziennika. Rejestr użytkowników podaje tu własny zestaw.
+   */
+  katalogMigracji?: string;
 };
 
 export function otworzBaze(opcje: OpcjeBazy = {}): Baza {
@@ -117,6 +122,6 @@ export function otworzBaze(opcje: OpcjeBazy = {}): Baza {
     db.pragma("journal_mode = WAL");
   }
 
-  uruchomMigracje(db);
+  uruchomMigracje(db, opcje.katalogMigracji);
   return db;
 }
