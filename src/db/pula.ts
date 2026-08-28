@@ -10,9 +10,10 @@
  * z początku mapy — najdawniej używany, nie najdawniej otwarty.
  */
 
+import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { otworzBaze, type Baza } from "./index.js";
+import { otworzBaze, otworzPolaczenie, uruchomMigracje, type Baza } from "./index.js";
 
 export type OpcjePuli = {
   /** Katalog z plikami `<id>.db`. */
@@ -38,6 +39,36 @@ export type ZrodlaDanych = {
 };
 
 const DOMYSLNY_LIMIT = 50;
+
+/**
+ * Doprowadza wszystkie dzienniki w katalogu do bieżącego schematu.
+ *
+ * Wołane przy starcie procesu, PRZED nasłuchiwaniem: wdrożenie ma zmigrować
+ * także konta, które od dawna nie zaglądały, a błąd migracji ma zatrzymać
+ * start — lepiej brak usługi z czytelnym wpisem w dzienniku niż połowa baz
+ * w nowym schemacie i połowa w starym. Migracja przy otwarciu z puli zostaje
+ * jako siatka bezpieczeństwa.
+ */
+export function zmigrujWszystkie(
+  katalog: string,
+  katalogMigracji?: string,
+): { baz: number; zastosowanych: number } {
+  if (!existsSync(katalog)) return { baz: 0, zastosowanych: 0 };
+
+  let baz = 0;
+  let zastosowanych = 0;
+  for (const nazwa of readdirSync(katalog)) {
+    if (!/^\d+\.db$/.test(nazwa)) continue;
+    baz += 1;
+    const db = otworzPolaczenie(join(katalog, nazwa));
+    try {
+      zastosowanych += uruchomMigracje(db, katalogMigracji).length;
+    } finally {
+      db.close();
+    }
+  }
+  return { baz, zastosowanych };
+}
 
 export function utworzPule(opcje: OpcjePuli): PulaBaz {
   const limit = opcje.limit ?? DOMYSLNY_LIMIT;

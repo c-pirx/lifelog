@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { utworzApp } from "./app.js";
 import { wczytajKonfiguracje, wczytajPlikEnv } from "./config.js";
 import { katalogMigracjiRejestru, otworzBaze } from "./db/index.js";
-import { utworzPule } from "./db/pula.js";
+import { utworzPule, zmigrujWszystkie } from "./db/pula.js";
 import { uruchomHarmonogram } from "./harmonogram.js";
 
 wczytajPlikEnv();
@@ -38,7 +38,15 @@ const rejestr = otworzBaze({
   sciezka: join(konfiguracja.katalogDanych, "rejestr.db"),
   katalogMigracji: katalogMigracjiRejestru(),
 });
-const pula = utworzPule({ katalog: join(konfiguracja.katalogDanych, "uzytkownicy") });
+
+// Wdrożenie ma zmigrować wszystkie dzienniki od razu, nie przy pierwszym
+// odwiedzeniu konta. Błąd przerywa start — lepiej brak usługi z czytelnym
+// wpisem w dzienniku niż połowa baz w nowym schemacie i połowa w starym.
+const katalogUzytkownikow = join(konfiguracja.katalogDanych, "uzytkownicy");
+const migracja = zmigrujWszystkie(katalogUzytkownikow);
+console.log(`Dzienniki: baz ${migracja.baz}, zastosowanych migracji ${migracja.zastosowanych}`);
+
+const pula = utworzPule({ katalog: katalogUzytkownikow });
 const zrodla = { rejestr, pula };
 
 const app = utworzApp(zrodla, {

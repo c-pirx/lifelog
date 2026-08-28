@@ -110,8 +110,11 @@ export type OpcjeBazy = {
   katalogMigracji?: string;
 };
 
-export function otworzBaze(opcje: OpcjeBazy = {}): Baza {
-  const sciezka = opcje.sciezka ?? process.env["DB_PATH"] ?? "./dane/asystent.db";
+/**
+ * Samo połączenie z pragmami, bez migracji. Dla `otworzBaze` i dla
+ * `zmigrujWszystkie`, które musi policzyć zastosowane migracje samodzielnie.
+ */
+export function otworzPolaczenie(sciezka: string): Baza {
   const wPamieci = sciezka === ":memory:";
 
   if (!wPamieci) {
@@ -127,6 +130,12 @@ export function otworzBaze(opcje: OpcjeBazy = {}): Baza {
     db.pragma("journal_mode = WAL");
   }
 
+  return db;
+}
+
+export function otworzBaze(opcje: OpcjeBazy = {}): Baza {
+  const sciezka = opcje.sciezka ?? process.env["DB_PATH"] ?? "./dane/asystent.db";
+  const db = otworzPolaczenie(sciezka);
   uruchomMigracje(db, opcje.katalogMigracji);
   return db;
 }

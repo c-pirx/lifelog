@@ -7,13 +7,12 @@
  * widoczny w bazie B.
  */
 
-import { existsSync } from "node:fs";
-import { mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { utworzPule, type PulaBaz } from "../src/db/pula.js";
+import { utworzPule, zmigrujWszystkie, type PulaBaz } from "../src/db/pula.js";
 
 let katalogi: string[] = [];
 let pule: PulaBaz[] = [];
@@ -118,6 +117,43 @@ describe("pula baz", () => {
 
     expect(a.open).toBe(false);
     expect(b.open).toBe(false);
+  });
+
+  it("zmigrujWszystkie doprowadza każdą bazę do bieżącego schematu przy starcie", () => {
+    // Dwie bazy na starym schemacie: katalog migracji ma jeden plik.
+    const katalogBaz = swiezyKatalog();
+    const stareMigracje = swiezyKatalog();
+    writeFileSync(join(stareMigracje, "0001_start.sql"), "CREATE TABLE proba (id INTEGER PRIMARY KEY);");
+
+    const stara = utworzPule({ katalog: katalogBaz, katalogMigracji: stareMigracje });
+    stara.daj(1).prepare("INSERT INTO proba DEFAULT VALUES").run();
+    stara.daj(2);
+    stara.zamknij();
+
+    // Wdrożenie: dochodzi migracja 0002. Start procesu ma ją zastosować
+    // wszystkim bazom — także kontom, które od dawna nie zaglądały.
+    const noweMigracje = swiezyKatalog();
+    writeFileSync(join(noweMigracje, "0001_start.sql"), "CREATE TABLE proba (id INTEGER PRIMARY KEY);");
+    writeFileSync(join(noweMigracje, "0002_kolumna.sql"), "ALTER TABLE proba ADD COLUMN uwaga TEXT;");
+
+    const wynik = zmigrujWszystkie(katalogBaz, noweMigracje);
+    expect(wynik.baz).toBe(2);
+    expect(wynik.zastosowanych).toBe(2); // po jednej nowej migracji na bazę
+
+    // Dane przetrwały, schemat jest nowy.
+    const nowa = utworzPule({ katalog: katalogBaz, katalogMigracji: noweMigracje });
+    pule.push(nowa);
+    const kolumny = nowa
+      .daj(1)
+      .prepare<[], { name: string }>("SELECT name FROM pragma_table_info('proba')")
+      .all()
+      .map((k) => k.name);
+    expect(kolumny).toContain("uwaga");
+    expect(nowa.daj(1).prepare("SELECT COUNT(*) AS ile FROM proba").get()).toEqual({ ile: 1 });
+  });
+
+  it("zmigrujWszystkie na pustym katalogu niczego nie robi i nie przeszkadza", () => {
+    expect(zmigrujWszystkie(swiezyKatalog())).toEqual({ baz: 0, zastosowanych: 0 });
   });
 
   it("odrzuca identyfikator niebędący dodatnią liczbą całkowitą — nazwa pliku powstaje z tej wartości", () => {
