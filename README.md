@@ -74,12 +74,12 @@ HTTPS address, which in practice means a small VPS and a domain you control.
 git clone <your-fork>
 cd <repo>
 npm install
-npm run setup      # generates .env with fresh secrets, prints your app password
+npm run setup      # generates .env with fresh secrets, prints the registration gate password
 npm run dev
 ```
 
-Open http://localhost:3000 and log in with the password `npm run setup`
-printed.
+Open http://localhost:3000, pick "Załóż konto" and use the gate password
+`npm run setup` printed as the access code.
 
 To see the screens with content, leave the server running and, in a second
 terminal, run `npm run demo` — it fills the database with a sample day.

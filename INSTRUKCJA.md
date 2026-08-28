@@ -180,24 +180,29 @@ ssh asystent 'bash /opt/asystent/wdrozenie/04-kopie.sh'
 > **Skrypt 01 wyłącza logowanie hasłem.** Upewnij się wcześniej, że
 > `ssh asystent` działa. Awaryjnie zostaje konsola KVM w panelu dostawcy.
 
-## Krok 4. Podłączenie konektora
+## Krok 4. Konto i podłączenie konektora
 
-Odczytaj adres konektora z serwera:
+Odczytaj hasło bramy rejestracji:
 
 ```bash
-ssh asystent 'echo https://asystent.twojadomena.pl/mcp/$(sudo grep "^MCP_TOKEN=" /etc/asystent/env | cut -d= -f2)'
+ssh asystent 'sudo grep "^REJESTRACJA_HASLO=" /etc/asystent/env'
 ```
+
+Otwórz `https://asystent.twojadomena.pl`, wybierz **Załóż konto** i podaj
+to hasło jako kod dostępu. Zapraszając znajomego, wyślij mu link
+`https://asystent.twojadomena.pl/?kod=<hasło-bramy>` — kod wypełni się sam.
+
+Adres konektora bierze się **z aplikacji, nie z serwera**: szuflada →
+**Konto** → **Wygeneruj i pokaż adres konektora** (każde konto ma własny;
+przy przenoszeniu starej bazy wypisuje go też `npm run przenies`).
 
 Na **claude.ai w przeglądarce** (raz, z komputera):
 **Customize → Connectors → + → Add custom connector** i wklej ten adres.
+Przy pierwszym użyciu narzędzi wybierz **Zawsze zezwalaj** — bez tego każde
+zdanie kończy się pytaniem o zgodę.
 
-Od tej chwili narzędzia działają też w aplikacji Claude na telefonie.
-
-Hasło do aplikacji webowej odczytasz tak:
-
-```bash
-ssh asystent 'sudo grep "^APP_PASSWORD=" /etc/asystent/env'
-```
+Od tej chwili narzędzia działają też w aplikacji Claude na telefonie,
+a ekran Konto pokazuje „✓ połączono".
 
 ## Krok 5. Aplikacja na ekranie głównym telefonu
 
@@ -451,25 +456,24 @@ Aktualne zakresy: https://platform.claude.com/docs/en/api/ip-addresses
 Zamknij kartę i otwórz ponownie. Od wersji z nagłówkami `no-cache` nie
 powinno się to zdarzać.
 
-**Nie pamiętam hasła do aplikacji.**
-Lokalnie: zajrzyj do `.env`. Na serwerze:
-`ssh asystent 'sudo grep APP_PASSWORD /etc/asystent/env'`.
-
-**Chcę wymienić token konektora.**
+**Nie pamiętam hasła do konta.**
+Reset przez ssh, bez żadnych e-maili:
 
 ```bash
-ssh asystent
-NOWY=$(openssl rand -hex 32)
-sudo sed -i "s/^MCP_TOKEN=.*/MCP_TOKEN=$NOWY/" /etc/asystent/env
-sudo systemctl restart asystent
-echo "https://asystent.twojadomena.pl/mcp/$NOWY"
+ssh asystent 'cd /opt/asystent && sudo node tools/konta.mjs haslo twoj-login nowe-haslo'
 ```
 
-Potem podmień adres konektora na claude.ai.
+Hasło bramy rejestracji (do zakładania kont):
+`ssh asystent 'sudo grep REJESTRACJA_HASLO /etc/asystent/env'`.
 
-**Chcę zacząć z czystą bazą.**
+**Chcę wymienić token konektora.**
+W aplikacji: szuflada → **Konto** → **Wygeneruj i pokaż adres konektora**.
+Stary adres gaśnie natychmiast; nowy wklej na claude.ai.
+
+**Chcę zacząć z czystymi bazami.**
 Lokalnie: `npm run reset -- --tak`. Na serwerze zatrzymaj usługę, usuń
-`/var/lib/asystent/asystent.db` i uruchom ponownie — schemat utworzy się sam.
+`/var/lib/asystent/rejestr.db` i katalog `/var/lib/asystent/uzytkownicy/`
+i uruchom ponownie — schemat utworzy się sam, konta zakłada się od nowa.
 
 ---
 

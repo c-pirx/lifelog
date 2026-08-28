@@ -185,24 +185,30 @@ ssh asystent 'bash /opt/asystent/wdrozenie/04-kopie.sh'
 > **Script 01 disables password login.** Make sure `ssh asystent` works first.
 > Your provider's KVM console remains as a fallback.
 
-## Step 4. Connect the connector
+## Step 4. Create an account and connect the connector
 
-Read the connector URL off the server:
+Read the registration gate password:
 
 ```bash
-ssh asystent 'echo https://asystent.yourdomain.com/mcp/$(sudo grep "^MCP_TOKEN=" /etc/asystent/env | cut -d= -f2)'
+ssh asystent 'sudo grep "^REJESTRACJA_HASLO=" /etc/asystent/env'
 ```
+
+Open `https://asystent.yourdomain.com`, pick **Załóż konto** (create account)
+and enter that password as the access code. To invite a friend, send them
+`https://asystent.yourdomain.com/?kod=<gate-password>` — the code fills in
+by itself.
+
+The connector URL comes **from the app, not from the server**: drawer →
+**Konto** → **Wygeneruj i pokaż adres konektora** (every account has its
+own; `npm run przenies` also prints it when migrating an old database).
 
 On **claude.ai in a browser** (once, from a computer):
 **Customize → Connectors → + → Add custom connector** and paste that URL.
+On first tool use pick **Always allow** — otherwise every sentence ends
+with a permission prompt.
 
-From then on the tools work in the Claude mobile app too.
-
-The web app password:
-
-```bash
-ssh asystent 'sudo grep "^APP_PASSWORD=" /etc/asystent/env'
-```
+From then on the tools work in the Claude mobile app too, and the Konto
+screen shows "✓ połączono".
 
 ## Step 5. Add the app to your phone's home screen
 
@@ -373,26 +379,25 @@ Current ranges: https://platform.claude.com/docs/en/api/ip-addresses
 Close the tab and reopen it. With the `no-cache` headers in place this should
 not happen again.
 
-**I forgot the web app password.**
-Locally it is in `.env`. On the server:
-`ssh asystent 'sudo grep APP_PASSWORD /etc/asystent/env'`.
-
-**I want to rotate the connector token.**
+**I forgot my account password.**
+Reset over ssh, no e-mail involved:
 
 ```bash
-ssh asystent
-NEW=$(openssl rand -hex 32)
-sudo sed -i "s/^MCP_TOKEN=.*/MCP_TOKEN=$NEW/" /etc/asystent/env
-sudo systemctl restart asystent
-echo "https://asystent.yourdomain.com/mcp/$NEW"
+ssh asystent 'cd /opt/asystent && sudo node tools/konta.mjs haslo your-login new-password'
 ```
 
-Then update the connector URL on claude.ai.
+The registration gate password (for creating accounts):
+`ssh asystent 'sudo grep REJESTRACJA_HASLO /etc/asystent/env'`.
 
-**I want to start from an empty database.**
+**I want to rotate the connector token.**
+In the app: drawer → **Konto** → **Wygeneruj i pokaż adres konektora**.
+The old URL stops working immediately; paste the new one on claude.ai.
+
+**I want to start from empty databases.**
 Locally: `npm run reset -- --tak`. On the server, stop the service, delete
-`/var/lib/asystent/asystent.db` and start it again — the schema recreates
-itself.
+`/var/lib/asystent/rejestr.db` and the `/var/lib/asystent/uzytkownicy/`
+directory and start it again — the schema recreates itself and accounts
+are created anew.
 
 ---
 
