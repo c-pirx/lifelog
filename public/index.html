@@ -130,34 +130,19 @@
               i wychodzą same, gdy wróci sieć.
             </p>
           </div>
-          <!-- Makieta jest czystą dekoracją: wszystko, co pokazuje, stoi
-               w prozie obok, więc czytnik ekranu niczego nie traci. Dlatego
-               aria-hidden i dlatego „przycisk" jest divem — element
-               fokusowalny wewnątrz aria-hidden byłby błędem dostępności. -->
-          <div class="telefon" aria-hidden="true">
-            <div class="telefon-ekran">
-              <div class="ekran-pasek">
-                <span>trening · wtorek</span>
-                <span class="ekran-offline">offline</span>
-              </div>
-              <div class="karta-cwiczenia">
-                <p class="cw-nazwa">Wyciskanie sztangi</p>
-                <p class="cw-meta">seria 3 z 5 · poprzednio 8 × 57,5 kg</p>
-                <div class="serie">
-                  <span class="seria"><span class="ok">✓</span> 8 × 60</span>
-                  <span class="seria"><span class="ok">✓</span> 8 × 60</span>
-                </div>
-                <p class="kolejka">⏳ 2 serie czekają na sieć</p>
-                <div class="odhacz">Odhacz serię 3 — 8 × 60 kg</div>
-              </div>
-              <div class="ekran-nawigacja">
-                <span>dziś</span>
-                <span class="teraz">trening</span>
-                <span>dieta</span>
-                <span>więcej</span>
+          <!-- Prawdziwy zrzut zakładki Trening w trakcie sesji (konto
+               poglądowe). Wszystko, co pokazuje, stoi w prozie obok, więc
+               czytnik ekranu niczego nie traci — stąd aria-hidden.
+               Odświeżenie jak przy Postępach: skrypty ze scratchpada,
+               nowa wersja pliku = nowa nazwa (cache PNG w nginx: 30 dni). -->
+          <figure class="zrzut">
+            <div class="telefon" aria-hidden="true">
+              <div class="telefon-ekran">
+                <img src="/zrzuty/trening.png" width="750" height="1624" alt="" loading="lazy" />
               </div>
             </div>
-          </div>
+            <figcaption>zakładka Trening · prawdziwy ekran</figcaption>
+          </figure>
         </div>
       </section>
 
@@ -193,7 +178,7 @@
                playwright ze scratchpada; nowa wersja pliku = nowa nazwa,
                bo nginx trzyma PNG w cache 30 dni. -->
           <figure class="zrzut">
-            <div class="telefon telefon-zrzut" aria-hidden="true">
+            <div class="telefon" aria-hidden="true">
               <div class="telefon-ekran">
                 <img src="/zrzuty/postepy.png" width="750" height="1624" alt="" loading="lazy" />
               </div>

@@ -458,12 +458,11 @@ section {
   margin-bottom: 0;
 }
 
-/* Ramka telefonu w czystym CSS: żadnych obrazków, więc makieta nigdy nie
-   rozjedzie się z barwami strony i nic nie waży. */
+/* Ramka telefonu w czystym CSS wokół prawdziwego zrzutu ekranu —
+   wysokość wyznacza obrazek, ramka dodaje tylko obudowę. */
 .telefon {
   position: relative;
-  width: clamp(12.5rem, 30vw, 14.5rem);
-  aspect-ratio: 9 / 19;
+  width: clamp(13rem, 26vw, 15rem);
   padding: 0.45rem;
   background: #0b0d11;
   border: 1px solid var(--linia);
@@ -497,105 +496,15 @@ section {
 }
 
 .telefon-ekran {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
   border-radius: 1.95rem;
   background: var(--tlo);
   overflow: hidden;
 }
 
-.ekran-pasek {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  padding: 2rem 1rem 0.8rem;
-  border-bottom: 1px solid var(--linia);
-  font-family: var(--dziennik);
-  font-size: 0.68rem;
-  color: var(--cichy);
-}
-
-.ekran-offline {
-  padding: 1px 7px;
-  border: 1px solid var(--linia);
-  border-radius: 999px;
-}
-
-.karta-cwiczenia {
-  margin: 0.9rem 0.8rem;
-  padding: 0.9rem;
-  background: var(--powierzchnia);
-  border: 1px solid var(--linia);
-  border-radius: 14px;
-}
-
-.cw-nazwa {
-  margin: 0 0 0.15rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.cw-meta {
-  margin: 0 0 0.75rem;
-  font-family: var(--dziennik);
-  font-size: 0.66rem;
-  color: var(--cichy);
-}
-
-.serie {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 0.6rem;
-}
-
-.seria {
-  padding: 0.25rem 0.55rem;
-  background: var(--tlo);
-  border: 1px solid var(--linia);
-  border-radius: 8px;
-  font-family: var(--dziennik);
-  font-size: 0.7rem;
-}
-
-/* Mięta wyłącznie na tym, co zostało zapisane — jak wszędzie na stronie. */
-.seria .ok {
-  color: var(--akcent);
-}
-
-.kolejka {
-  margin: 0 0 0.75rem;
-  font-family: var(--dziennik);
-  font-size: 0.64rem;
-  color: var(--cichy);
-}
-
-.odhacz {
-  padding: 0.65rem 0.8rem;
-  background: var(--akcent);
-  border-radius: 11px;
-  color: #0f1115;
-  font-size: 0.78rem;
-  font-weight: 640;
-  text-align: center;
-}
-
-/* Dolny pasek jak w aplikacji — bieżąca zakładka jaśniejsza, bez mięty:
-   ta zostaje zarezerwowana dla zapisu. */
-.ekran-nawigacja {
-  display: flex;
-  justify-content: space-around;
-  margin-top: auto;
-  padding: 0.7rem 0.5rem 1.1rem;
-  border-top: 1px solid var(--linia);
-  font-family: var(--dziennik);
-  font-size: 0.62rem;
-  color: var(--cichy);
-}
-
-.ekran-nawigacja .teraz {
-  color: var(--tekst);
+.telefon-ekran img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 @media (max-width: 40rem) {
@@ -607,10 +516,6 @@ section {
 
   .aplikacja-tekst {
     justify-self: stretch;
-  }
-
-  .telefon {
-    width: 13rem;
   }
 }
 
@@ -696,26 +601,11 @@ section {
   font-size: 0.95rem;
 }
 
-/* Prawdziwy zrzut zakładki w tej samej ramce telefonu, co makieta wyżej —
-   jeden język „urządzenia" na całej stronie. */
+/* Prawdziwe zrzuty zakładek w jednej ramce telefonu — wspólny język
+   „urządzenia" na całej stronie. */
 .zrzut {
   margin: 0;
   justify-self: center;
-}
-
-.telefon-zrzut {
-  width: clamp(13rem, 26vw, 15rem);
-  aspect-ratio: auto;
-}
-
-.telefon-zrzut .telefon-ekran {
-  height: auto;
-}
-
-.telefon-zrzut img {
-  display: block;
-  width: 100%;
-  height: auto;
 }
 
 .zrzut figcaption {
