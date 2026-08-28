@@ -94,6 +94,50 @@ afterAll(() => {
   rmSync(katalogPuli, { recursive: true, force: true });
 });
 
+describe("rejestracja", () => {
+  it("zakłada konto, loguje od razu i oddaje token konektora dokładnie raz", async () => {
+    const odpowiedz = await wyslij("/api/rejestracja", {
+      kod: KOD_BRAMY,
+      login: "nowa-osoba",
+      haslo: "haslo-nowej-osoby",
+      zgoda: true,
+    });
+    expect(odpowiedz.status).toBe(201);
+
+    const dane = (await odpowiedz.json()) as { token_konektora: string };
+    expect(dane.token_konektora).toMatch(/^[0-9a-f]{64}$/);
+
+    // Rejestracja loguje od razu — świeże konto widzi pusty dzień bez
+    // osobnego przejścia przez formularz logowania.
+    const sesja = (odpowiedz.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+    expect(sesja).toMatch(/^sesja=/);
+    const dzien = await fetch(`${adres}/api/dzien`, { headers: { cookie: sesja } });
+    expect(dzien.status).toBe(200);
+  });
+
+  it("odrzuca zły kod bramy czytelnym błędem", async () => {
+    const odpowiedz = await wyslij("/api/rejestracja", {
+      kod: "zly-kod",
+      login: "ktos",
+      haslo: "jakies-haslo-123",
+      zgoda: true,
+    });
+    expect(odpowiedz.status).toBe(400);
+    expect(((await odpowiedz.json()) as { kod: string }).kod).toBe("zly_kod_rejestracji");
+  });
+
+  it("odrzuca zajęty login", async () => {
+    const odpowiedz = await wyslij("/api/rejestracja", {
+      kod: KOD_BRAMY,
+      login: LOGIN,
+      haslo: "jakies-haslo-123",
+      zgoda: true,
+    });
+    expect(odpowiedz.status).toBe(400);
+    expect(((await odpowiedz.json()) as { kod: string }).kod).toBe("login_zajety");
+  });
+});
+
 describe("logowanie", () => {
   it("odrzuca dostęp bez sesji", async () => {
     expect((await zadanie("/api/dzien")).status).toBe(401);

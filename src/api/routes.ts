@@ -14,7 +14,7 @@ import type { Baza } from "../db/index.js";
 import type { ZrodlaDanych } from "../db/pula.js";
 import { aktywnosciZDnia, historiaRuchu, zapiszAktywnosc } from "../domain/aktywnosci.js";
 import { czyBladDomeny } from "../domain/bledy.js";
-import { kontoPoId, sekretSesjiDla, zaloguj, type Konto } from "../domain/konta.js";
+import { kontoPoId, sekretSesjiDla, zaloguj, zarejestruj, type Konto } from "../domain/konta.js";
 import {
   celeNaDzien,
   czestePosilki,
@@ -174,6 +174,29 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
     });
     return true;
   };
+
+  // === Rejestracja ======================================================
+
+  // Przed bramą sesji — rejestrujący ze zdefiniowania nie ma jeszcze konta.
+  // Napór z internetu dławi nginx (strefa `rejestracja`), a wpuszcza dopiero
+  // wspólne hasło bramy sprawdzane w domenie.
+  api.post("/rejestracja", async (c) => {
+    const dane = z
+      .object({
+        kod: z.string(),
+        login: z.string().min(1),
+        haslo: z.string(),
+        zgoda: z.boolean(),
+      })
+      .parse(await c.req.json());
+
+    const wynik = zarejestruj(rejestr, { ...dane, kodOczekiwany: ustawienia.rejestracjaHaslo });
+    wydajSesje(c, wynik.id);
+
+    // Jawny token pojawia się wyłącznie tutaj i przy rotacji — rejestr trzyma
+    // sam hasz, więc później nie ma go już skąd odczytać.
+    return c.json({ ok: true, token_konektora: wynik.tokenKonektora }, 201);
+  });
 
   // === Logowanie ========================================================
 

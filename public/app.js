@@ -2460,12 +2460,77 @@ function pokazLogowanie() {
   aplikacja.hidden = true;
 }
 
-document.getElementById("formularz-logowania")?.addEventListener("submit", async (zdarzenie) => {
+// Przełączanie logowanie ⇄ rejestracja bez przeładowania. Kod z linku
+// zaproszenia (/?kod=...) otwiera od razu rejestrację z wypełnionym polem.
+const formularzLogowania = document.getElementById("formularz-logowania");
+const formularzRejestracji = document.getElementById("formularz-rejestracji");
+
+document.getElementById("pokaz-rejestracje")?.addEventListener("click", () => {
+  formularzLogowania.hidden = true;
+  formularzRejestracji.hidden = false;
+  document.getElementById("rejestracja-kod")?.focus();
+});
+
+document.getElementById("pokaz-logowanie")?.addEventListener("click", () => {
+  formularzRejestracji.hidden = true;
+  formularzLogowania.hidden = false;
+});
+
+{
+  const kodZLinku = new URLSearchParams(location.search).get("kod");
+  if (kodZLinku) {
+    document.getElementById("rejestracja-kod").value = kodZLinku;
+    formularzLogowania.hidden = true;
+    formularzRejestracji.hidden = false;
+    // Kod znika z paska adresu: to sekret bramy, a nie część adresu strony.
+    history.replaceState(null, "", location.pathname);
+  }
+}
+
+formularzRejestracji?.addEventListener("submit", async (zdarzenie) => {
+  zdarzenie.preventDefault();
+
+  const przycisk = document.getElementById("przycisk-rejestruj");
+  const blad = document.getElementById("blad-rejestracji");
+  const dane = {
+    kod: document.getElementById("rejestracja-kod").value.trim(),
+    login: document.getElementById("rejestracja-login").value.trim(),
+    haslo: document.getElementById("rejestracja-haslo").value,
+    zgoda: document.getElementById("rejestracja-zgoda").checked,
+  };
+
+  blad.hidden = true;
+  przycisk.disabled = true;
+  przycisk.textContent = "Zakładanie…";
+
+  try {
+    // Rejestracji nie kolejkujemy z tego samego powodu co logowania:
+    // bez połączenia trzeba to powiedzieć od razu, nie za godzinę.
+    await api("/rejestracja", {
+      method: "POST",
+      dane,
+      bezPrzekierowania: true,
+      kolejkuj: false,
+    });
+    ekranLogowania.hidden = true;
+    aplikacja.hidden = false;
+    await odswiez();
+  } catch (problem) {
+    blad.textContent = problem.message ?? "Nie udało się założyć konta";
+    blad.hidden = false;
+  } finally {
+    przycisk.disabled = false;
+    przycisk.textContent = "Załóż konto";
+  }
+});
+
+formularzLogowania?.addEventListener("submit", async (zdarzenie) => {
   zdarzenie.preventDefault();
 
   const pole = document.getElementById("haslo");
   const przycisk = document.getElementById("przycisk-zaloguj");
   const blad = document.getElementById("blad-logowania");
+  const login = document.getElementById("login").value.trim();
   const haslo = pole.value.trim();
 
   const pokazBlad = (tekst) => {
@@ -2475,7 +2540,7 @@ document.getElementById("formularz-logowania")?.addEventListener("submit", async
 
   blad.hidden = true;
 
-  if (!haslo) return pokazBlad("Wpisz hasło.");
+  if (!login || !haslo) return pokazBlad("Wpisz login i hasło.");
 
   // Widoczna informacja, że coś się dzieje — bez tego przy wolnej sieci
   // przycisk sprawia wrażenie martwego.
@@ -2487,7 +2552,7 @@ document.getElementById("formularz-logowania")?.addEventListener("submit", async
     // a użytkownik musi od razu wiedzieć, że nie ma połączenia.
     await api("/logowanie", {
       method: "POST",
-      dane: { haslo },
+      dane: { login, haslo },
       bezPrzekierowania: true,
       kolejkuj: false,
     });
@@ -2497,7 +2562,7 @@ document.getElementById("formularz-logowania")?.addEventListener("submit", async
   } catch (problem) {
     pokazBlad(
       problem.status === 401
-        ? "Nieprawidłowe hasło. Sprawdź wielkość liter."
+        ? "Nieprawidłowy login lub hasło. Sprawdź wielkość liter."
         : (problem.message ?? "Nie udało się zalogować"),
     );
     pole.select?.();

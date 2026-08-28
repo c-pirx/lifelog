@@ -1,53 +1,48 @@
 /**
- * Czyści bazę z wszystkich danych, zachowując strukturę tabel.
+ * Czyści lokalne dane: rejestr użytkowników i wszystkie dzienniki.
  * Uruchomienie: `node tools/wyczysc.mjs [--tak]`
  *
  * Przydatne po zabawie danymi poglądowymi, gdy chcesz zacząć zapisywać
- * naprawdę. Operacja jest nieodwracalna, więc wymaga potwierdzenia flagą.
+ * naprawdę. Kasujemy pliki baz zamiast wierszy w tabelach — przy bazie na
+ * użytkownika to jedyna wersja, która nie zestarzeje się przy następnej
+ * migracji (poprzednia wersja tego skryptu nie znała tabel dodanych po
+ * jej napisaniu). Operacja jest nieodwracalna, więc wymaga flagi.
  */
 
-import Database from "better-sqlite3";
-import { existsSync } from "node:fs";
+import { existsSync, readdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
 
-const SCIEZKA = process.env.DB_PATH ?? "./dane/asystent.db";
+const KATALOG = process.env.DANE_KATALOG ?? "./dane";
 
 if (!process.argv.includes("--tak")) {
   console.log(
-    `To usunie WSZYSTKIE dane z ${SCIEZKA} bez możliwości cofnięcia.\n` +
+    `To usunie WSZYSTKIE konta i dzienniki z ${KATALOG} bez możliwości cofnięcia.\n` +
       "Jeśli na pewno tego chcesz, uruchom ponownie z flagą --tak:\n" +
       "  npm run reset -- --tak",
   );
   process.exit(1);
 }
 
-if (!existsSync(SCIEZKA)) {
-  console.log(`Baza ${SCIEZKA} nie istnieje — nie ma czego czyścić.`);
+if (!existsSync(KATALOG)) {
+  console.log(`Katalog ${KATALOG} nie istnieje — nie ma czego czyścić.`);
   process.exit(0);
 }
 
-const db = new Database(SCIEZKA);
-db.pragma("foreign_keys = ON");
-
-// Kolejność ma znaczenie: najpierw tabele zależne, potem te, do których się odwołują.
-const tabele = [
-  "serie",
-  "sesje",
-  "cwiczenia_w_dniu",
-  "dni_planu",
-  "cwiczenia",
-  "pozycje_posilku",
-  "posilki",
-  "cele",
-  "waga_ciala",
-];
-
-db.transaction(() => {
-  for (const tabela of tabele) {
-    const { changes } = db.prepare(`DELETE FROM ${tabela}`).run();
-    if (changes > 0) console.log(`  ${tabela}: usunięto ${changes}`);
+// Kasujemy wyłącznie pliki baz (razem z plikami -wal/-shm), nie cały katalog:
+// gdyby ktoś trzymał w katalogu danych coś swojego, ma to przetrwać.
+let usuniete = 0;
+const usunBazy = (katalog) => {
+  for (const nazwa of readdirSync(katalog)) {
+    if (/\.db(-wal|-shm)?$/.test(nazwa)) {
+      rmSync(join(katalog, nazwa), { force: true });
+      usuniete += 1;
+      console.log(`  usunięto ${join(katalog, nazwa)}`);
+    }
   }
-  // Numeracja od nowa, żeby identyfikatory w podsumowaniach zaczynały się od 1.
-  db.prepare("DELETE FROM sqlite_sequence").run();
-})();
+};
 
-console.log("Baza wyczyszczona.");
+usunBazy(KATALOG);
+const uzytkownicy = join(KATALOG, "uzytkownicy");
+if (existsSync(uzytkownicy)) usunBazy(uzytkownicy);
+
+console.log(usuniete > 0 ? "Dane wyczyszczone." : "Nie było żadnych baz do usunięcia.");

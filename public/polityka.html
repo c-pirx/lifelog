@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Jak działają twoje dane — Lifelog</title>
+    <style>
+      /* Strona samodzielna: czyta się ją PRZED założeniem konta, więc nie
+         zakłada niczego o reszcie aplikacji ani jej stylach. */
+      body {
+        margin: 0 auto;
+        max-width: 42rem;
+        padding: 2rem 1.25rem 4rem;
+        font-family: system-ui, sans-serif;
+        line-height: 1.6;
+        background: #0f1115;
+        color: #e8eaed;
+      }
+      h1 { font-size: 1.5rem; }
+      h2 { font-size: 1.1rem; margin-top: 2rem; }
+      a { color: #95e6b9; }
+      p, li { color: #c6cad1; }
+    </style>
+  </head>
+  <body>
+    <h1>Jak działają twoje dane</h1>
+    <p>
+      Lifelog to prywatny dziennik diety i treningu prowadzony przez jedną
+      osobę dla wąskiego grona znajomych. Nie jest to usługa komercyjna:
+      nie ma tu reklam, analityki ani przekazywania danych komukolwiek.
+    </p>
+
+    <h2>Co zapisujemy</h2>
+    <ul>
+      <li>posiłki, kalorie i makroskładniki, które sam wpiszesz lub podyktujesz,</li>
+      <li>treningi, serie i aktywności,</li>
+      <li>wagę ciała,</li>
+      <li>notatki, które zdecydujesz się zapisać,</li>
+      <li>login i hasło (hasło wyłącznie w postaci nieodwracalnego skrótu).</li>
+    </ul>
+    <p>
+      To są dane o zdrowiu. Zapisujemy tylko to, co sam wprowadzisz —
+      aplikacja niczego nie śledzi w tle.
+    </p>
+
+    <h2>Gdzie to leży i kto to widzi</h2>
+    <p>
+      Twoje wpisy trzymane są w osobnej bazie, oddzielonej od baz innych
+      użytkowników na poziomie plików — konektor czatu i aplikacja innego
+      użytkownika nie mają do niej żadnej drogi. Serwer utrzymuje gospodarz
+      instancji i — jak każdy administrator serwera — ma techniczny dostęp
+      do danych. Kopie zapasowe obejmują bazy i są trzymane na tym samym
+      serwerze.
+    </p>
+
+    <h2>Claude i dyktowanie</h2>
+    <p>
+      Jeśli podłączysz konto Claude, treść twoich rozmów przetwarza Anthropic
+      według własnego regulaminu — serwer Lifelog widzi wyłącznie gotowe
+      wpisy (np. „owsianka, 500 kcal"), nigdy treść rozmowy.
+    </p>
+
+    <h2>Twoje prawa</h2>
+    <p>
+      W każdej chwili możesz poprosić gospodarza o usunięcie konta — znika
+      wtedy cały plik z twoimi danymi — albo o kopię danych. Wystarczy
+      zwykła wiadomość.
+    </p>
+
+    <p><a href="/">← wróć do aplikacji</a></p>
+  </body>
+</html>

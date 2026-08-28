@@ -1188,6 +1188,49 @@ body:has(#timer:not([hidden])) .komunikat {
   margin: 0 0 28px;
 }
 
+/* Rejestracja dzieli ekran z logowaniem — nagłówek zastępuje znak marki. */
+#logowanie h2 {
+  font-size: 1.3rem;
+  margin: 0 0 20px;
+  text-align: center;
+}
+
+/* Przycisk wyglądający jak odnośnik: przełącza formularze, niczego nie wysyła. */
+.odnosnik {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--akcent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#logowanie .przelacznik-formularza {
+  margin-top: 20px;
+  text-align: center;
+}
+
+/* Zgoda: pole wyboru i tekst w jednej linii, tekst może się łamać. */
+#logowanie .zgoda {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  font-size: 0.85rem;
+  color: var(--tekst-cichy);
+  margin: 4px 0 12px;
+}
+
+#logowanie .zgoda input {
+  width: auto;
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+#logowanie .zgoda a {
+  color: var(--akcent);
+}
+
 .blad-formularza {
   margin: 12px 0 0;
   padding: 10px 12px;

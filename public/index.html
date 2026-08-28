@@ -39,6 +39,17 @@
           <h1>Lifelog</h1>
           <p>Dziennik diety i treningów.</p>
         </div>
+        <label for="login">Login</label>
+        <input
+          id="login"
+          name="login"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
         <label for="haslo">Hasło</label>
         <input
           id="haslo"
@@ -57,6 +68,63 @@
         <div class="przyciski">
           <button class="przycisk glowny" type="submit" id="przycisk-zaloguj">Zaloguj</button>
         </div>
+        <p class="przelacznik-formularza">
+          Masz kod od gospodarza?
+          <button type="button" class="odnosnik" id="pokaz-rejestracje">Załóż konto</button>
+        </p>
+      </form>
+
+      <!-- Rejestracja za wspólnym hasłem bramy. Ten sam ekran co logowanie,
+           przełączany bez przeładowania — kod z linku zaproszenia
+           (/?kod=...) trafia tu sam. -->
+      <form id="formularz-rejestracji" hidden>
+        <h2>Nowe konto</h2>
+        <label for="rejestracja-kod">Kod dostępu</label>
+        <input
+          id="rejestracja-kod"
+          name="kod"
+          type="text"
+          autocomplete="off"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+        <label for="rejestracja-login">Login</label>
+        <input
+          id="rejestracja-login"
+          name="login"
+          type="text"
+          autocomplete="username"
+          autocapitalize="none"
+          autocorrect="off"
+          spellcheck="false"
+          required
+        />
+        <label for="rejestracja-haslo">Hasło (co najmniej 10 znaków)</label>
+        <input
+          id="rejestracja-haslo"
+          name="haslo"
+          type="password"
+          autocomplete="new-password"
+          minlength="10"
+          required
+        />
+        <label class="zgoda">
+          <input id="rejestracja-zgoda" name="zgoda" type="checkbox" required />
+          <span>
+            Zgadzam się na przetwarzanie moich danych o diecie, treningach
+            i wadze — <a href="/polityka.html" target="_blank" rel="noopener">jak to działa</a>.
+          </span>
+        </label>
+        <p id="blad-rejestracji" class="blad-formularza" hidden></p>
+        <div class="przyciski">
+          <button class="przycisk glowny" type="submit" id="przycisk-rejestruj">Załóż konto</button>
+        </div>
+        <p class="przelacznik-formularza">
+          Masz już konto?
+          <button type="button" class="odnosnik" id="pokaz-logowanie">Zaloguj się</button>
+        </p>
       </form>
     </div>
 

@@ -26,10 +26,10 @@ if (existsSync(PLIK_ENV)) {
 }
 
 const ADRES = process.argv[2] ?? `http://localhost:${process.env.PORT || 3000}`;
-const HASLO = process.env.APP_PASSWORD;
+const HASLO = process.env.REJESTRACJA_HASLO;
 
 if (!HASLO) {
-  console.error("APP_PASSWORD jest puste w .env — uruchom: npm run setup");
+  console.error("REJESTRACJA_HASLO jest puste w .env — uruchom: npm run setup");
   process.exit(1);
 }
 
@@ -80,7 +80,18 @@ function przedDniami(data, dni) {
 const zdrowie = await (await wyslij("/zdrowie", undefined, "GET")).json();
 const DZIS = zdrowie.dzisiaj;
 
-const logowanie = await wyslij("/api/logowanie", { haslo: HASLO });
+// Dane poglądowe żyją na osobnym koncie „demo", zakładanym przy pierwszym
+// uruchomieniu — praca nad wyglądem nie miesza wtedy w prawdziwym dzienniku.
+// Hasłem konta jest hasło bramy: to narzędzie deweloperskie, nie sekret.
+let logowanie = await wyslij("/api/logowanie", { login: "demo", haslo: HASLO });
+if (logowanie.status === 401) {
+  logowanie = await wyslij("/api/rejestracja", {
+    kod: HASLO,
+    login: "demo",
+    haslo: HASLO,
+    zgoda: true,
+  });
+}
 ciasteczko = (logowanie.headers.get("set-cookie") ?? "").split(";")[0];
 
 // Czyścimy poprzednie dane poglądowe, żeby wielokrotne uruchomienie nie mnożyło wpisów.
