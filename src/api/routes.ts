@@ -14,7 +14,15 @@ import type { Baza } from "../db/index.js";
 import type { ZrodlaDanych } from "../db/pula.js";
 import { aktywnosciZDnia, historiaRuchu, zapiszAktywnosc } from "../domain/aktywnosci.js";
 import { czyBladDomeny } from "../domain/bledy.js";
-import { kontoPoId, sekretSesjiDla, zaloguj, zarejestruj, type Konto } from "../domain/konta.js";
+import {
+  kontoPoId,
+  nowyTokenKonektora,
+  sekretSesjiDla,
+  zaloguj,
+  zarejestruj,
+  zmienHaslo,
+  type Konto,
+} from "../domain/konta.js";
 import {
   celeNaDzien,
   czestePosilki,
@@ -239,6 +247,34 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
     c.set("strefa", konto.strefa);
     c.set("konto", konto);
     return nastepny();
+  });
+
+  // === Konto ============================================================
+
+  api.get("/konto", (c) => c.json(c.var.konto));
+
+  // Rotacja tokenu konektora. Rejestr trzyma sam hasz, więc to jedyna droga
+  // do zobaczenia adresu — także po zgubieniu tego z rejestracji.
+  api.post("/konektor/nowy", (c) =>
+    c.json({ ok: true, token_konektora: nowyTokenKonektora(rejestr, c.var.konto.id) }),
+  );
+
+  api.post("/haslo", async (c) => {
+    const { stare, nowe } = z
+      .object({ stare: z.string(), nowe: z.string() })
+      .parse(await c.req.json());
+
+    // Sesja nie wystarcza do zmiany hasła: telefon zostawiony odblokowany
+    // nie może przejąć konta na stałe.
+    if (!zaloguj(rejestr, c.var.konto.login, stare)) {
+      return c.json({ blad: "Nieprawidłowe obecne hasło" }, 401);
+    }
+
+    zmienHaslo(rejestr, c.var.konto.id, nowe);
+    // Stare sesje właśnie zgasły (sekret podpisu zawiera hasz hasła) —
+    // ta odpowiedź niesie świeże ciasteczko, żeby zalogowany nie wypadł.
+    wydajSesje(c, c.var.konto.id);
+    return c.json({ ok: true });
   });
 
   // Błędy domenowe to komunikat dla użytkownika, nie awaria serwera.

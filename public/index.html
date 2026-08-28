@@ -213,7 +213,18 @@
             Notatki
           </button>
 
-          <button class="na-dole" data-akcja="wyloguj">
+          <!-- Konto i Wyloguj poza grupami Zdrowie/Życie: to sprawy sesji,
+               nie dziedziny. Klasę na-dole niesie pierwszy z pary — margines
+               auto spycha oba na sam dół. -->
+          <button class="na-dole" data-ekran="konto">
+            <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M5.5 19.5a6.5 6.5 0 0 1 13 0" />
+            </svg>
+            Konto
+          </button>
+          <button data-akcja="wyloguj">
             <svg class="znak" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                  stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M9.5 4.5H7a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2.5" />

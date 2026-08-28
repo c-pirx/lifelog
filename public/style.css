@@ -1677,3 +1677,51 @@ textarea {
   resize: vertical;
   line-height: 1.5;
 }
+
+/* === Ekran Konto ======================================================= */
+
+/* Przygaszone objaśnienia pod kontrolkami — ta sama rola co .cel przy
+   liczbach, ale tu w pełnych zdaniach. */
+.karta .cel {
+  color: var(--tekst-cichy);
+  font-size: 0.85rem;
+}
+
+.konektor-stan {
+  font-size: 0.95rem;
+}
+
+.konektor-stan.ok {
+  color: var(--akcent);
+}
+
+/* Adres konektora: długi ciąg, który musi się łamać, obok przycisk Kopiuj. */
+.adres-konektora {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.adres-konektora code {
+  flex: 1;
+  word-break: break-all;
+  font-size: 0.8rem;
+  background: var(--tlo);
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.karta details summary {
+  cursor: pointer;
+  color: var(--tekst-cichy);
+  margin-top: 10px;
+}
+
+.instrukcja {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.9rem;
+}

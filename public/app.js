@@ -1515,7 +1515,15 @@ const TYTULY = {
   dieta: "Dieta",
   aktywnosci: "Aktywności",
   notatki: "Notatki",
+  konto: "Konto",
 };
+
+/**
+ * Jawny token konektora po rotacji — do pierwszego wyjścia z ekranu Konto.
+ * Serwer trzyma sam hasz, więc po przerysowaniu innego ekranu adresu nie ma
+ * już skąd wziąć; to celowe, nie przeoczenie.
+ */
+let tokenPokazany = null;
 
 async function odswiez() {
   tytulEkranu.textContent = TYTULY[ekran];
@@ -1644,9 +1652,87 @@ async function odswiez() {
     return;
   }
 
+  if (ekran === "konto") {
+    const konto = await api("/konto");
+    dataEkranu.textContent = "";
+    widok.innerHTML = ekranKonto(konto, tokenPokazany);
+    return;
+  }
+
   const [postepy, waga] = await Promise.all([api("/postepy?dni=30"), api("/waga?dni=30")]);
   dataEkranu.textContent = "30 dni";
   widok.innerHTML = ekranPostepy(postepy, waga);
+}
+
+// === Ekran Konto ========================================================
+
+function ekranKonto(konto, token) {
+  const slad = konto.ostatnie_uzycie_konektora
+    ? `<p class="konektor-stan ok">✓ połączono · ostatni kontakt ${esc(
+        new Date(konto.ostatnie_uzycie_konektora).toLocaleString("pl-PL", {
+          dateStyle: "short",
+          timeStyle: "short",
+        }),
+      )}</p>`
+    : `<p class="konektor-stan">Claude jeszcze się nie połączył.</p>`;
+
+  // Adres widać wyłącznie zaraz po wygenerowaniu: serwer zna sam hasz tokenu,
+  // więc nie ma trasy, która oddałaby go później.
+  const adresBox = token
+    ? `<div class="adres-konektora">
+        <code>${esc(`${location.origin}/mcp/${token}`)}</code>
+        <button class="przycisk" type="button" data-akcja="kopiuj-adres"
+                data-adres="${esc(`${location.origin}/mcp/${token}`)}">Kopiuj</button>
+      </div>
+      <p class="cel">Adres widzisz tylko teraz — traktuj go jak hasło.
+      Zgubiony wygenerujesz na nowo.</p>`
+    : `<button class="przycisk" type="button" data-akcja="konektor-nowy">
+        Wygeneruj i pokaż adres konektora
+      </button>
+      <p class="cel">Poprzedni adres przestanie wtedy działać.</p>`;
+
+  return `
+    <section class="karta">
+      <h2>Twoje konto</h2>
+      <p>Login: <strong>${esc(konto.login)}</strong></p>
+      <p class="cel">Strefa czasowa: ${esc(konto.strefa)}</p>
+    </section>
+
+    <section class="karta">
+      <h2>Dyktowanie przez Claude</h2>
+      <p class="cel">
+        Podłącz swoje konto Claude, żeby mówić, co zjadłeś, zamiast to
+        wyklikiwać. Konfiguruje się raz, najwygodniej na komputerze.
+      </p>
+      ${slad}
+      ${adresBox}
+      <details>
+        <summary>Jak podłączyć, krok po kroku</summary>
+        <ol class="instrukcja">
+          <li>Usiądź do komputera i skopiuj adres powyżej.</li>
+          <li>Zaloguj się na claude.ai (potrzebny plan płatny).</li>
+          <li>Ustawienia → Konektory → Dodaj własny konektor.</li>
+          <li>Wklej adres i zatwierdź.</li>
+          <li>Przy pierwszym użyciu narzędzi wybierz „Zawsze zezwalaj" —
+              bez tego każde zdanie kończy się pytaniem o zgodę.</li>
+          <li>Wróć tutaj: napis powyżej zmieni się na „✓ połączono".</li>
+        </ol>
+      </details>
+    </section>
+
+    <section class="karta">
+      <h2>Zmiana hasła</h2>
+      <form id="formularz-haslo">
+        <label for="haslo-stare">Obecne hasło</label>
+        <input id="haslo-stare" name="stare" type="password" autocomplete="current-password" required />
+        <label for="haslo-nowe">Nowe hasło (co najmniej 10 znaków)</label>
+        <input id="haslo-nowe" name="nowe" type="password" autocomplete="new-password" minlength="10" required />
+        <div class="przyciski">
+          <button class="przycisk glowny" type="submit">Zmień hasło</button>
+        </div>
+      </form>
+      <p class="cel">Po zmianie inne zalogowane urządzenia zostaną wylogowane.</p>
+    </section>`;
 }
 
 // === Obsługa zdarzeń ====================================================
@@ -1659,6 +1745,8 @@ function przejdzDo(nowyEkran) {
   otwarteCwiczenie = null;
   otwartyFolder = null;
   otwartaNotatka = null;
+  // Jawny token konektora żyje do wyjścia z ekranu Konto — nie dłużej.
+  tokenPokazany = null;
 
   // Raporty żyją w bocznym menu, nie w dolnym pasku — wtedy żaden przycisk
   // paska nie jest bieżący i wszystkie muszą stracić zaznaczenie.
@@ -1825,6 +1913,26 @@ document.addEventListener("touchcancel", zakonczGest);
 
 widok.addEventListener("click", (zdarzenie) => {
   const cel = zdarzenie.target;
+
+  // Rotacja tokenu konektora. Bez kolejki: bez sieci nowy adres i tak nie
+  // miałby czego obsłużyć, a stary zdążyłby zgasnąć.
+  const nowyKonektor = cel.closest('[data-akcja="konektor-nowy"]');
+  if (nowyKonektor) {
+    akcjaPrzycisku(nowyKonektor, async () => {
+      const wynik = await api("/konektor/nowy", { method: "POST", dane: {}, kolejkuj: false });
+      tokenPokazany = wynik.token_konektora;
+    });
+    return;
+  }
+
+  const kopiuj = cel.closest('[data-akcja="kopiuj-adres"]');
+  if (kopiuj) {
+    navigator.clipboard
+      ?.writeText(kopiuj.dataset.adres)
+      .then(() => komunikat("Adres skopiowany"))
+      .catch(() => komunikat("Nie udało się skopiować — zaznacz adres ręcznie", true));
+    return;
+  }
 
   // Rozwinięcie raportu przerysowuje listę z pamięci, bez ponownego żądania —
   // archiwum przyszło w całości jednym zapytaniem.
@@ -2283,6 +2391,18 @@ widok.addEventListener("submit", (zdarzenie) => {
 
   // Zapis już trwa — drugie wysłanie zapisałoby ten sam wpis po raz drugi.
   if (formularz.dataset.zapisuje === "1") return;
+
+  if (formularz.id === "formularz-haslo") {
+    const stare = formularz.elements.stare.value;
+    const nowe = formularz.elements.nowe.value;
+    // Bez kolejki: hasło odłożone na później to hasło wysłane nie wiadomo kiedy.
+    akcja(
+      () => api("/haslo", { method: "POST", dane: { stare, nowe }, kolejkuj: false }),
+      "Hasło zmienione",
+      formularz,
+    );
+    return;
+  }
 
   if (formularz.id === "formularz-posilku") {
     akcja(

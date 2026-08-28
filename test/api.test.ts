@@ -176,6 +176,72 @@ describe("logowanie", () => {
   });
 });
 
+describe("ekran Konto", () => {
+  it("GET /konto oddaje login, strefę i ślad konektora", async () => {
+    const konto = (await pobierz("/api/konto")) as {
+      login: string;
+      strefa: string;
+      ostatnie_uzycie_konektora: string | null;
+    };
+    expect(konto.login).toBe(LOGIN);
+    expect(konto.strefa).toBe("Europe/Warsaw");
+    expect(konto.ostatnie_uzycie_konektora).toBeNull();
+  });
+
+  it("rotacja tokenu unieważnia stary adres konektora", async () => {
+    const stary = TOKEN_MCP;
+    const odpowiedz = await wyslij("/api/konektor/nowy", {});
+    expect(odpowiedz.status).toBe(200);
+    const { token_konektora } = (await odpowiedz.json()) as { token_konektora: string };
+    expect(token_konektora).toMatch(/^[0-9a-f]{64}$/);
+    expect(token_konektora).not.toBe(stary);
+
+    const starym = await fetch(`${adres}/mcp/${stary}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }),
+    });
+    expect(starym.status).toBe(401);
+
+    TOKEN_MCP = token_konektora;
+  });
+
+  it("zmiana hasła: stara sesja gaśnie, nowa odpowiedź niesie świeże ciasteczko", async () => {
+    const staraSesjaCiasteczko = ciasteczko;
+    const odpowiedz = await wyslij("/api/haslo", {
+      stare: HASLO,
+      nowe: "nowe-haslo-testera-1",
+    });
+    expect(odpowiedz.status).toBe(200);
+
+    // Świeże ciasteczko z odpowiedzi — zalogowany nie wypada z aplikacji.
+    const nowe = (odpowiedz.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+    expect(nowe).toMatch(/^sesja=/);
+
+    // Stara sesja podpisana starym haszem przestała działać.
+    const staraProba = await fetch(`${adres}/api/dzien`, {
+      headers: { cookie: staraSesjaCiasteczko },
+    });
+    expect(staraProba.status).toBe(401);
+
+    ciasteczko = nowe;
+
+    // Logowanie: stare hasło odpada, nowe działa.
+    expect((await wyslij("/api/logowanie", { login: LOGIN, haslo: HASLO })).status).toBe(401);
+    expect(
+      (await wyslij("/api/logowanie", { login: LOGIN, haslo: "nowe-haslo-testera-1" })).status,
+    ).toBe(200);
+  });
+
+  it("zmiana hasła wymaga poprawnego starego hasła", async () => {
+    const odpowiedz = await wyslij("/api/haslo", {
+      stare: "zle-stare-haslo",
+      nowe: "jakies-nowe-haslo-1",
+    });
+    expect(odpowiedz.status).toBe(401);
+  });
+});
+
 describe("dieta przez API", () => {
   it("zapisuje posiłek i pokazuje go w podsumowaniu dnia", async () => {
     await wyslij("/api/cele", {
