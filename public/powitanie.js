@@ -213,9 +213,9 @@ void pokazLicznik();
 // === Film ===============================================================
 
 /**
- * Nagranie waży 3,7 MB, więc `preload="none"` w znaczniku pilnuje, żeby ani
- * bajt nie poszedł bez zgody użytkownika — a nakładka jest tą zgodą. Znika
- * dopiero na `playing`, nie na kliknięciu: przy wolnym łączu między jednym
+ * Nagranie rusza samo po trzech sekundach patrzenia — ale `preload="none"`
+ * w znaczniku zostaje, więc do tej chwili nie schodzi ani bajt. Nakładka znika
+ * dopiero na `playing`, nie na starcie: przy wolnym łączu między jednym
  * a drugim mija sekunda, w której zdjęta za wcześnie zostawiłaby czarną
  * dziurę zamiast obrazu.
  */
@@ -258,7 +258,63 @@ if (film && filmStart) {
     film.addEventListener(zdarzenie, () => scena?.classList.remove("gra"));
   }
 
-  // === Rozdziały (tylko wariant A) ======================================
+  // === Start po zauważeniu ==============================================
+
+  /**
+   * Film rusza sam, gdy kadr jest na ekranie przez trzy sekundy — tyle trwa
+   * przewinięcie obok, więc nagranie nie zaczyna się komuś, kto tylko przez
+   * sekcję przejeżdża.
+   *
+   * Trzy sytuacje autostart pomija, bo w każdej z nich zabrałby decyzję:
+   * przy prośbie o ograniczony ruch, przy włączonym oszczędzaniu danych
+   * i na wolnym łączu — nagranie waży 3,7 MB i na komórce w drodze na siłownię
+   * to nie jest transfer, o który wypada prosić bez pytania.
+   */
+  const OPOZNIENIE_STARTU = 3000;
+  const WIDOCZNE_DOSC = 0.6;
+
+  // `connection` nie jest w standardzie i nie zna go Safari — stąd rzutowanie
+  // zamiast prostego odczytu.
+  const polaczenie = /** @type {{ saveData?: boolean; effectiveType?: string } | undefined} */ (
+    /** @type {any} */ (navigator).connection
+  );
+  const oszczedzaDane = Boolean(
+    polaczenie?.saveData || /(^|-)2g$/.test(polaczenie?.effectiveType ?? ""),
+  );
+
+  if (!PREFERUJE_SPOKOJ && !oszczedzaDane && "IntersectionObserver" in window) {
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let odliczanie;
+    let autostartZuzyty = false;
+
+    const obserwatorFilmu = new IntersectionObserver(
+      (wpisy) => {
+        for (const wpis of wpisy) {
+          if (wpis.isIntersecting) {
+            // Odliczanie biegnie tylko wtedy, gdy kadr NIEPRZERWANIE jest na
+            // ekranie: wyjście z widoku je kasuje, więc trzy sekundy znaczą
+            // trzy sekundy patrzenia, a nie sumę mignięć.
+            if (autostartZuzyty || !film.paused) continue;
+            odliczanie = setTimeout(() => {
+              autostartZuzyty = true;
+              puscFilm();
+            }, OPOZNIENIE_STARTU);
+          } else {
+            clearTimeout(odliczanie);
+            // Poza ekranem nagranie bez dźwięku nie ma odbiorcy, a dalej
+            // schodziłoby z serwera. Wznowienia nie ma: kto zjechał w dół,
+            // wraca do zatrzymanego kadru i sam decyduje.
+            if (!film.paused) film.pause();
+          }
+        }
+      },
+      { threshold: WIDOCZNE_DOSC },
+    );
+
+    obserwatorFilmu.observe(film);
+  }
+
+  // === Rozdziały ========================================================
   const rozdzialy = [...document.querySelectorAll(".film-rozdzialy button")];
 
   if (rozdzialy.length > 0) {
