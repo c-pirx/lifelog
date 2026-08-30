@@ -163,6 +163,18 @@
                 <span class="film-napis">Zobacz aplikację w ruchu</span>
                 <span class="film-drobne">20 sekund · startuje bez dźwięku</span>
               </button>
+
+              <!-- Podpowiedź o dźwięku jest przyciskiem, nie napisem: skoro
+                   i tak trzeba ją zauważyć, niech od razu robi to, o czym
+                   mówi. Szukanie ikony w pasku odtwarzacza byłoby drugim
+                   krokiem, którego da się nie robić. -->
+              <button type="button" class="film-dzwiek" hidden>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 9.5v5h3.5l4.5 4v-13l-4.5 4z" />
+                  <path d="M16 9.5l4 5M20 9.5l-4 5" />
+                </svg>
+                <span>Włącz dźwięk</span>
+              </button>
             </figure>
           </div>
 

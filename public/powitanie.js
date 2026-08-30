@@ -258,6 +258,49 @@ if (film && filmStart) {
     film.addEventListener(zdarzenie, () => scena?.classList.remove("gra"));
   }
 
+  // === Podpowiedź o dźwięku =============================================
+
+  /**
+   * Nagranie rusza wyciszone, bo inaczej przeglądarka w ogóle by go nie
+   * puściła bez kliknięcia. Ścieżka dźwiękowa jednak istnieje, więc trzeba
+   * o niej powiedzieć — inaczej gość obejrzy film przekonany, że jest niemy.
+   *
+   * Podpowiedź gaśnie sama po sześciu sekundach: to trzecia część nagrania,
+   * dość, żeby ją zauważyć, i za mało, żeby zawadzała do końca. Pokazuje się
+   * raz — przypominanie przy każdym wznowieniu byłoby dopominaniem się.
+   */
+  const dzwiek = /** @type {HTMLElement | null} */ (document.querySelector(".film-dzwiek"));
+
+  if (dzwiek) {
+    const CZAS_PODPOWIEDZI = 6000;
+    let podpowiedzZuzyta = false;
+    /** @type {ReturnType<typeof setTimeout> | undefined} */
+    let gasniecie;
+
+    const schowajPodpowiedz = () => {
+      clearTimeout(gasniecie);
+      dzwiek.hidden = true;
+    };
+
+    film.addEventListener("playing", () => {
+      if (podpowiedzZuzyta || !film.muted) return;
+      podpowiedzZuzyta = true;
+      dzwiek.hidden = false;
+      gasniecie = setTimeout(schowajPodpowiedz, CZAS_PODPOWIEDZI);
+    });
+
+    dzwiek.addEventListener("click", () => {
+      film.muted = false;
+      schowajPodpowiedz();
+    });
+
+    // Także wtedy, gdy dźwięk włączono paskiem odtwarzacza — podpowiedź
+    // zachęcająca do zrobienia czegoś, co już się stało, jest szumem.
+    film.addEventListener("volumechange", () => {
+      if (!film.muted) schowajPodpowiedz();
+    });
+  }
+
   // === Start po zauważeniu ==============================================
 
   /**
