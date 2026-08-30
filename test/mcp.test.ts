@@ -29,6 +29,8 @@ const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import
 let TOKEN = "";
 let katalogPuli: string;
 let pula: PulaBaz;
+/** Wspólny rejestr — testowi raportu pozwala założyć konto z czystym dziennikiem. */
+let rejestr: ReturnType<typeof otworzBaze>;
 let serwer: ReturnType<typeof serve>;
 let klient: Client;
 let adres: string;
@@ -44,7 +46,7 @@ async function wywolaj(nazwa: string, argumenty: Record<string, unknown> = {}): 
 }
 
 beforeAll(async () => {
-  const rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
+  rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
   katalogPuli = mkdtempSync(join(tmpdir(), "mcp-test-"));
   pula = utworzPule({ katalog: katalogPuli });
 
@@ -411,12 +413,34 @@ describe("waga", () => {
 
 describe("raport tygodniowy przez MCP", () => {
   it("bez raportu w bazie tłumaczy, kiedy powstanie pierwszy", async () => {
-    // Świeża baza nie ma zamkniętego tygodnia z danymi — odpowiedź jest ta sama
-    // niezależnie od dnia uruchomienia testu.
-    const wynik = await wywolaj("podsumowanie_dnia", { okres: "tydzien" });
+    // Osobne konto, więc osobny plik dziennika: reszta pliku dzieli jedną bazę
+    // i zapisuje wpisy z konkretnymi datami. Gdy taki dzień wpadnie w tydzień
+    // już zamknięty, `zapewnijRaporty` naprawdę wygeneruje raport i zamiast
+    // zdania o niedzieli przyjdą liczby — test zaczynałby padać sam z siebie,
+    // po prostu z upływem czasu. Świeży dziennik odpowiada tak samo w każdy
+    // dzień roku.
+    const token = utworzKonto(rejestr, {
+      login: "tester-raport",
+      haslo: "haslo-testowe-raport",
+      zgoda: true,
+    }).tokenKonektora;
 
-    expect(wynik).toMatch(/niedziel/i);
-    expect(wynik).toMatch(/9:00/);
+    const klientCzysty = new Client({ name: "test-raport", version: "1.0.0" });
+    await klientCzysty.connect(new StreamableHTTPClientTransport(new URL(`${adres}/mcp/${token}`)));
+
+    try {
+      const wynik = tresc(
+        await klientCzysty.callTool({
+          name: "podsumowanie_dnia",
+          arguments: { okres: "tydzien" },
+        }),
+      );
+
+      expect(wynik).toMatch(/niedziel/i);
+      expect(wynik).toMatch(/9:00/);
+    } finally {
+      await klientCzysty.close();
+    }
   });
 
   it("odmawia zapisania komentarza bez wskazania tygodnia", async () => {

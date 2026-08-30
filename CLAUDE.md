@@ -235,7 +235,12 @@ pozycję. Każde narzędzie zajmuje kontekst w **każdej** rozmowie. Pilnuje teg
 
 **Testy nie mogą zależeć od dzisiejszej daty.** `trendWagi` i `czestePosilki`
 przyjmują datę odniesienia właśnie dlatego — wcześniejsza wersja testów
-zaczęłaby padać po 90 dniach bez żadnej zmiany w kodzie.
+zaczęłaby padać po 90 dniach bez żadnej zmiany w kodzie. Ta sama pułapka wraca
+przy **bazie współdzielonej w obrębie pliku**: `test/mcp.test.ts` pisze wpisy
+z konkretnymi datami, więc gdy taki dzień wpadł w tydzień już zamknięty,
+`zapewnijRaporty` naprawdę generował raport i test „bez raportu w bazie"
+przestawał widzieć zdanie o niedzieli. Test wymagający pustego dziennika
+zakłada **własne konto** — pula wyda mu osobny plik.
 
 **Testy nie mogą zależeć od katalogu roboczego.** `test/stdio.test.ts` sięga
 po `tsx` przez `import.meta.resolve`, a nie po ścieżkę `node_modules/…`.
