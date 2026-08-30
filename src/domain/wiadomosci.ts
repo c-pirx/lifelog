@@ -108,7 +108,7 @@ export function wiadomoscPowitalna(dane: {
     html: oprawa(
       "Jesteś na liście",
       zdania.slice(1).map(akapit).join(""),
-      `Nie zapisywałeś się albo zmieniłeś zdanie? <a href="${bezpieczny(wypis)}" style="color:#95e6b9">Usuń mój adres</a> — kasujemy wpis od razu, bez pytań.`,
+      `To pomyłka albo zmiana zdania? <a href="${bezpieczny(wypis)}" style="color:#95e6b9">Usuń mój adres</a> — kasujemy wpis od razu, bez pytań.`,
     ),
   };
 }
@@ -187,7 +187,7 @@ export function wiadomoscZaproszenie(dane: {
             "wersja beta i każde zgłoszenie realnie coś zmienia.",
         ]
       : []),
-    `Mam nadzieję, że ${NAZWA} będzie Ci służyć w codziennym osiąganiu celów.`,
+    `Mamy nadzieję, że ${NAZWA} będzie Ci służyć w codziennym osiąganiu celów.`,
   ];
 
   const krokiTekstem = KROKI_KONEKTORA.map((krok, i) => `${i + 1}. ${krok}`).join("\n");
@@ -210,7 +210,7 @@ export function wiadomoscZaproszenie(dane: {
         przycisk("Załóż konto", link) +
         blok(naglowekBloku, WSTEP_KONEKTORA, KROKI_KONEKTORA, STOPKA_KONEKTORA) +
         dopiski.map(akapit).join(""),
-      `Link działa ${dane.waznoscDni} dni i tylko raz. Zmieniłeś zdanie? <a href="${bezpieczny(wypis)}" style="color:#95e6b9">Usuń mój adres</a>.`,
+      `Link działa ${dane.waznoscDni} dni i tylko raz. Zmiana zdania? <a href="${bezpieczny(wypis)}" style="color:#95e6b9">Usuń mój adres</a>.`,
     ),
   };
 }
