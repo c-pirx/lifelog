@@ -519,6 +519,94 @@ section {
   transition: opacity 0.6s ease;
 }
 
+/* === Wariant A: rozdziały ============================================== */
+
+/* Kadr i spis treści obok siebie. Kolumna rozdziałów jest wąska celowo —
+   to podpis do obrazu, nie druga treść sekcji. */
+.film-uklad {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 15rem;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.film-rozdzialy {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.film-rozdzialy button {
+  display: grid;
+  grid-template-columns: 3.1rem 1fr;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.62rem 0.6rem;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--cichy);
+  font-family: inherit;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.film-rozdzialy button:hover,
+.film-rozdzialy button:focus-visible {
+  background: var(--powierzchnia);
+  color: var(--tekst);
+}
+
+/* Czas w kroju dziennika: to odczyt z nagrania, nie etykieta redakcyjna —
+   ta sama zasada, co przy godzinach wpisów w aplikacji. */
+.film-czas {
+  font-family: var(--dziennik);
+  font-size: 0.78rem;
+  color: var(--cichy);
+}
+
+/* Rozdział, który właśnie leci. Mięta zostaje w kresce po lewej, nie zalewa
+   tła: kolor zapisu ma na tej stronie znaczyć jedno. */
+.film-rozdzialy .teraz button {
+  background: var(--powierzchnia);
+  color: var(--tekst);
+  box-shadow: inset 2px 0 0 var(--akcent);
+}
+
+.film-rozdzialy .teraz .film-czas {
+  color: var(--akcent);
+}
+
+@media (max-width: 46rem) {
+  .film-uklad {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+}
+
+/* === Wariant E: plakat z prawdziwej klatki ============================= */
+
+/* Nakładka nie zasłania plakatu, tylko go przyciemnia — pod spodem ma być
+   widać, co się zapisuje. Gradient od dołu, bo tam w kadrze stoi przycisk
+   „Odhacz serię" i to on jest treścią tej klatki. */
+/* Przyciemnienie równomierne, treść na środku. Napisy stały wcześniej u dołu
+   i kładły się na zielonym „Odhacz serię" z klatki — czyli dokładnie na tym,
+   po co ten plakat tu jest. */
+.film-plakat .film-start {
+  background: rgba(15, 17, 21, 0.62);
+}
+
+/* Bez łuny: plakat sam mówi, co jest w środku, a pulsowanie obok konkretnej
+   klatki robiłoby dwa zaproszenia w jednym miejscu. */
+.film-plakat .film-scena::before {
+  content: none;
+}
+
 /* Ta sama rama, co karta „przemiany" w hero: nagranie ma się czytać jako
    element z tej samej rodziny, a nie wklejony obcy odtwarzacz. */
 .film-ramka {

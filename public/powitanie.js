@@ -219,23 +219,41 @@ void pokazLicznik();
  * a drugim mija sekunda, w której zdjęta za wcześnie zostawiłaby czarną
  * dziurę zamiast obrazu.
  */
-const film = /** @type {HTMLVideoElement | null} */ (document.getElementById("film"));
-const filmStart = document.getElementById("film-start");
+// TYMCZASOWE: strona niesie dwa warianty sekcji filmu, `?film=a` (domyślny)
+// i `?film=e`. Niewybrany znika z DOM, żeby porównanie odbywało się na pełnej
+// stronie, a nie na makiecie obok niej. Po decyzji zostaje jeden wariant
+// i te trzy linijki idą do kosza.
+const wybranyWariant = new URLSearchParams(location.search).get("film") === "e" ? "e" : "a";
+for (const sekcja of document.querySelectorAll("section.film[data-wariant]")) {
+  if (sekcja.getAttribute("data-wariant") !== wybranyWariant) sekcja.remove();
+}
+
+const film = /** @type {HTMLVideoElement | null} */ (document.querySelector(".film-wideo"));
+const filmStart = document.querySelector(".film-start");
 
 if (film && filmStart) {
-  filmStart.addEventListener("click", () => {
+  const scena = film.closest(".film-scena");
+
+  /** Wspólne wejście w odtwarzanie: z nakładki i z rozdziału. */
+  const puscFilm = () => {
     filmStart.setAttribute("aria-busy", "tak");
-    // Fokus na odtwarzacz, żeby spacja i strzałki działały od razu —
-    // przycisk, który za chwilę zniknie, nie może go zatrzymać.
-    film.focus();
+    // Kontrolki dopiero teraz. W znaczniku stały zawsze i prześwitywały przez
+    // nakładkę wariantu z plakatem: obok dużego przycisku „odtwórz" widniał
+    // drugi, mały, w pasku odtwarzacza.
+    film.controls = true;
     void film.play().catch(() => {
       // Odtwarzanie odrzucone (np. oszczędzanie danych) — nakładka wraca,
       // bo bez niej zostałby sam czarny prostokąt bez wyjaśnienia.
       filmStart.removeAttribute("aria-busy");
     });
-  });
+  };
 
-  const scena = film.closest(".film-scena");
+  filmStart.addEventListener("click", () => {
+    // Fokus na odtwarzacz, żeby spacja i strzałki działały od razu —
+    // przycisk, który za chwilę zniknie, nie może go zatrzymać.
+    film.focus();
+    puscFilm();
+  });
 
   film.addEventListener("playing", () => {
     filmStart.hidden = true;
@@ -247,6 +265,40 @@ if (film && filmStart) {
   // Pauza i koniec przywracają oddech — sekcja znów czeka na gest.
   for (const zdarzenie of ["pause", "ended"]) {
     film.addEventListener(zdarzenie, () => scena?.classList.remove("gra"));
+  }
+
+  // === Rozdziały (tylko wariant A) ======================================
+  const rozdzialy = [...document.querySelectorAll(".film-rozdzialy button")];
+
+  if (rozdzialy.length > 0) {
+    for (const przycisk of rozdzialy) {
+      przycisk.addEventListener("click", () => {
+        film.currentTime = Number(przycisk.dataset["sekunda"]);
+        puscFilm();
+      });
+    }
+
+    // Podświetlenie idzie za obrazem, nie za kliknięciem: przewinięcie suwakiem
+    // ma zaznaczyć właściwy rozdział tak samo jak stuknięcie w listę.
+    const granice = rozdzialy.map((p) => Number(p.dataset["sekunda"]));
+    let ostatni = -1;
+
+    film.addEventListener("timeupdate", () => {
+      let biezacy = -1;
+      for (let i = 0; i < granice.length; i += 1) {
+        if (film.currentTime >= (granice[i] ?? 0)) biezacy = i;
+      }
+      if (biezacy === ostatni) return;
+      ostatni = biezacy;
+      rozdzialy.forEach((p, i) => {
+        p.parentElement?.classList.toggle("teraz", i === biezacy);
+      });
+    });
+
+    film.addEventListener("ended", () => {
+      ostatni = -1;
+      for (const p of rozdzialy) p.parentElement?.classList.remove("teraz");
+    });
   }
 }
 

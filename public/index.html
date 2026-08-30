@@ -127,22 +127,92 @@
            wciąż 3,7 MB, o które nie wypada prosić kogoś w drodze na siłownię.
            Źródło miało 13,3 MB; x264 CRF 26 zdjął 72% przy SSIM 0,9967, bo
            nagranie ekranów prawie się nie rusza. Sterowanie w powitanie.js. -->
-      <section class="tresc film">
-        <!-- Sekcja bez nagłówka i bez prozy: film ma zapraszać kliknięciem,
-             nie zapowiedzią. Opis, który wcześniej stał obok, przeniósł się
-             w `aria-label` odtwarzacza — czytnik ekranu nie może zostać z samym
-             słowem „wideo", skoro widzący dostaje tu cały produkt w ruchu. -->
+      <!-- TYMCZASOWE: dwa warianty sekcji filmu do porównania. Przełącznik
+           `?film=a` (domyślny) i `?film=e` — powitanie.js usuwa z DOM ten,
+           którego nie wybrano. Po decyzji zostaje jeden, bez atrybutu
+           `data-wariant`, a przełącznik znika ze skryptu. -->
+
+      <!-- WARIANT A — rozdziały. Nagranie jest sekwencją ekranów, więc obok
+           kadru stoi spis treści z czasami: sekcja mówi, co jest w środku,
+           zanim ktokolwiek kliknie, a klik w rozdział przeskakuje do sceny. -->
+      <section class="tresc film" data-wariant="a">
+        <div class="film-scena">
+          <div class="film-uklad">
+            <figure class="film-ramka">
+              <video
+                class="film-wideo"
+                preload="none"
+                playsinline
+                muted
+                width="1920"
+                height="1080"
+                aria-label="Nagranie aplikacji Lifelog, 20 sekund: logowanie, plan treningu i aktywności, dzienne makro z wykresem, odhaczanie serii przysiadu"
+              >
+                <source src="/film/lifelog.mp4" type="video/mp4" />
+                <p>
+                  Twoja przeglądarka nie odtworzy tego nagrania.
+                  <a href="/film/lifelog.mp4">Otwórz plik osobno</a>.
+                </p>
+              </video>
+              <button type="button" class="film-start">
+                <span class="film-ikona" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M9 7.5v9l7.5-4.5z" />
+                  </svg>
+                </span>
+                <span class="film-napis">Zobacz aplikację w ruchu</span>
+                <span class="film-drobne">20 sekund · startuje bez dźwięku</span>
+              </button>
+            </figure>
+
+            <!-- Lista, nie ozdobna numeracja: czasy są prawdziwe i klikalne,
+                 a kolejność niesie informację, bo tak działa aplikacja —
+                 najpierw wejście, potem plan, na końcu wynik pod sztangą. -->
+            <ol class="film-rozdzialy">
+              <li>
+                <button type="button" data-sekunda="2">
+                  <span class="film-czas">0:02</span>
+                  <span>Otwierasz aplikację</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" data-sekunda="5">
+                  <span class="film-czas">0:05</span>
+                  <span>Plan treningu i ruch</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" data-sekunda="9">
+                  <span class="film-czas">0:09</span>
+                  <span>Makro dnia i wykres</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" data-sekunda="13">
+                  <span class="film-czas">0:13</span>
+                  <span>Odhaczasz serię</span>
+                </button>
+              </li>
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <!-- WARIANT E — plakatem jest prawdziwa klatka z odhaczania serii,
+           a nie rysowana poświata. Gość widzi produkt, zanim cokolwiek
+           pobierze: 23 kB obrazu zamiast pustego prostokąta. -->
+      <section class="tresc film film-plakat" data-wariant="e">
         <div class="film-scena">
           <figure class="film-ramka">
             <video
-              id="film"
+              class="film-wideo"
               preload="none"
-              controls
               playsinline
               muted
               width="1920"
               height="1080"
-              aria-label="Nagranie aplikacji Lifelog, 20 sekund: logowanie, zakładka Aktywności, odhaczanie serii przysiadu i ekran Postępy z wykresem wagi"
+              poster="/film/plakat.webp"
+              aria-label="Nagranie aplikacji Lifelog, 20 sekund: logowanie, plan treningu i aktywności, dzienne makro z wykresem, odhaczanie serii przysiadu"
             >
               <source src="/film/lifelog.mp4" type="video/mp4" />
               <p>
@@ -150,7 +220,7 @@
                 <a href="/film/lifelog.mp4">Otwórz plik osobno</a>.
               </p>
             </video>
-            <button type="button" class="film-start" id="film-start">
+            <button type="button" class="film-start">
               <span class="film-ikona" aria-hidden="true">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M9 7.5v9l7.5-4.5z" />
