@@ -128,39 +128,39 @@
            Źródło miało 13,3 MB; x264 CRF 26 zdjął 72% przy SSIM 0,9967, bo
            nagranie ekranów prawie się nie rusza. Sterowanie w powitanie.js. -->
       <section class="tresc film">
-        <p class="etykieta">Zobacz w ruchu</p>
-        <h2>Dwadzieścia sekund całej aplikacji</h2>
-        <p class="film-opis">
-          Logowanie, zakładka Aktywności, odhaczanie serii przysiadu i ekran
-          Postępy z wykresem wagi — nagranie z działającej aplikacji, nie
-          makieta.
-        </p>
-        <figure class="film-ramka">
-          <video
-            id="film"
-            preload="none"
-            controls
-            playsinline
-            muted
-            width="1920"
-            height="1080"
-          >
-            <source src="/film/lifelog.mp4" type="video/mp4" />
-            <p>
-              Twoja przeglądarka nie odtworzy tego nagrania.
-              <a href="/film/lifelog.mp4">Otwórz plik osobno</a>.
-            </p>
-          </video>
-          <button type="button" class="film-start" id="film-start">
-            <span class="film-ikona" aria-hidden="true">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9 7.5v9l7.5-4.5z" />
-              </svg>
-            </span>
-            <span class="film-napis">Odtwórz nagranie</span>
-            <span class="film-drobne">20 sekund · startuje bez dźwięku</span>
-          </button>
-        </figure>
+        <!-- Sekcja bez nagłówka i bez prozy: film ma zapraszać kliknięciem,
+             nie zapowiedzią. Opis, który wcześniej stał obok, przeniósł się
+             w `aria-label` odtwarzacza — czytnik ekranu nie może zostać z samym
+             słowem „wideo", skoro widzący dostaje tu cały produkt w ruchu. -->
+        <div class="film-scena">
+          <figure class="film-ramka">
+            <video
+              id="film"
+              preload="none"
+              controls
+              playsinline
+              muted
+              width="1920"
+              height="1080"
+              aria-label="Nagranie aplikacji Lifelog, 20 sekund: logowanie, zakładka Aktywności, odhaczanie serii przysiadu i ekran Postępy z wykresem wagi"
+            >
+              <source src="/film/lifelog.mp4" type="video/mp4" />
+              <p>
+                Twoja przeglądarka nie odtworzy tego nagrania.
+                <a href="/film/lifelog.mp4">Otwórz plik osobno</a>.
+              </p>
+            </video>
+            <button type="button" class="film-start" id="film-start">
+              <span class="film-ikona" aria-hidden="true">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9 7.5v9l7.5-4.5z" />
+                </svg>
+              </span>
+              <span class="film-napis">Zobacz aplikację w ruchu</span>
+              <span class="film-drobne">20 sekund · startuje bez dźwięku</span>
+            </button>
+          </figure>
+        </div>
       </section>
 
       <section class="tresc aplikacja">

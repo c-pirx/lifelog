@@ -235,9 +235,19 @@ if (film && filmStart) {
     });
   });
 
+  const scena = film.closest(".film-scena");
+
   film.addEventListener("playing", () => {
     filmStart.hidden = true;
+    // Łuna przestaje pulsować pod lecącym obrazem: zapraszała do kliknięcia,
+    // a po nim ma już tylko trzymać kadr, nie ciągnąć wzroku na boki.
+    scena?.classList.add("gra");
   });
+
+  // Pauza i koniec przywracają oddech — sekcja znów czeka na gest.
+  for (const zdarzenie of ["pause", "ended"]) {
+    film.addEventListener(zdarzenie, () => scena?.classList.remove("gra"));
+  }
 }
 
 // === Odsłony sekcji przy przewijaniu ====================================

@@ -162,8 +162,11 @@ section {
 /* === Podpis strony: zdanie zamienia się w zapis ========================= */
 
 /* Serce strony. Na górze to, co człowiek powiedział, pod spodem wiersz, który
-   z tego powstał w dzienniku. Cały produkt w jednym geście — dlatego jest to
-   jedyne miejsce z animacją. */
+   z tego powstał w dzienniku. Cały produkt w jednym geście — dlatego to tutaj
+   animacja niesie treść, a nie ozdabia.
+   Drugie miejsce, które się rusza samo, to łuna pod nagraniem: sekcja filmu
+   nie ma nagłówka ani prozy, więc pulsowanie jest tam jedynym zaproszeniem
+   do kliknięcia. Trzeciego być nie powinno. */
 .przemiana {
   margin: 0 0 2rem;
   padding: 1.1rem 1.25rem 1.25rem;
@@ -439,17 +442,88 @@ section {
 
 /* === Film ============================================================== */
 
-.film-opis {
-  margin: 0;
-  max-width: 38rem;
-  color: var(--cichy);
+/* Poświata musi wychodzić poza kadr, a `.film-ramka` przycina wszystko
+   (`overflow: hidden` trzyma wideo w zaokrąglonych rogach) — stąd osobna
+   scena. Jej jedynym zadaniem jest dać poświacie miejsce pod spodem. */
+.film-scena {
+  position: relative;
+  isolation: isolate;
+}
+
+/* Miętowa łuna zza nagrania. Sekcja straciła nagłówek i prozę, więc to ona
+   niesie teraz zaproszenie — pulsuje, dopóki film stoi, i cichnie, gdy
+   rusza: pod obrazem miałaby już tylko rozpraszać.
+   `blur` na przezroczystym gradiencie zamiast `box-shadow`, bo cień nie
+   umie zmieniać kształtu, a ta plama ma oddychać razem ze skalą. */
+.film-scena::before {
+  content: "";
+  position: absolute;
+  z-index: 0;
+  /* Łuna musi wystawać na tyle, żeby przetrwała rozmycie: przy 46 px blura
+     rozlanie o 20 px rozchodzi się do zera i pod ramką nie zostaje nic. */
+  /* W bok ani piksela ujemnego wcięcia, choć łuna ma sięgać dalej niż kadr.
+     Element pozycjonowany bezwzględnie wystający poza rodzica powiększa obszar
+     przewijania i strona dostaje pasek poziomy na każdym ekranie węższym niż
+     rynna — czyli na każdym telefonie. Rozmycie takiego skutku nie ma: maluje
+     poza granicami, ale layoutu nie rusza, więc to ono rozprowadza łunę na
+     boki. Próba przycięcia tego przez `overflow-x: clip` na `main` kosztowała
+     płynne przejście do kotwicy #lista — sekcja przestawała się przewijać. */
+  inset: -15% 0;
+  border-radius: 50%;
+  /* Jednolita plama rozmywana blurem, nie gradient. Gradient wygasa promieniem
+     od środka, a środek chowa się za nieprzezroczystą ramką — przy jej krawędzi,
+     czyli w jedynym miejscu, gdzie łunę widać, zostawała mu ledwie jedna trzecia
+     koloru. Blur na pełnym kolorze robi miękkie brzegi dokładnie za kadrem. */
+  background: rgba(125, 211, 160, 0.55);
+  filter: blur(50px);
+  animation: film-oddech 5.5s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* Rozmycie jest w pikselach, więc przy niskim kadrze na telefonie waży
+   proporcjonalnie dużo więcej niż na monitorze — bez tego łuna schodziła
+   z sekcji i kładła się na nagłówku następnej. */
+@media (max-width: 40rem) {
+  .film-scena::before {
+    filter: blur(34px);
+  }
+}
+
+/* Ramka nad łuną — inaczej nieprzezroczyste tło odtwarzacza i tak by ją
+   przykryło, ale kolejność zostawiona przypadkowi mści się przy pierwszej
+   zmianie tła sekcji. */
+.film-scena > .film-ramka {
+  position: relative;
+  z-index: 1;
+}
+
+/* Pulsuje samo krycie, nigdy skala. Transformowany element wnosi do obszaru
+   przewijania swój przeskalowany prostokąt, a ten pseudoelement wystaje poza
+   sekcję — `scale` w pętli kazałby wysokości dokumentu drgać co klatkę.
+   Na rozmytej plamie skala i tak nie robi różnicy, której nie da się uzyskać
+   kryciem, więc nie ma czego bronić. */
+@keyframes film-oddech {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+/* Klasę zdejmuje i dokłada powitanie.js, śledząc odtwarzanie. */
+.film-scena.gra::before {
+  animation: none;
+  opacity: 0.22;
+  transition: opacity 0.6s ease;
 }
 
 /* Ta sama rama, co karta „przemiany" w hero: nagranie ma się czytać jako
    element z tej samej rodziny, a nie wklejony obcy odtwarzacz. */
 .film-ramka {
   position: relative;
-  margin: 2rem 0 0;
+  margin: 0;
   aspect-ratio: 16 / 9;
   background: var(--powierzchnia);
   border: 1px solid var(--linia);
@@ -527,8 +601,19 @@ section {
   color: var(--cichy);
 }
 
+/* Kto prosi o spokój, dostaje łunę nieruchomą — nie jej brak. Zgaszona do zera
+   zabrałaby sekcji jedyne, co po zdjęciu nagłówka mówi „to tu". */
 @media (prefers-reduced-motion: reduce) {
   .film-ikona {
+    transition: none;
+  }
+
+  .film-scena::before {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .film-scena.gra::before {
     transition: none;
   }
 }
