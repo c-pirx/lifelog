@@ -210,6 +210,36 @@ async function pokazLicznik() {
 
 void pokazLicznik();
 
+// === Film ===============================================================
+
+/**
+ * Nagranie waży 3,7 MB, więc `preload="none"` w znaczniku pilnuje, żeby ani
+ * bajt nie poszedł bez zgody użytkownika — a nakładka jest tą zgodą. Znika
+ * dopiero na `playing`, nie na kliknięciu: przy wolnym łączu między jednym
+ * a drugim mija sekunda, w której zdjęta za wcześnie zostawiłaby czarną
+ * dziurę zamiast obrazu.
+ */
+const film = /** @type {HTMLVideoElement | null} */ (document.getElementById("film"));
+const filmStart = document.getElementById("film-start");
+
+if (film && filmStart) {
+  filmStart.addEventListener("click", () => {
+    filmStart.setAttribute("aria-busy", "tak");
+    // Fokus na odtwarzacz, żeby spacja i strzałki działały od razu —
+    // przycisk, który za chwilę zniknie, nie może go zatrzymać.
+    film.focus();
+    void film.play().catch(() => {
+      // Odtwarzanie odrzucone (np. oszczędzanie danych) — nakładka wraca,
+      // bo bez niej zostałby sam czarny prostokąt bez wyjaśnienia.
+      filmStart.removeAttribute("aria-busy");
+    });
+  });
+
+  film.addEventListener("playing", () => {
+    filmStart.hidden = true;
+  });
+}
+
 // === Odsłony sekcji przy przewijaniu ====================================
 
 /**

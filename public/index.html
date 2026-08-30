@@ -119,6 +119,50 @@
         </form>
       </section>
 
+      <!-- Nagranie z działającej aplikacji: logowanie, Aktywności, odhaczanie
+           serii, Postępy. Wszystko, co pokazuje, stoi w prozie obok — czytnik
+           ekranu niczego nie traci, tak samo jak przy zrzutach niżej.
+           Plakatem jest nakładka rysowana CSS-em, nie plik: przy `preload=none`
+           strona nie pobiera ani bajta nagrania, dopóki ktoś nie kliknie — a to
+           wciąż 3,7 MB, o które nie wypada prosić kogoś w drodze na siłownię.
+           Źródło miało 13,3 MB; x264 CRF 26 zdjął 72% przy SSIM 0,9967, bo
+           nagranie ekranów prawie się nie rusza. Sterowanie w powitanie.js. -->
+      <section class="tresc film">
+        <p class="etykieta">Zobacz w ruchu</p>
+        <h2>Dwadzieścia sekund całej aplikacji</h2>
+        <p class="film-opis">
+          Logowanie, zakładka Aktywności, odhaczanie serii przysiadu i ekran
+          Postępy z wykresem wagi — nagranie z działającej aplikacji, nie
+          makieta.
+        </p>
+        <figure class="film-ramka">
+          <video
+            id="film"
+            preload="none"
+            controls
+            playsinline
+            muted
+            width="1920"
+            height="1080"
+          >
+            <source src="/film/lifelog.mp4" type="video/mp4" />
+            <p>
+              Twoja przeglądarka nie odtworzy tego nagrania.
+              <a href="/film/lifelog.mp4">Otwórz plik osobno</a>.
+            </p>
+          </video>
+          <button type="button" class="film-start" id="film-start">
+            <span class="film-ikona" aria-hidden="true">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M9 7.5v9l7.5-4.5z" />
+              </svg>
+            </span>
+            <span class="film-napis">Odtwórz nagranie</span>
+            <span class="film-drobne">20 sekund · startuje bez dźwięku</span>
+          </button>
+        </figure>
+      </section>
+
       <section class="tresc aplikacja">
         <p class="etykieta">Na siłowni</p>
         <h2>Aplikacja robi tylko jedno</h2>

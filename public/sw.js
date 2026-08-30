@@ -113,6 +113,13 @@ self.addEventListener("fetch", (zdarzenie) => {
   // Logowanie i konektor MCP zawsze prosto do serwera.
   if (adres.pathname.startsWith("/mcp")) return;
 
+  // Żądania zakresowe omijają cache w całości. Odtwarzacz wideo prosi
+  // o fragmenty pliku, a Cache API odrzuca odpowiedzi 206 — `cache.put`
+  // sypałby odrzuconą obietnicą przy każdym kawałku nagrania. Nawet gdyby
+  // przyjmował: film ze strony powitalnej nie ma czego szukać w magazynie,
+  // który istnieje po to, żeby dziennik otwierał się w piwnicy siłowni.
+  if (zadanie.headers.has("range")) return;
+
   if (adres.pathname.startsWith("/api/") || adres.pathname === "/zdrowie") {
     zdarzenie.respondWith(siecPotemCache(zadanie));
     return;

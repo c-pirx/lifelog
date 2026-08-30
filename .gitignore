@@ -21,3 +21,8 @@ MOJE.md
 
 # Katalog roboczy narzędzi Claude Code (mieści też worktree wewnątrz repo)
 .claude/
+
+# Materiały źródłowe filmu — do repo idzie wyłącznie wersja skompresowana
+# spod public/film/. Oryginał waży cztery razy tyle, a historia gita jest
+# publiczna i nie zapomina: raz wpuszczony plik zostaje w niej na zawsze.
+filmik/

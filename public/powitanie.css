@@ -437,6 +437,102 @@ section {
   font-size: 0.9rem;
 }
 
+/* === Film ============================================================== */
+
+.film-opis {
+  margin: 0;
+  max-width: 38rem;
+  color: var(--cichy);
+}
+
+/* Ta sama rama, co karta „przemiany" w hero: nagranie ma się czytać jako
+   element z tej samej rodziny, a nie wklejony obcy odtwarzacz. */
+.film-ramka {
+  position: relative;
+  margin: 2rem 0 0;
+  aspect-ratio: 16 / 9;
+  background: var(--powierzchnia);
+  border: 1px solid var(--linia);
+  border-radius: 14px;
+  overflow: hidden;
+}
+
+.film-ramka video {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Plakat rysowany, nie pobierany: przy `preload="none"` element jest czarnym
+   prostokątem, a plik-plakat kosztowałby kolejne setki kilobajtów u każdego,
+   kto nagrania nawet nie odtworzy. Poświata w mięcie powtarza pierwszą klatkę
+   filmu, więc kliknięcie nie jest cięciem, tylko ciągiem dalszym. */
+.film-start {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 0;
+  background:
+    radial-gradient(60% 70% at 50% 52%, rgba(125, 211, 160, 0.18), transparent 70%),
+    var(--powierzchnia);
+  color: var(--tekst);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* Bez tego atrybut `hidden` nie działa: przeglądarka realizuje go regułą
+   `display: none` z własnego arkusza, a każda deklaracja `display` w naszym
+   przegrywa z nią na specyficzności. Nakładka zostawała na wierzchu, a film
+   leciał pod spodem — słychać, nie widać. */
+.film-start[hidden] {
+  display: none;
+}
+
+.film-ikona {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  background: var(--akcent);
+  box-shadow: 0 0 0 10px rgba(125, 211, 160, 0.1);
+  transition: transform 0.18s ease;
+}
+
+.film-ikona svg {
+  width: 2.1rem;
+  height: 2.1rem;
+  fill: var(--tlo);
+}
+
+.film-start:hover .film-ikona,
+.film-start:focus-visible .film-ikona {
+  transform: scale(1.06);
+}
+
+.film-napis {
+  font-weight: 600;
+}
+
+.film-drobne {
+  font-family: var(--dziennik);
+  font-size: 0.66rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cichy);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .film-ikona {
+    transition: none;
+  }
+}
+
 /* === Podgląd aplikacji ================================================= */
 
 /* Jedyne miejsce, w którym coś staje obok kolumny prozy — telefon ma być
