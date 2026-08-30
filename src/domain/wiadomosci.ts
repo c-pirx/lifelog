@@ -6,8 +6,9 @@
  * jest decyzją produktową. Dzięki rozdzieleniu testy sprawdzają, że link wypisu
  * naprawdę trafia do maila, nie dotykając Resendu.
  *
- * Trzy wiadomości i ani jednej więcej — poczta jest tu transakcyjna,
- * nie marketingowa.
+ * Cztery wiadomości i ani jednej więcej: dwie do zapisanego (powitanie
+ * i zaproszenie) oraz dwie do gospodarza (nowy zapis, nowe konto). Poczta jest
+ * tu transakcyjna, nie marketingowa — próg dla piątej jest równie wysoki.
  */
 
 import type { Wiadomosc } from "../lib/poczta.js";
@@ -211,6 +212,42 @@ export function wiadomoscZaproszenie(dane: {
         blok(naglowekBloku, WSTEP_KONEKTORA, KROKI_KONEKTORA, STOPKA_KONEKTORA) +
         dopiski.map(akapit).join(""),
       `Link działa ${dane.waznoscDni} dni i tylko raz. Zmiana zdania? <a href="${bezpieczny(wypis)}" style="color:#95e6b9">Usuń mój adres</a>.`,
+    ),
+  };
+}
+
+// === 4. Nowe konto z zaproszenia =========================================
+
+/**
+ * Druga wiadomość dla gospodarza: kod zaproszenia zamienił się w konto.
+ *
+ * Zapis na listę i rejestracja to dwa osobne zdarzenia rozdzielone tygodniami,
+ * więc mają dwa osobne maile — jeden mówi „ktoś chce", drugi „ktoś wszedł".
+ * Login jest tu najważniejszy: to jedyny uchwyt do konta w `npm run konta`,
+ * a rejestr nie wie, który adres z listy za nim stoi.
+ */
+export function wiadomoscORejestracji(dane: {
+  odbiorca: string;
+  email: string;
+  imie: string | null;
+  login: string;
+}): Wiadomosc {
+  const linie = [
+    `Login konta: ${dane.login}`,
+    `Adres z listy: ${dane.email}`,
+    `Imię: ${dane.imie ?? "(nie podano)"}`,
+    "",
+    "Kod zaproszenia zgasł — wpis na liście jest zamknięty.",
+  ];
+
+  return {
+    odbiorca: dane.odbiorca,
+    temat: `Nowe konto z zaproszenia: ${dane.login}`,
+    tekst: `${linie.join("\n")}\n`,
+    html: oprawa(
+      "Nowe konto z zaproszenia",
+      linie.filter((linia) => linia !== "").map(akapit).join(""),
+      `Powiadomienie z ${bezpieczny(NAZWA)}a. Konto już działa — ten mail tylko o nim mówi.`,
     ),
   };
 }

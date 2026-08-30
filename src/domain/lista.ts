@@ -223,6 +223,18 @@ export type DaneRejestracji = {
   strefa?: string;
 };
 
+export type WynikRejestracji = {
+  id: number;
+  /** Jawny token konektora — pokazywany raz, potem zostaje sam hasz. */
+  tokenKonektora: string;
+  /**
+   * Adres i imię z zużytego wpisu. Konto ich nie przechowuje, a powiadomienie
+   * gospodarza musi powiedzieć, KTO wszedł — sam login tego nie mówi.
+   */
+  email: string;
+  imie: string | null;
+};
+
 /**
  * Rejestracja z kodu zaproszenia — następczyni bramy na wspólne hasło.
  *
@@ -234,7 +246,7 @@ export function zarejestrujZKodem(
   rejestr: Baza,
   dane: DaneRejestracji,
   opcje: { teraz?: Date } = {},
-): { id: number; tokenKonektora: string } {
+): WynikRejestracji {
   const teraz = opcje.teraz ?? new Date();
 
   return wTransakcji(rejestr, () => {
@@ -257,7 +269,7 @@ export function zarejestrujZKodem(
     });
 
     oznaczWykorzystanie(rejestr, wiersz.id, konto.id, teraz.toISOString());
-    return konto;
+    return { ...konto, email: wiersz.email, imie: wiersz.imie };
   });
 }
 

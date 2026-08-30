@@ -29,7 +29,11 @@ import {
   zapiszNaListe,
   zarejestrujZKodem,
 } from "../domain/lista.js";
-import { wiadomoscDlaGospodarza, wiadomoscPowitalna } from "../domain/wiadomosci.js";
+import {
+  wiadomoscDlaGospodarza,
+  wiadomoscORejestracji,
+  wiadomoscPowitalna,
+} from "../domain/wiadomosci.js";
 import type { Poczta, Wiadomosc } from "../lib/poczta.js";
 import {
   celeNaDzien,
@@ -306,6 +310,20 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
 
     const wynik = zarejestrujZKodem(rejestr, dane);
     wydajSesje(c, wynik.id);
+
+    // Zaproszony dostał już swoje maile — ten idzie wyłącznie do gospodarza.
+    // Bez niego jedyną drogą do wiadomości „kod się zużył" jest `npm run lista`
+    // na serwerze, a to znaczy: nikt się nie dowie.
+    if (ustawienia.poczta) {
+      wyslijWTle(
+        wiadomoscORejestracji({
+          odbiorca: ustawienia.poczta.gospodarz,
+          email: wynik.email,
+          imie: wynik.imie,
+          login: dane.login,
+        }),
+      );
+    }
 
     // Jawny token pojawia się wyłącznie tutaj i przy rotacji — rejestr trzyma
     // sam hasz, więc później nie ma go już skąd odczytać.

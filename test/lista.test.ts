@@ -17,7 +17,7 @@ import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { utworzApp } from "../src/app.js";
 import { otworzBaze, type Baza } from "../src/db/index.js";
@@ -35,7 +35,7 @@ import {
   zarejestrujZKodem,
   WAZNOSC_ZAPROSZENIA_DNI,
 } from "../src/domain/lista.js";
-import { wiadomoscZaproszenie } from "../src/domain/wiadomosci.js";
+import { wiadomoscORejestracji, wiadomoscZaproszenie } from "../src/domain/wiadomosci.js";
 import type { Poczta, Wiadomosc } from "../src/lib/poczta.js";
 
 const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
@@ -210,6 +210,24 @@ describe("rejestracja z kodu zaproszenia", () => {
     expect(wpisyListy(rejestr)[0]?.stan).toBe("zarejestrowany");
   });
 
+  // Trasa musi mieć czym zaadresować powiadomienie gospodarza: konto zna
+  // sam login, a kto za nim stoi, wie wyłącznie zużyty wpis na liście.
+  it("oddaje adres i imię z wykorzystanego wpisu", () => {
+    const rejestr = otworzRejestr();
+    zapiszNaListe(rejestr, { email: "ania@przyklad.pl", imie: "Ania", zgoda: true });
+    const kod = zapros(rejestr, "ania@przyklad.pl").kod;
+
+    const wynik = zarejestrujZKodem(rejestr, {
+      kod,
+      login: "ania-k",
+      haslo: "haslo-anny-dlugie",
+      zgoda: true,
+    });
+
+    expect(wynik.email).toBe("ania@przyklad.pl");
+    expect(wynik.imie).toBe("Ania");
+  });
+
   it("zużywa kod dokładnie raz", () => {
     const rejestr = otworzRejestr();
     const kod = zaproszony(rejestr);
@@ -322,9 +340,40 @@ describe("treść maila z zaproszeniem", () => {
   });
 });
 
+describe("treść maila o rejestracji", () => {
+  it("mówi gospodarzowi, kto założył konto i pod jakim loginem", () => {
+    const wiadomosc = wiadomoscORejestracji({
+      odbiorca: "ja@przyklad.pl",
+      email: "ania@przyklad.pl",
+      imie: "Ania",
+      login: "ania-k",
+    });
+
+    expect(wiadomosc.odbiorca).toBe("ja@przyklad.pl");
+    for (const tresc of [wiadomosc.tekst, wiadomosc.html]) {
+      expect(tresc).toContain("ania@przyklad.pl");
+      expect(tresc).toContain("Ania");
+      // Login jest jedynym uchwytem do konta w `npm run konta`.
+      expect(tresc).toContain("ania-k");
+    }
+  });
+
+  it("radzi sobie z wpisem bez imienia", () => {
+    const wiadomosc = wiadomoscORejestracji({
+      odbiorca: "ja@przyklad.pl",
+      email: "ania@przyklad.pl",
+      imie: null,
+      login: "ania-k",
+    });
+
+    // Puste miejsce po imieniu wyglądałoby jak usterka wysyłki.
+    expect(wiadomosc.tekst).toContain("(nie podano)");
+  });
+});
+
 // === Trasa =============================================================
 
-describe("POST /api/lista", () => {
+describe("trasy listy i rejestracji", () => {
   let rejestr: Baza;
   let pula: PulaBaz;
   let katalogPuli: string;
@@ -417,6 +466,25 @@ describe("POST /api/lista", () => {
     // Listę ogląda się wyłącznie przez `npm run lista`. Gdyby kiedyś powstała
     // trasa GET, ten test ma o tym przypomnieć.
     expect((await fetch(`${adres}/api/lista`)).status).toBe(401);
+  });
+
+  it("po rejestracji z kodu powiadamia gospodarza, a zaproszonego zostawia w spokoju", async () => {
+    zapiszNaListe(rejestr, { email: "ania@przyklad.pl", imie: "Ania", zgoda: true });
+    const { kod } = zapros(rejestr, "ania@przyklad.pl");
+    poczta.wyslane.length = 0;
+
+    const odpowiedz = await fetch(`${adres}/api/rejestracja`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ kod, login: "ania-k", haslo: "haslo-anny-dlugie", zgoda: true }),
+    });
+    expect(odpowiedz.status).toBe(201);
+
+    // Wysyłka idzie obok odpowiedzi, więc mail bywa o tik później niż 201.
+    await vi.waitFor(() => expect(poczta.wyslane).toHaveLength(1));
+    expect(poczta.wyslane[0]?.odbiorca).toBe("ja@przyklad.pl");
+    expect(poczta.wyslane[0]?.tekst).toContain("ania@przyklad.pl");
+    expect(poczta.wyslane[0]?.tekst).toContain("ania-k");
   });
 
   it("licznik jest publiczny i zdradza wyłącznie liczbę", async () => {

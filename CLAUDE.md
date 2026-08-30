@@ -104,9 +104,18 @@ konta poglądowego (`npm run demo`) i gdyby mail uparcie nie docierał.
 ### Poczta
 
 Transport w `src/lib/poczta.ts` (Resend przez `fetch`, zero nowych zależności),
-treść w `src/domain/wiadomosci.ts` — trzy wiadomości transakcyjne i ani jednej
-więcej. Poczta jest **wstrzykiwana** do `utworzApp`, więc testy podstawiają
+treść w `src/domain/wiadomosci.ts` — cztery wiadomości transakcyjne i ani jednej
+więcej: dwie do zapisanego (powitanie, zaproszenie) i dwie do gospodarza
+(nowy zapis na listę, nowe konto z zaproszenia — obie na `MAIL_GOSPODARZ`).
+Poczta jest **wstrzykiwana** do `utworzApp`, więc testy podstawiają
 atrapę i żaden z nich nie dobija się do internetu.
+
+**Gospodarz dowiaduje się o obu końcach drogi**: kiedy adres trafia na listę
+i kiedy kod zaproszenia zamienia się w konto. Bez tego drugiego maila jedyną
+drogą do wiadomości „ktoś wszedł" jest `npm run lista` na serwerze. Dlatego
+`zarejestrujZKodem` oddaje adres i imię z zużytego wpisu — konto ich nie zna,
+a sam login nie mówi, kto za nim stoi. Konta zakładane z CLI
+(`npm run konta -- utworz`) maila nie wysyłają: zakłada je gospodarz.
 
 **Zmienne poczty są opcjonalne** (`RESEND_API_KEY`, `MAIL_OD`, `MAIL_GOSPODARZ`,
 `PUBLICZNY_ADRES` — komplet albo nic). Gdyby były wymagane, jedno pole
