@@ -10,7 +10,7 @@
     <title>Lifelog — dziennik diety i treningu, który słucha</title>
     <meta
       name="description"
-      content="Mówisz zdaniem, zapisuje się wpis. Na siłowni odhaczasz serie w telefonie. Lifelog jest w wersji zamkniętej — zostaw adres, odezwiemy się z zaproszeniem."
+      content="Mówisz jedno zdanie, zapisuje się wpis. Na siłowni odhaczasz serie w telefonie. Lifelog jest w wersji zamkniętej — zostaw adres, odezwiemy się z zaproszeniem."
     />
     <meta property="og:title" content="Lifelog — dziennik diety i treningu, który słucha" />
     <meta
@@ -54,9 +54,9 @@
     <main>
       <section class="hero tresc">
         <p class="etykieta">Dziennik diety i treningu · wersja zamknięta</p>
-        <h1>Mówisz zdaniem.<br />Wpis <em>robi się sam</em>.</h1>
+        <h1>Mówisz jedno zdanie.<br />Wpis <em>robi się sam</em>.</h1>
         <p class="wstep">
-          Rozmowa z Claude'em, kiedy masz czas mówić. Aplikacja w telefonie,
+          Rozmowa z Claude'em, kiedy masz chwilę. Aplikacja w telefonie,
           kiedy liczy się jedno stuknięcie.
         </p>
 
@@ -80,7 +80,7 @@
         </div>
 
         <form class="zapis-form" id="formularz" novalidate>
-          <p class="zapis-kicker">Zapis na zamkniętą betę</p>
+          <p class="zapis-kicker">Zapis na wersję zamkniętą</p>
           <div class="para">
             <label class="pulapka">
               Nie wypełniaj tego pola
@@ -121,7 +121,7 @@
 
       <section class="tresc aplikacja">
         <p class="etykieta">Na siłowni</p>
-        <h2>Telefon robi tylko jedno</h2>
+        <h2>Aplikacja robi tylko jedno</h2>
         <div class="aplikacja-uklad">
           <div class="aplikacja-tekst">
             <p>
@@ -165,11 +165,11 @@
             </li>
             <li>
               <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M6 11a6 6 0 0 0 12 0M12 17v4" /></svg>
-              <div><strong>Notatki</strong><span>dyktowane głosem, porządkowane przed zapisem</span></div>
+              <div><strong>Notatki</strong><span>dyktujesz głosem, Claude porządkuje przed zapisem</span></div>
             </li>
             <li>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20v-8M12 20V6M19 20v-5" /></svg>
-              <div><strong>Raport tygodnia</strong><span>w niedzielę rano, liczby zamrożone</span></div>
+              <div><strong>Raport tygodnia</strong><span>w niedzielę rano; raz policzony, już się nie zmienia</span></div>
             </li>
           </ul>
 
@@ -191,19 +191,19 @@
 
       <section class="tresc dane">
         <p class="etykieta">Twoje dane</p>
-        <h2>Dziennik zdrowotny to nie jest zwykła aplikacja</h2>
+        <h2>To dane o zdrowiu — i tak je traktujemy</h2>
         <ul class="tarcze">
           <li>
             <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3" /><path d="M5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3" /></svg>
-            <div><strong>Osobny plik bazy na osobę</strong><span>nie ma zapytania do cudzych wpisów — pilnują tego testy</span></div>
+            <div><strong>Osobny plik bazy na osobę</strong><span>nikt inny nie ma do nich dostępu — pilnują tego testy</span></div>
           </li>
           <li>
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="3.5" /><path d="M11.5 12H21M18 12v3.5M14.5 12v2.5" /></svg>
-            <div><strong>Hasła tylko jako skrót</strong><span>scrypt z solą — nigdzie nie leżą jawnie</span></div>
+            <div><strong>Haseł nie da się odczytać</strong><span>zamieniamy je w nieodwracalny skrót (scrypt)</span></div>
           </li>
           <li>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" /><circle cx="12" cy="12" r="2.5" /><path d="M4 4l16 16" /></svg>
-            <div><strong>Zero reklam i analityki</strong><span>ta strona nie wysyła żądań do obcych serwerów</span></div>
+            <div><strong>Zero reklam i analityki</strong><span>ta strona nie łączy się z żadnym obcym serwerem</span></div>
           </li>
           <li>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5" /></svg>
@@ -211,8 +211,8 @@
           </li>
         </ul>
         <p class="tarcze-stopka">
-          Wypisujesz się jednym kliknięciem, wpis znika.
-          <a href="/polityka.html">Pełny opis: jak działają twoje dane</a>
+          Wypisujesz się jednym kliknięciem — Twój adres znika z listy.
+          <a href="/polityka.html">Pełny opis: jak działają Twoje dane</a>
         </p>
       </section>
 
@@ -223,8 +223,9 @@
         <details class="pytanie">
           <summary>Potrzebuję subskrypcji Claude?</summary>
           <p>
-            Do dyktowania — tak, konektor podpina się do twojej subskrypcji.
-            Sama aplikacja działa bez niej i wystarczy do prowadzenia dziennika.
+            Do dyktowania — tak. Lifelog podłącza się do Twojej subskrypcji
+            Claude jako konektor: dodajesz jeden adres w ustawieniach. Sama
+            aplikacja działa bez tego i wystarczy do prowadzenia dziennika.
           </p>
         </details>
 
@@ -239,8 +240,8 @@
         <details class="pytanie">
           <summary>Kiedy dostanę zaproszenie?</summary>
           <p>
-            Konkretnej daty nie obiecujemy — partie są małe, żeby każdemu nowemu
-            kontu móc się przyjrzeć. Lista idzie ściśle w kolejności zapisu.
+            Konkretnej daty nie obiecujemy. Zapraszamy małymi grupami, żeby
+            przyjrzeć się każdemu nowemu kontu — w kolejności zapisu.
           </p>
         </details>
 
@@ -290,19 +291,17 @@
             <label class="zgoda">
               <input type="checkbox" id="zgoda-stopka" required />
               <span>
-                Zgadzam się, żeby mój adres trafił na listę oczekujących —
+                Zgadzam się, żeby mój adres trafił na listę oczekujących
+                i żebyście napisali do mnie w sprawie zaproszenia —
                 <a href="/polityka.html">co robimy z danymi</a>.
               </span>
             </label>
-            <p class="obietnica">
-              Dokładnie dwa maile: potwierdzenie i zaproszenie. Nic więcej.
-            </p>
             <p class="komunikat" id="komunikat-stopka" role="status"></p>
           </form>
           <ol class="stepper">
             <li><span class="stepper-nr">1</span>zostawiasz adres</li>
             <li><span class="stepper-nr">2</span>mail z potwierdzeniem</li>
-            <li><span class="stepper-nr">3</span>zaproszenie: kod na 14 dni</li>
+            <li><span class="stepper-nr">3</span>zaproszenie: kod ważny 14 dni</li>
           </ol>
         </div>
       </section>

@@ -272,7 +272,7 @@ function podłączFormularz({ formularz, email, zgoda, pulapka, przycisk, komuni
     formularz.dataset.wysyla = "tak";
     przycisk.disabled = true;
     const napis = przycisk.textContent;
-    przycisk.textContent = "Zapisuję…";
+    przycisk.textContent = "Zapisujemy…";
 
     try {
       const odpowiedz = await fetch("/api/lista", {
