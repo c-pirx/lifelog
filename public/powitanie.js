@@ -219,15 +219,6 @@ void pokazLicznik();
  * a drugim mija sekunda, w której zdjęta za wcześnie zostawiłaby czarną
  * dziurę zamiast obrazu.
  */
-// TYMCZASOWE: strona niesie dwa warianty sekcji filmu, `?film=a` (domyślny)
-// i `?film=e`. Niewybrany znika z DOM, żeby porównanie odbywało się na pełnej
-// stronie, a nie na makiecie obok niej. Po decyzji zostaje jeden wariant
-// i te trzy linijki idą do kosza.
-const wybranyWariant = new URLSearchParams(location.search).get("film") === "e" ? "e" : "a";
-for (const sekcja of document.querySelectorAll("section.film[data-wariant]")) {
-  if (sekcja.getAttribute("data-wariant") !== wybranyWariant) sekcja.remove();
-}
-
 const film = /** @type {HTMLVideoElement | null} */ (document.querySelector(".film-wideo"));
 const filmStart = document.querySelector(".film-start");
 

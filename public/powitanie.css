@@ -450,17 +450,22 @@ section {
   isolation: isolate;
 }
 
-/* Miętowa łuna zza nagrania. Sekcja straciła nagłówek i prozę, więc to ona
-   niesie teraz zaproszenie — pulsuje, dopóki film stoi, i cichnie, gdy
-   rusza: pod obrazem miałaby już tylko rozpraszać.
-   `blur` na przezroczystym gradiencie zamiast `box-shadow`, bo cień nie
-   umie zmieniać kształtu, a ta plama ma oddychać razem ze skalą. */
-.film-scena::before {
+/* Światło zza ekranu, a nie zielony filtr położony na obrazku. Dwie warstwy,
+   bo tak zachowuje się prawdziwa poświata: ciasna i jasna tuż przy krawędzi,
+   szeroka i przygaszona dalej. Jedna płaska plama zdradzała się od razu —
+   równy kolor na całej długości nie wygląda jak światło, tylko jak wypełnienie.
+   Obie powtarzają PROSTOKĄTNY kształt kadru z zaokrągleniem. Elipsa za
+   prostokątem czytała się jak bąbel doklejony pod spodem: łuna schodziła
+   z narożników i wybrzuszała się w połowie boków, czyli dokładnie odwrotnie,
+   niż pada światło z ekranu.
+   Kolory wprost z gradientu logo (#95e6b9 → #4f9c74): bliska warstwa jaśniejsza,
+   daleka chłodniejsza. Dwa odcienie dają głębię, której jedna zieleń nie ma. */
+.film-scena::before,
+.film-scena::after {
   content: "";
   position: absolute;
   z-index: 0;
-  /* Łuna musi wystawać na tyle, żeby przetrwała rozmycie: przy 46 px blura
-     rozlanie o 20 px rozchodzi się do zera i pod ramką nie zostaje nic. */
+  pointer-events: none;
   /* W bok ani piksela ujemnego wcięcia, choć łuna ma sięgać dalej niż kadr.
      Element pozycjonowany bezwzględnie wystający poza rodzica powiększa obszar
      przewijania i strona dostaje pasek poziomy na każdym ekranie węższym niż
@@ -468,16 +473,28 @@ section {
      poza granicami, ale layoutu nie rusza, więc to ono rozprowadza łunę na
      boki. Próba przycięcia tego przez `overflow-x: clip` na `main` kosztowała
      płynne przejście do kotwicy #lista — sekcja przestawała się przewijać. */
-  inset: -15% 0;
-  border-radius: 50%;
-  /* Jednolita plama rozmywana blurem, nie gradient. Gradient wygasa promieniem
-     od środka, a środek chowa się za nieprzezroczystą ramką — przy jej krawędzi,
-     czyli w jedynym miejscu, gdzie łunę widać, zostawała mu ledwie jedna trzecia
-     koloru. Blur na pełnym kolorze robi miękkie brzegi dokładnie za kadrem. */
-  background: rgba(125, 211, 160, 0.55);
-  filter: blur(50px);
-  animation: film-oddech 5.5s ease-in-out infinite;
-  pointer-events: none;
+  inset-inline: 0;
+}
+
+/* Daleka: szeroka, chłodna, opada niżej niż sięga w górę — światło z ekranu
+   kładzie się na tym, co pod nim, a nie rozchodzi równo we wszystkie strony. */
+.film-scena::before {
+  inset-block: -11% -17%;
+  border-radius: 54px;
+  background: rgba(79, 156, 116, 0.6);
+  filter: blur(64px);
+  animation: film-oddech-daleko 9s ease-in-out infinite;
+}
+
+/* Bliska: wąski rąbek tuż przy krawędzi kadru, w jaśniejszym odcieniu.
+   To ona sprawia, że ramka wygląda na podświetloną od tyłu, a nie na
+   położoną na zielonej plamie. */
+.film-scena::after {
+  inset-block: -3%;
+  border-radius: 26px;
+  background: rgba(149, 230, 185, 0.42);
+  filter: blur(20px);
+  animation: film-oddech-blisko 6s ease-in-out infinite;
 }
 
 /* Rozmycie jest w pikselach, więc przy niskim kadrze na telefonie waży
@@ -485,7 +502,11 @@ section {
    z sekcji i kładła się na nagłówku następnej. */
 @media (max-width: 40rem) {
   .film-scena::before {
-    filter: blur(34px);
+    filter: blur(40px);
+  }
+
+  .film-scena::after {
+    filter: blur(14px);
   }
 }
 
@@ -502,20 +523,36 @@ section {
    sekcję — `scale` w pętli kazałby wysokości dokumentu drgać co klatkę.
    Na rozmytej plamie skala i tak nie robi różnicy, której nie da się uzyskać
    kryciem, więc nie ma czego bronić. */
-@keyframes film-oddech {
+/* Dwa oddechy o różnych okresach, nie jeden wspólny. Warstwy rozjeżdżają się
+   w fazie i łuna faluje nieregularnie, zamiast równo mrugać — jednoczesne
+   pulsowanie obu czytało się jak miganie diody.
+   Amplitudy są węższe niż w pierwszej wersji: przejście 0,45 → 0,95 skakało
+   tak, że oko łapało każdy cykl. */
+@keyframes film-oddech-daleko {
   0%,
   100% {
-    opacity: 0.45;
+    opacity: 0.38;
   }
   50% {
-    opacity: 0.95;
+    opacity: 0.66;
+  }
+}
+
+@keyframes film-oddech-blisko {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.85;
   }
 }
 
 /* Klasę zdejmuje i dokłada powitanie.js, śledząc odtwarzanie. */
-.film-scena.gra::before {
+.film-scena.gra::before,
+.film-scena.gra::after {
   animation: none;
-  opacity: 0.22;
+  opacity: 0.18;
   transition: opacity 0.6s ease;
 }
 
@@ -587,24 +624,6 @@ section {
     grid-template-columns: minmax(0, 1fr);
     gap: 1rem;
   }
-}
-
-/* === Wariant E: plakat z prawdziwej klatki ============================= */
-
-/* Nakładka nie zasłania plakatu, tylko go przyciemnia — pod spodem ma być
-   widać, co się zapisuje. Gradient od dołu, bo tam w kadrze stoi przycisk
-   „Odhacz serię" i to on jest treścią tej klatki. */
-/* Przyciemnienie równomierne, treść na środku. Napisy stały wcześniej u dołu
-   i kładły się na zielonym „Odhacz serię" z klatki — czyli dokładnie na tym,
-   po co ten plakat tu jest. */
-.film-plakat .film-start {
-  background: rgba(15, 17, 21, 0.62);
-}
-
-/* Bez łuny: plakat sam mówi, co jest w środku, a pulsowanie obok konkretnej
-   klatki robiłoby dwa zaproszenia w jednym miejscu. */
-.film-plakat .film-scena::before {
-  content: none;
 }
 
 /* Ta sama rama, co karta „przemiany" w hero: nagranie ma się czytać jako
@@ -701,7 +720,13 @@ section {
     opacity: 0.5;
   }
 
-  .film-scena.gra::before {
+  .film-scena::after {
+    animation: none;
+    opacity: 0.7;
+  }
+
+  .film-scena.gra::before,
+  .film-scena.gra::after {
     transition: none;
   }
 }
