@@ -116,6 +116,8 @@ switch (polecenie) {
         waznoscDni: WAZNOSC_ZAPROSZENIA_DNI,
         tokenWypisu: tokenWypisu(zaproszenie.wpis.email, process.env.SESSION_SECRET ?? ""),
         adresy: { publiczny: ADRES_PUBLICZNY },
+        // Zgłoszenia idą tam, gdzie powiadomienia o zapisach — do gospodarza.
+        kontakt: process.env.MAIL_GOSPODARZ?.trim() || null,
       }),
     );
     console.log(`\nZaproszenie wysłane na ${zaproszenie.wpis.email}.`);

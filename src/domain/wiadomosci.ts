@@ -51,6 +51,25 @@ function akapit(tekst: string): string {
   return `<p style="margin:0 0 14px;font-size:15px;line-height:1.6">${bezpieczny(tekst)}</p>`;
 }
 
+/**
+ * Wydzielony panel z instrukcją: wgłębione tło i zielona krawędź, żeby kroki
+ * odróżniały się od listu jednym spojrzeniem. Numerację niesie `<ol>`, ale
+ * kroki są krótkie — klient, który listę spłaszczy, dalej daje się przeczytać.
+ */
+function blok(naglowek: string, wstep: string, kroki: string[], stopka: string): string {
+  const pozycje = kroki
+    .map((krok) => `<li style="margin:0 0 8px">${bezpieczny(krok)}</li>`)
+    .join("");
+  return [
+    `<div style="margin:28px 0;padding:18px 20px;background:#0f1115;border-left:3px solid #95e6b9;border-radius:12px">`,
+    `<p style="margin:0 0 10px;font-size:13px;font-weight:600;letter-spacing:0.04em;text-transform:uppercase;color:#95e6b9">${bezpieczny(naglowek)}</p>`,
+    `<p style="margin:0 0 12px;font-size:14px;line-height:1.6">${bezpieczny(wstep)}</p>`,
+    `<ol style="margin:0;padding-left:20px;font-size:14px;line-height:1.6">${pozycje}</ol>`,
+    `<p style="margin:14px 0 0;font-size:13px;line-height:1.6;color:#8b93a3">${bezpieczny(stopka)}</p>`,
+    `</div>`,
+  ].join("");
+}
+
 function przycisk(etykieta: string, adres: string): string {
   return (
     `<p style="margin:24px 0"><a href="${bezpieczny(adres)}" ` +
@@ -126,6 +145,21 @@ export function wiadomoscDlaGospodarza(dane: {
 
 // === 3. Zaproszenie do założenia konta ===================================
 
+/** Kroki podłączenia konektora — skrót tego, co ekran Konto mówi szerzej. */
+const KROKI_KONEKTORA = [
+  "Załóż konto z linku powyżej.",
+  'W aplikacji: menu → Konto → „Wygeneruj i pokaż adres konektora".',
+  "Na claude.ai: Ustawienia → Konektory → Dodaj własny konektor. Wklej adres.",
+  'Przy pierwszym pytaniu o zgodę wybierz „Zawsze zezwalaj".',
+];
+
+const WSTEP_KONEKTORA =
+  "Aplikacja to jedno wejście do dziennika, Claude drugie: mówisz zdaniem, " +
+  "on zapisuje. Bez tego zostaje samo wyklikiwanie.";
+
+const STOPKA_KONEKTORA =
+  "Konfiguruje się raz, najwygodniej przy komputerze. Po stronie Claude'a potrzebny plan płatny.";
+
 export function wiadomoscZaproszenie(dane: {
   email: string;
   imie: string | null;
@@ -133,6 +167,8 @@ export function wiadomoscZaproszenie(dane: {
   waznoscDni: number;
   tokenWypisu: string;
   adresy: Adresy;
+  /** Adres gospodarza do zgłoszeń; bez niego mail nie zaprasza do pisania donikąd. */
+  kontakt: string | null;
 }): Wiadomosc {
   const link = `${dane.adresy.publiczny}/app?kod=${encodeURIComponent(dane.kod)}`;
   const wypis = linkWypisu(dane.adresy, dane.tokenWypisu);
@@ -143,14 +179,37 @@ export function wiadomoscZaproszenie(dane: {
     `Kod działa przez ${dane.waznoscDni} dni i tylko raz. Jest przypisany do tego adresu, ` +
       "więc przekazany dalej nikomu nie pomoże.",
   ];
+  const naglowekBloku = "Pełnia możliwości: Claude pod ręką";
+  const dopiski = [
+    ...(dane.kontakt
+      ? [
+          `Coś nie działa albo wygląda dziwnie? Napisz na ${dane.kontakt} — to wciąż ` +
+            "wersja beta i każde zgłoszenie realnie coś zmienia.",
+        ]
+      : []),
+    `Mam nadzieję, że ${NAZWA} będzie Ci służyć w codziennym osiąganiu celów.`,
+  ];
+
+  const krokiTekstem = KROKI_KONEKTORA.map((krok, i) => `${i + 1}. ${krok}`).join("\n");
+  const blokTekstem = [
+    `— ${naglowekBloku} —`,
+    WSTEP_KONEKTORA,
+    krokiTekstem,
+    STOPKA_KONEKTORA,
+  ].join("\n\n");
 
   return {
     odbiorca: dane.email,
     temat: `Zaproszenie do ${NAZWA}a`,
-    tekst: `${zdania.join("\n\n")}\n\nZałóż konto: ${link}\n\nNie chcesz? Wypisz się: ${wypis}\n`,
+    tekst:
+      `${zdania.join("\n\n")}\n\nZałóż konto: ${link}\n\n${blokTekstem}\n\n` +
+      `${dopiski.join("\n\n")}\n\nNie chcesz? Wypisz się: ${wypis}\n`,
     html: oprawa(
       "Zaproszenie czeka",
-      zdania.slice(1).map(akapit).join("") + przycisk("Załóż konto", link),
+      zdania.slice(1).map(akapit).join("") +
+        przycisk("Załóż konto", link) +
+        blok(naglowekBloku, WSTEP_KONEKTORA, KROKI_KONEKTORA, STOPKA_KONEKTORA) +
+        dopiski.map(akapit).join(""),
       `Link działa ${dane.waznoscDni} dni i tylko raz. Zmieniłeś zdanie? <a href="${bezpieczny(wypis)}" style="color:#95e6b9">Usuń mój adres</a>.`,
     ),
   };

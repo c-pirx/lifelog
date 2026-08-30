@@ -274,12 +274,50 @@ describe("treść maila z zaproszeniem", () => {
       waznoscDni: WAZNOSC_ZAPROSZENIA_DNI,
       tokenWypisu: "token-xyz",
       adresy: { publiczny: ADRES_PUBLICZNY },
+      kontakt: "gospodarz@przyklad.test",
     });
 
     expect(wiadomosc.odbiorca).toBe("ania@przyklad.pl");
     for (const tresc of [wiadomosc.tekst, wiadomosc.html]) {
       expect(tresc).toContain(`${ADRES_PUBLICZNY}/app?kod=kod-abc`);
       expect(tresc).toContain(`${ADRES_PUBLICZNY}/api/lista/wypis/token-xyz`);
+    }
+  });
+
+  it("uczy podłączenia konektora i podaje adres do zgłoszeń", () => {
+    const wiadomosc = wiadomoscZaproszenie({
+      email: "ania@przyklad.pl",
+      imie: "Ania",
+      kod: "kod-abc",
+      waznoscDni: WAZNOSC_ZAPROSZENIA_DNI,
+      tokenWypisu: "token-xyz",
+      adresy: { publiczny: ADRES_PUBLICZNY },
+      kontakt: "gospodarz@przyklad.test",
+    });
+
+    for (const tresc of [wiadomosc.tekst, wiadomosc.html]) {
+      expect(tresc).toContain("adres konektora");
+      expect(tresc).toContain("Konektory");
+      expect(tresc).toContain("gospodarz@przyklad.test");
+    }
+  });
+
+  // Poczta bywa skonfigurowana bez adresu gospodarza — mail ma wtedy wyjść
+  // bez zdania o zgłoszeniach, a nie z pustym miejscem po adresie.
+  it("bez adresu kontaktowego nie zaprasza do pisania donikąd", () => {
+    const wiadomosc = wiadomoscZaproszenie({
+      email: "ania@przyklad.pl",
+      imie: null,
+      kod: "kod-abc",
+      waznoscDni: WAZNOSC_ZAPROSZENIA_DNI,
+      tokenWypisu: "token-xyz",
+      adresy: { publiczny: ADRES_PUBLICZNY },
+      kontakt: null,
+    });
+
+    for (const tresc of [wiadomosc.tekst, wiadomosc.html]) {
+      expect(tresc).toContain("adres konektora");
+      expect(tresc).not.toContain("Napisz na");
     }
   });
 });
