@@ -687,6 +687,16 @@ section {
   color: var(--cichy);
 }
 
+/* Wyróżniona jest sama odpowiedź na pytanie z nagłówka — po to, żeby rozwinięte
+   FAQ dało się przeczytać wzrokiem, bez czytania zdań. Akapit jest przygaszony,
+   więc wystarczy wrócić do koloru tekstu; mięta zostaje przy panelu zapisu,
+   inaczej cztery odpowiedzi konkurowałyby kolorem z jedynym wezwaniem strony.
+   Interpunkcja celowo poza <strong> — pogrubiona kropka wygląda jak usterka. */
+.pytanie p strong {
+  color: var(--tekst);
+  font-weight: 600;
+}
+
 /* === Panel zapisu ====================================================== */
 
 /* Jedyna barwna płaszczyzna na całej stronie: mięta, kolor zapisu — bo zapis
