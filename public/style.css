@@ -1524,23 +1524,22 @@ header h1 {
   line-height: 1.15;
 }
 
-/* Panel bieżącego tygodnia dostaje 2×2 zamiast rzędu czterech: ułamki
-   („2/4", „1/2") i podpisy nie mieszczą się w ćwiartce szerokości telefonu. */
-.tydzien .liczby {
-  grid-template-columns: repeat(2, 1fr);
-}
 
-.tydzien .liczby b {
-  font-size: 1.35rem;
-}
-
+/* Porównanie z poprzednim tygodniem w bąbelku: to jedno zdanie jest werdyktem
+   całej karty, a jako zwykły akapit ginęło pod rzędem kafelków. Wjeżdża
+   animacją, bo pojawia się dopiero po pierwszym zamkniętym dniu — ruch mówi
+   „mam dla ciebie nową wiadomość" bez dokładania słów. */
 .zmiana {
-  display: flex;
+  display: inline-flex;
   align-items: flex-start;
   gap: 8px;
   margin: 14px 0 0;
+  padding: 8px 14px;
+  border-radius: 16px;
+  background: var(--powierzchnia-2);
   font-size: 0.85rem;
   color: var(--tekst-cichy);
+  animation: bombelek 0.4s ease-out both;
 }
 
 .zmiana b {
@@ -1550,6 +1549,11 @@ header h1 {
 .zmiana .strzalka {
   font-size: 0.75rem;
   line-height: 1.7;
+  animation: puls-strzalki 1.1s ease-out 0.35s 1;
+}
+
+.zmiana.lepiej {
+  background: var(--akcent-ciemny);
 }
 
 .zmiana.lepiej .strzalka,
@@ -1557,9 +1561,33 @@ header h1 {
   color: var(--akcent);
 }
 
+.zmiana.gorzej {
+  background: color-mix(in srgb, var(--ostrzezenie) 16%, transparent);
+}
+
 .zmiana.gorzej .strzalka,
 .zmiana.gorzej b {
   color: var(--ostrzezenie);
+}
+
+@keyframes bombelek {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+@keyframes puls-strzalki {
+  40% {
+    transform: scale(1.35);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zmiana,
+  .zmiana .strzalka {
+    animation: none;
+  }
 }
 
 .karta.raport {
