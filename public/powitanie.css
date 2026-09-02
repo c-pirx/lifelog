@@ -1142,10 +1142,20 @@ section {
 }
 
 /* Trzy kroki w jednej linijce — cała dawna sekcja „Jak dostać konto"
-   zmieściła się pod formularzem, przy którym jest potrzebna. */
+   zmieściła się pod formularzem, przy którym jest potrzebna.
+
+   Kroki tlą się w kółko: punkt się zapala, linia dobiega do następnego,
+   ten się zapala. To nie ozdoba, tylko to samo zdanie co tekst obok,
+   powiedziane ruchem — droga do konta ma trzy etapy i idzie się nią po
+   kolei. Wszystkie pięć elementów (trzy punkty, dwie linie) dzieli JEDEN
+   cykl `--krok-cykl` i różni się wyłącznie zwłoką: przy osobnych czasach
+   trwania animacje rozjechałyby się po kilku minutach. */
 .stepper {
+  --krok-odstep: 0.9rem;
+  --krok-cykl: 9s;
+  --krok-takt: 1.35s;
   display: flex;
-  gap: 0.9rem;
+  gap: var(--krok-odstep);
   margin: 1.75rem 0 0;
   padding: 1.25rem 0 0;
   border-top: 1px solid rgba(15, 17, 21, 0.25);
@@ -1153,11 +1163,58 @@ section {
   font-size: 0.85rem;
 }
 
+/* Punkt nad tekstem, nie obok: inaczej linia łącząca szłaby w poprzek
+   napisu sąsiedniej pozycji. Na wąskim ekranie wraca układ w wierszu,
+   bo tam kolumna kroków stoi pionowo i linia ma czym biec. */
 .stepper li {
+  position: relative;
   display: flex;
   flex: 1;
+  flex-direction: column;
   align-items: center;
   gap: 0.5rem;
+  text-align: center;
+  animation: krok-tekst var(--krok-cykl) ease-in-out infinite both;
+  animation-delay: calc(var(--i) * var(--krok-takt));
+}
+
+.stepper li:nth-child(1) {
+  --i: 0;
+}
+
+.stepper li:nth-child(2) {
+  --i: 1;
+}
+
+.stepper li:nth-child(3) {
+  --i: 2;
+}
+
+/* Łącznik: `::before` to stały blady tor, `::after` jasna kreska, która się
+   po nim rysuje. Bez toru linia znikałaby zupełnie i trzy kroki rozpadały
+   się na trzy osobne rzeczy. Prawa krawędź liczona z szerokości pozycji
+   (`flex: 1`, więc wszystkie równe) plus odstęp — stąd `--krok-odstep`
+   zmienną, a nie liczbą wpisaną w dwóch miejscach. */
+.stepper li:not(:last-child)::before,
+.stepper li:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: calc(0.75rem - 1px);
+  left: calc(50% + 1.05rem);
+  right: calc(-50% - var(--krok-odstep) + 1.05rem);
+  height: 2px;
+  border-radius: 1px;
+}
+
+.stepper li:not(:last-child)::before {
+  background: rgba(15, 17, 21, 0.18);
+}
+
+.stepper li:not(:last-child)::after {
+  background: #0f1115;
+  transform-origin: left center;
+  animation: krok-linia var(--krok-cykl) cubic-bezier(0.65, 0, 0.35, 1) infinite both;
+  animation-delay: calc(var(--i) * var(--krok-takt) + 0.55s);
 }
 
 .stepper-nr {
@@ -1171,16 +1228,138 @@ section {
   font-family: var(--dziennik);
   font-size: 0.72rem;
   font-weight: 640;
+  animation: krok-punkt var(--krok-cykl) ease-in-out infinite both;
+  animation-delay: calc(var(--i) * var(--krok-takt));
+}
+
+/* Zapalony punkt to atrament na miętowym tle — dokładnie ta sama para barw,
+   co przycisk panelu. Żadnego nowego koloru: obietnica z nagłówka arkusza. */
+@keyframes krok-punkt {
+  0% {
+    border-color: rgba(15, 17, 21, 0.3);
+    background: transparent;
+    color: rgba(15, 17, 21, 0.72);
+    box-shadow: 0 0 0 0 rgba(15, 17, 21, 0);
+  }
+
+  6%,
+  62% {
+    border-color: #0f1115;
+    background: #0f1115;
+    color: var(--akcent);
+    box-shadow: 0 0 0 0.3rem rgba(15, 17, 21, 0.1);
+  }
+
+  72%,
+  100% {
+    border-color: rgba(15, 17, 21, 0.3);
+    background: transparent;
+    color: rgba(15, 17, 21, 0.72);
+    box-shadow: 0 0 0 0 rgba(15, 17, 21, 0);
+  }
+}
+
+@keyframes krok-tekst {
+  0% {
+    color: rgba(15, 17, 21, 0.72);
+  }
+
+  6%,
+  62% {
+    color: #0f1115;
+  }
+
+  72%,
+  100% {
+    color: rgba(15, 17, 21, 0.72);
+  }
+}
+
+/* Linia gaśnie przezroczystością, a dopiero niewidoczna wraca do zera —
+   cofanie się kreski na oczach widza czytałoby się jak krok wstecz. */
+@keyframes krok-linia {
+  0% {
+    transform: scaleX(0);
+    opacity: 1;
+  }
+
+  9%,
+  62% {
+    transform: scaleX(1);
+    opacity: 1;
+  }
+
+  72% {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+
+  73%,
+  100% {
+    transform: scaleX(0);
+    opacity: 0;
+  }
+}
+
+@keyframes krok-linia-pion {
+  0% {
+    transform: scaleY(0);
+    opacity: 1;
+  }
+
+  9%,
+  62% {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+
+  72% {
+    transform: scaleY(1);
+    opacity: 0;
+  }
+
+  73%,
+  100% {
+    transform: scaleY(0);
+    opacity: 0;
+  }
 }
 
 @media (max-width: 40rem) {
+  /* Odstęp większy niż w poziomie i to nie kwestia gustu: pozycja jest tu
+     dokładnie tak wysoka jak punkt, więc pionowy łącznik mieści się wyłącznie
+     w przerwie między nimi. Przy dawnych 0.7rem zostawało z niego 5 px. */
   .stepper {
+    --krok-odstep: 1.75rem;
     flex-direction: column;
-    gap: 0.7rem;
   }
 
   .stepper li {
     flex: none;
+    flex-direction: row;
+    align-items: flex-start;
+    /* Wiersz tekstu równy wysokości punktu — przy wyrównaniu do góry to
+       jedyne, co ustawia cyfrę i napis w jednej osi. */
+    line-height: 1.5rem;
+    text-align: left;
+  }
+
+  /* Pionowo łącznik biegnie od dołu punktu do góry następnego. Odległości
+     w rem, nie w procentach: przy zawiniętym tekście wysokości pozycji się
+     różnią i procent trafiałby w próżnię. */
+  .stepper li:not(:last-child)::before,
+  .stepper li:not(:last-child)::after {
+    top: 1.8rem;
+    right: auto;
+    bottom: calc(0.3rem - var(--krok-odstep));
+    left: calc(0.75rem - 1px);
+    width: 2px;
+    height: auto;
+  }
+
+  .stepper li:not(:last-child)::after {
+    transform-origin: center top;
+    animation-name: krok-linia-pion;
   }
 }
 
@@ -1237,6 +1416,16 @@ footer .podpis a:hover {
     opacity: 1;
     transform: none;
     transition: none;
+  }
+
+  /* Kroki bez ruchu: komplet linii i punkty w spoczynku. Nic z treści nie
+     ginie, znika sama pętla. Selektor linii musi być co do znaku ten sam co
+     wyżej — krótszy `.stepper li::after` przegrywa specyficznością z
+     `:not(:last-child)` i animacja szłaby dalej. */
+  .stepper li,
+  .stepper-nr,
+  .stepper li:not(:last-child)::after {
+    animation: none;
   }
 
 }
