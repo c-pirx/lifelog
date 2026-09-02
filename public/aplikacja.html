@@ -126,6 +126,12 @@
           <button type="button" class="odnosnik" id="pokaz-logowanie">Zaloguj się</button>
         </p>
       </form>
+
+      <!-- Wyjście ze ślepego zaułka: bez tego z /app nie ma drogi z powrotem
+           na / inaczej niż ręcznym skróceniem adresu. Zwykły odnośnik, bo to
+           przeładowanie na osobną stronę, a nie przełączenie widoku. Stoi
+           poza obydwoma formularzami, więc nie znika przy rejestracji. -->
+      <a class="powrot-na-powitanie" href="/">← Strona główna</a>
     </div>
 
     <div id="aplikacja" hidden>
