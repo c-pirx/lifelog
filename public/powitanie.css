@@ -1198,11 +1198,22 @@ footer p {
   margin: 0 0 0.5rem;
 }
 
-/* Podpis wykonawcy: widoczny, ale nigdy pierwszy w kolejce do oka. */
+/* Podpis wykonawcy: widoczny, ale nigdy pierwszy w kolejce do oka.
+   Bez mięty - ten kolor należy do zapisów w dzienniku, nie do stopki. */
 footer .podpis {
-  margin-top: 1.75rem;
+  margin: 1.75rem 0 0;
   font-size: 0.72rem;
-  opacity: 0.55;
+}
+
+footer .podpis a {
+  color: var(--cichy);
+  opacity: 0.7;
+  text-decoration: none;
+}
+
+footer .podpis a:hover {
+  opacity: 1;
+  text-decoration: underline;
 }
 
 @media (prefers-reduced-motion: reduce) {
