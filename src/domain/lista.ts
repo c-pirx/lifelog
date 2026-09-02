@@ -101,6 +101,29 @@ export function tokenWypisu(email: string, sekretSesji: string): string {
   return podpiszTekst(email.trim().toLowerCase(), sekretWypisu(sekretSesji));
 }
 
+/**
+ * Wariant sekretu dla linku „zaproś" z powiadomienia dla gospodarza. Osobny od
+ * wypisu, bo prowadzi w przeciwną stronę: token ze stopki listu do zapisanego
+ * nie może otwierać zapraszania.
+ */
+function sekretZaproszenia(sekretSesji: string): string {
+  return `${sekretSesji}|zaproszenie-z-listy`;
+}
+
+/**
+ * Token linku „zaproś". Jak przy wypisie: wyprowadzany z adresu, bez kolumny
+ * w bazie — mail leży w skrzynce gospodarza miesiącami, a wpis nie musi
+ * pamiętać sekretu.
+ */
+export function tokenZaproszenia(email: string, sekretSesji: string): string {
+  return podpiszTekst(email.trim().toLowerCase(), sekretZaproszenia(sekretSesji));
+}
+
+/** Kogo dotyczy link — do pokazania na stronie potwierdzenia, bez wydawania kodu. */
+export function adresZTokenuZaproszenia(token: string, sekretSesji: string): string | null {
+  return odczytajPodpisanyTekst(token, sekretZaproszenia(sekretSesji));
+}
+
 function wierszNaWpis(wiersz: WierszListy): WpisListy {
   return {
     id: wiersz.id,
@@ -212,6 +235,24 @@ export function zapros(rejestr: Baza, email: string, opcje: { teraz?: Date } = {
   zapiszKodZaproszenia(rejestr, wiersz.id, haszTokenu(kod), wygasa, teraz.toISOString());
 
   return { wpis: { ...wierszNaWpis(wiersz), stan: "zaproszony" }, kod, wygasa };
+}
+
+/**
+ * Zaproszenie z linku w mailu, zamiast `npm run lista -- zapros` przez ssh.
+ * Adres bierze się z podpisu, nie z paska adresu — kliknięcie w link zaprasza
+ * dokładnie tę osobę, o której był mail, i nikogo innego.
+ */
+export function zaprosZTokenu(
+  rejestr: Baza,
+  token: string,
+  sekretSesji: string,
+  opcje: { teraz?: Date } = {},
+): Zaproszenie {
+  const email = adresZTokenuZaproszenia(token, sekretSesji);
+  if (email === null) {
+    throw new BladDomeny("Link zaproszenia jest nieprawidłowy", "zly_token_zaproszenia");
+  }
+  return zapros(rejestr, email, opcje);
 }
 
 export type DaneRejestracji = {

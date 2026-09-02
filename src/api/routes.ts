@@ -23,16 +23,21 @@ import {
   type Konto,
 } from "../domain/konta.js";
 import {
+  adresZTokenuZaproszenia,
   liczbaZapisanych,
   tokenWypisu,
+  tokenZaproszenia,
   wypiszZListy,
   zapiszNaListe,
+  zaprosZTokenu,
   zarejestrujZKodem,
+  WAZNOSC_ZAPROSZENIA_DNI,
 } from "../domain/lista.js";
 import {
   wiadomoscDlaGospodarza,
   wiadomoscORejestracji,
   wiadomoscPowitalna,
+  wiadomoscZaproszenie,
 } from "../domain/wiadomosci.js";
 import type { Poczta, Wiadomosc } from "../lib/poczta.js";
 import {
@@ -66,6 +71,34 @@ import {
 import { dzisiaj, parsujCzas, przesunDate } from "../lib/time.js";
 
 export const NAZWA_CIASTECZKA = "sesja";
+
+const NIEDZIALAJACY_LINK =
+  "<p>Ten link zaproszenia jest nieprawidłowy albo pochodzi sprzed wymiany klucza sesji. " +
+  "Zaproś przez <code>npm run lista</code>.</p>";
+
+function bezpiecznyHtml(tekst: string): string {
+  return tekst.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+/**
+ * Jedyne strony HTML składane w kodzie, a nie leżące w `public/`: obie mówią
+ * o konkretnym adresie z listy, więc statyczny plik nie miałby czego pokazać.
+ * Arkusz i klasy te same co na stronie powitalnej — nowego CSS nie ma.
+ */
+function stronaGospodarza(naglowek: string, tresc: string): string {
+  return [
+    `<!doctype html><html lang="pl"><head><meta charset="utf-8" />`,
+    `<meta name="viewport" content="width=device-width, initial-scale=1" />`,
+    `<meta name="robots" content="noindex" />`,
+    `<title>${bezpiecznyHtml(naglowek)} — Lifelog</title>`,
+    `<link rel="stylesheet" href="/powitanie.css" /></head><body>`,
+    `<main class="tresc" style="padding-top: 6rem; max-width: 32rem">`,
+    `<p class="etykieta">Lista oczekujących</p>`,
+    `<h1 style="font-size: 1.8rem; letter-spacing: -0.02em">${bezpiecznyHtml(naglowek)}</h1>`,
+    tresc,
+    `</main></body></html>`,
+  ].join("");
+}
 
 /**
  * Poczta razem z tym, czego potrzebuje treść wiadomości: dokąd prowadzą linki
@@ -268,6 +301,8 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
           imie: wynik.wpis.imie,
           numer: wynik.lacznie,
           lacznie: wynik.lacznie,
+          tokenZaproszenia: tokenZaproszenia(wynik.wpis.email, ustawienia.sekretSesji),
+          adresy,
         }),
       );
     }
@@ -291,6 +326,69 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
   api.get("/lista/wypis/:token", (c) => {
     wypiszZListy(rejestr, c.req.param("token"), ustawienia.sekretSesji);
     return c.redirect("/wypisano.html", 302);
+  });
+
+  /**
+   * Zaproszenie z linku w mailu do gospodarza — druga droga obok
+   * `npm run lista -- zapros`, żeby nie trzeba było wchodzić na serwer.
+   *
+   * GET tylko PYTA, kod wydaje dopiero POST. Nie z uprzejmości: skanery linków
+   * w skrzynkach pocztowych odwiedzają adresy z treści listu, więc zapraszanie
+   * pod GET-em rozsyłałoby kody samo z siebie. Link wypisu wyżej znosi to
+   * ryzyko (kasuje wpis nadawcy), ten rozdaje dostęp.
+   */
+  api.get("/lista/zapros/:token", (c) => {
+    const email = adresZTokenuZaproszenia(c.req.param("token"), ustawienia.sekretSesji);
+    if (email === null) return c.html(stronaGospodarza("Link nie działa", NIEDZIALAJACY_LINK), 400);
+    return c.html(
+      stronaGospodarza(
+        "Zaprosić?",
+        `<p style="color: var(--cichy)">${bezpiecznyHtml(email)}</p>` +
+          `<form method="post" class="zapis-form"><button type="submit">Wyślij zaproszenie</button></form>`,
+      ),
+    );
+  });
+
+  api.post("/lista/zapros/:token", (c) => {
+    let zaproszenie;
+    try {
+      zaproszenie = zaprosZTokenu(rejestr, c.req.param("token"), ustawienia.sekretSesji);
+    } catch (blad) {
+      const powod = czyBladDomeny(blad) ? blad.message : "Nie udało się zaprosić.";
+      return c.html(stronaGospodarza("Nie poszło", `<p>${bezpiecznyHtml(powod)}</p>`), 400);
+    }
+
+    // Kod jest już w rejestrze — mail tylko go niesie. Gdyby wysyłka padła,
+    // link do skopiowania zostaje na tej stronie.
+    const link = ustawienia.poczta
+      ? `${ustawienia.poczta.adresPubliczny}/app?kod=${encodeURIComponent(zaproszenie.kod)}`
+      : null;
+    if (ustawienia.poczta) {
+      wyslijWTle(
+        wiadomoscZaproszenie({
+          email: zaproszenie.wpis.email,
+          imie: zaproszenie.wpis.imie,
+          kod: zaproszenie.kod,
+          waznoscDni: WAZNOSC_ZAPROSZENIA_DNI,
+          tokenWypisu: tokenWypisu(zaproszenie.wpis.email, ustawienia.sekretSesji),
+          adresy: { publiczny: ustawienia.poczta.adresPubliczny },
+          kontakt: ustawienia.poczta.gospodarz,
+        }),
+      );
+    }
+
+    return c.html(
+      stronaGospodarza(
+        "Zaproszenie poszło",
+        `<p style="color: var(--cichy)">${bezpiecznyHtml(zaproszenie.wpis.email)} — kod ważny ` +
+          `${WAZNOSC_ZAPROSZENIA_DNI} dni, do jednokrotnego użycia.</p>` +
+          (link
+            ? `<p style="color: var(--cichy)">Gdyby mail nie dotarł, ten link działa tak samo:<br />` +
+              `<code style="word-break: break-all">${bezpiecznyHtml(link)}</code></p>`
+            : `<p style="color: var(--cichy)">Poczta jest wyłączona — link trzeba wysłać samemu ` +
+              `(<code>npm run lista</code> na serwerze).</p>`),
+      ),
+    );
   });
 
   // === Rejestracja ======================================================

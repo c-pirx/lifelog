@@ -122,24 +122,28 @@ export function wiadomoscDlaGospodarza(dane: {
   imie: string | null;
   numer: number;
   lacznie: number;
+  /** Link „zaproś" — zastępuje wejście na serwer po `npm run lista`. */
+  tokenZaproszenia: string;
+  adresy: Adresy;
 }): Wiadomosc {
+  const zapros = `${dane.adresy.publiczny}/api/lista/zapros/${dane.tokenZaproszenia}`;
   const linie = [
     `Adres: ${dane.email}`,
     `Imię: ${dane.imie ?? "(nie podano)"}`,
     `Numer na liście: ${dane.numer}`,
     `Zapisanych łącznie: ${dane.lacznie}`,
-    "",
-    "Zaproszenie: npm run lista -- zapros " + dane.email,
   ];
 
   return {
     odbiorca: dane.odbiorca,
     temat: `Nowy zapis na listę: ${dane.email}`,
-    tekst: `${linie.join("\n")}\n`,
+    tekst:
+      `${linie.join("\n")}\n\nZaproś (link pyta o potwierdzenie): ${zapros}\n\n` +
+      `Albo przez ssh: npm run lista -- zapros ${dane.email}\n`,
     html: oprawa(
       "Nowy zapis na listę",
-      linie.filter((linia) => linia !== "").map(akapit).join(""),
-      `Powiadomienie z ${bezpieczny(NAZWA)}a. Wpis jest w rejestrze — ten mail tylko o nim mówi.`,
+      linie.map(akapit).join("") + przycisk("Zaproś tę osobę", zapros),
+      `Powiadomienie z ${bezpieczny(NAZWA)}a. Link otwiera stronę z pytaniem — kod wychodzi dopiero po potwierdzeniu.`,
     ),
   };
 }

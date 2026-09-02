@@ -27,6 +27,7 @@ import { zaloguj } from "../src/domain/konta.js";
 import {
   liczbaZapisanych,
   tokenWypisu,
+  tokenZaproszenia,
   usunZListy,
   wpisyListy,
   wypiszZListy,
@@ -35,7 +36,11 @@ import {
   zarejestrujZKodem,
   WAZNOSC_ZAPROSZENIA_DNI,
 } from "../src/domain/lista.js";
-import { wiadomoscORejestracji, wiadomoscZaproszenie } from "../src/domain/wiadomosci.js";
+import {
+  wiadomoscDlaGospodarza,
+  wiadomoscORejestracji,
+  wiadomoscZaproszenie,
+} from "../src/domain/wiadomosci.js";
 import type { Poczta, Wiadomosc } from "../src/lib/poczta.js";
 
 const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
@@ -340,6 +345,25 @@ describe("treść maila z zaproszeniem", () => {
   });
 });
 
+describe("treść powiadomienia dla gospodarza", () => {
+  it("niesie link zapraszający — bez niego jedyną drogą jest ssh", () => {
+    const wiadomosc = wiadomoscDlaGospodarza({
+      odbiorca: "ja@przyklad.pl",
+      email: "ania@przyklad.pl",
+      imie: "Ania",
+      numer: 7,
+      lacznie: 7,
+      tokenZaproszenia: "token-zapros",
+      adresy: { publiczny: ADRES_PUBLICZNY },
+    });
+
+    for (const tresc of [wiadomosc.tekst, wiadomosc.html]) {
+      expect(tresc).toContain(`${ADRES_PUBLICZNY}/api/lista/zapros/token-zapros`);
+      expect(tresc).toContain("ania@przyklad.pl");
+    }
+  });
+});
+
 describe("treść maila o rejestracji", () => {
   it("mówi gospodarzowi, kto założył konto i pod jakim loginem", () => {
     const wiadomosc = wiadomoscORejestracji({
@@ -458,6 +482,41 @@ describe("trasy listy i rejestracji", () => {
     const nieznany = await fetch(`${adres}/api/lista/wypis/nieistniejacy`, { redirect: "manual" });
     expect(nieznany.status).toBe(302);
     expect(nieznany.headers.get("location")).toBe("/wypisano.html");
+  });
+
+  it("link zaproszenia pyta pod GET-em, a kod wydaje dopiero POST", async () => {
+    await zapisz({ email: "ania@przyklad.pl", zgoda: true });
+    const token = tokenZaproszenia("ania@przyklad.pl", SEKRET);
+    poczta.wyslane.length = 0;
+
+    // Skanery linków w skrzynkach pocztowych odwiedzają adresy z treści maila.
+    // Gdyby GET zapraszał, kody rozchodziłyby się same.
+    const pytanie = await fetch(`${adres}/api/lista/zapros/${token}`);
+    expect(pytanie.status).toBe(200);
+    expect(await pytanie.text()).toContain("ania@przyklad.pl");
+    expect(wpisyListy(rejestr)[0]?.stan).toBe("oczekuje");
+    expect(poczta.wyslane).toHaveLength(0);
+
+    const potwierdzenie = await fetch(`${adres}/api/lista/zapros/${token}`, { method: "POST" });
+    expect(potwierdzenie.status).toBe(200);
+    expect(wpisyListy(rejestr)[0]?.stan).toBe("zaproszony");
+
+    await vi.waitFor(() => expect(poczta.wyslane).toHaveLength(1));
+    expect(poczta.wyslane[0]?.odbiorca).toBe("ania@przyklad.pl");
+    expect(poczta.wyslane[0]?.tekst).toContain(`${ADRES_PUBLICZNY}/app?kod=`);
+  });
+
+  it("podrobiony token nie zaprasza nikogo", async () => {
+    await zapisz({ email: "ania@przyklad.pl", zgoda: true });
+    poczta.wyslane.length = 0;
+
+    // Ten sam adres, ale podpis z sekretu wypisu — warianty klucza muszą się
+    // rozjeżdżać, inaczej token ze stopki listu do zapisanego otwierałby
+    // zapraszanie samego siebie.
+    const obcy = tokenWypisu("ania@przyklad.pl", SEKRET);
+    expect((await fetch(`${adres}/api/lista/zapros/${obcy}`, { method: "POST" })).status).toBe(400);
+    expect(wpisyListy(rejestr)[0]?.stan).toBe("oczekuje");
+    expect(poczta.wyslane).toHaveLength(0);
   });
 
   it("zapis na listę nie wymaga sesji, a lista nie jest widoczna przez API", async () => {

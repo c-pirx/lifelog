@@ -67,9 +67,18 @@ wskazuje jedną bazę, bez rejestru.
 
 Rejestracja nie stoi już na wspólnym haśle bramy. Kolejność jest teraz taka:
 adres trafia na listę (`POST /api/lista` ze strony powitalnej) → gospodarz
-zaprasza konkretny wpis (`npm run lista -- zapros`) → **jednorazowy kod**
-z maila zamienia się w konto i gaśnie. Dostęp da się cofnąć jednej osobie,
-a kod przekazany dalej nikomu nie pomaga.
+zaprasza konkretny wpis (przyciskiem w mailu-powiadomieniu albo
+`npm run lista -- zapros`) → **jednorazowy kod** z maila zamienia się w konto
+i gaśnie. Dostęp da się cofnąć jednej osobie, a kod przekazany dalej nikomu
+nie pomaga.
+
+**Link „zaproś" z maila do gospodarza pyta pod GET-em, a zaprasza pod POST-em.**
+Adres bierze się z podpisu HMAC w tokenie (wariant sekretu `|zaproszenie-z-listy`,
+ten sam chwyt co przy wypisie), nie z paska adresu. Rozdział metod nie jest
+uprzejmością: skanery linków w skrzynkach pocztowych odwiedzają adresy z treści
+listu, więc zapraszanie pod GET-em rozsyłałoby kody samo z siebie. To jedyne dwie
+strony HTML składane w kodzie, a nie leżące w `public/` — obie mówią o konkretnym
+adresie z listy.
 
 Trzecia dziedzina rejestru, obok kont: tabela `lista_oczekujacych`, SQL
 w `src/db/rejestr.ts`, logika w `src/domain/lista.ts`. Zależność idzie
@@ -609,8 +618,9 @@ Z listy odłożonych spadło przez to „lista ostatnich sesji"; **poprawianie s
 wstecz nadal czeka** — zakładka pokazuje wyniki, ale ich nie edytuje.
 
 Odłożone świadomie przy liście oczekujących: panel administracyjny w aplikacji
-(zapraszanie idzie przez CLI, tą samą drogą co `npm run konta` — zero nowych
-tras to zero nowej powierzchni ataku), ponawianie nieudanej wysyłki,
+(zapraszanie idzie linkiem z maila albo przez CLI — pełny panel to logowanie,
+uprawnienia i przeglądanie adresów, czyli dużo nowej powierzchni ataku za
+czynność robioną raz na jakiś czas), ponawianie nieudanej wysyłki,
 potwierdzanie adresu klikiem w mail (double opt-in) oraz narzędzie MCP do
 listy — budżet 12 narzędzi jest wyczerpany, a lista nie jest dziedziną
 użytkownika.
