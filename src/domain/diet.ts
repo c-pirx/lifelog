@@ -168,7 +168,14 @@ function zsumujMakro(posilki: Posilek[]): Makro {
   return posilki.reduce<Makro>((suma, p) => dodajMakro(suma, p), MAKRO_ZERO);
 }
 
-export type SumaDnia = Makro & { data: string; cel_kcal: number | null };
+export type SumaDnia = Makro & {
+  data: string;
+  cel_kcal: number | null;
+  /** Cele makro — wykres każdego składnika rysuje własną linię celu. */
+  cel_bialko_g: number | null;
+  cel_wegle_g: number | null;
+  cel_tluszcz_g: number | null;
+};
 
 /**
  * Sumy dzienne za okres — do wykresów. Zwraca tylko dni z jakimkolwiek
@@ -176,14 +183,23 @@ export type SumaDnia = Makro & { data: string; cel_kcal: number | null };
  * tam, gdzie po prostu nic nie zapisano.
  */
 export function sumyDzienne(db: Baza, od: string, doDaty: string): SumaDnia[] {
-  return repo.sumyDzienne(db, od, doDaty).map((w) => ({
-    data: w.data_lokalna,
-    kcal: w.kcal,
-    bialko_g: w.bialko_g,
-    wegle_g: w.wegle_g,
-    tluszcz_g: w.tluszcz_g,
-    cel_kcal: repo.celeNaDzien(db, w.data_lokalna)?.kcal ?? null,
-  }));
+  return repo.sumyDzienne(db, od, doDaty).map((w) => {
+    // Cel czytany raz na dzień, nie raz na składnik: zmiana celu w środku
+    // okresu ma przesunąć wszystkie cztery linie tak samo.
+    const cel = repo.celeNaDzien(db, w.data_lokalna);
+
+    return {
+      data: w.data_lokalna,
+      kcal: w.kcal,
+      bialko_g: w.bialko_g,
+      wegle_g: w.wegle_g,
+      tluszcz_g: w.tluszcz_g,
+      cel_kcal: cel?.kcal ?? null,
+      cel_bialko_g: cel?.bialko_g ?? null,
+      cel_wegle_g: cel?.wegle_g ?? null,
+      cel_tluszcz_g: cel?.tluszcz_g ?? null,
+    };
+  });
 }
 
 export type CzestyPosilek = Makro & {

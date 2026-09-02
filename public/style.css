@@ -957,6 +957,35 @@ nav button[aria-current="page"] {
   vector-effect: non-scaling-stroke;
 }
 
+/* Cztery składniki obok siebie: 2×2, bo w rzędzie czterech słupki schodzą
+   poniżej szerokości piksela na telefonie i wykres robi się szumem. */
+.mini-wykresy {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px 12px;
+  margin-top: 12px;
+}
+
+.mini h3 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--tekst-cichy);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.mini .wykres {
+  margin-top: 6px;
+}
+
+.podpis-mini {
+  margin: 4px 0 0;
+  font-size: 0.72rem;
+  color: var(--tekst);
+  font-variant-numeric: tabular-nums;
+}
+
 .podpis {
   display: flex;
   justify-content: space-between;
@@ -1513,15 +1542,6 @@ header h1 {
   font-size: 0.68rem;
   color: var(--tekst-cichy);
   line-height: 1.2;
-}
-
-/* Trzeci wiersz kafelka: skąd bierze się liczba. Czytany raz, przy pierwszym
-   spojrzeniu na kartę — dlatego cichszy od etykiety, ale nie niewidzialny. */
-.liczby small {
-  font-size: 0.6rem;
-  color: var(--tekst-cichy);
-  opacity: 0.7;
-  line-height: 1.15;
 }
 
 

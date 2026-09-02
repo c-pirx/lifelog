@@ -5,6 +5,7 @@ import {
   czestePosilki,
   historiaDiety,
   podsumowanieDnia,
+  sumyDzienne,
   ustawCele,
   zapiszPosilek,
 } from "../src/domain/diet.js";
@@ -359,6 +360,19 @@ describe("historia diety", () => {
 
     expect(historia.dni.find((d) => d.data === "2026-08-20")?.cel_kcal).toBe(2000);
     expect(historia.dni.find((d) => d.data === "2026-08-23")?.cel_kcal).toBe(1800);
+  });
+
+  it("sumy dzienne podają cele wszystkich makro, nie tylko kalorii", () => {
+    // Wykresy makro na ekranie Postępy rysują linię celu dla każdego składnika.
+    ustawCele(db, { ...CELE, obowiazuje_od: "2026-08-01" });
+    zapisz("2026-08-20", 500);
+
+    expect(sumyDzienne(db, "2026-08-12", "2026-08-25")[0]).toMatchObject({
+      cel_kcal: 2400,
+      cel_bialko_g: 180,
+      cel_wegle_g: 250,
+      cel_tluszcz_g: 80,
+    });
   });
 
   it("parametr przed przesuwa okno — kursor do „pokaż starsze”", () => {

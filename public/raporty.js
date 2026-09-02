@@ -45,14 +45,8 @@ function mnoga(n, jeden, kilka, wiele) {
   return jednosci >= 2 && jednosci <= 4 && (reszta < 12 || reszta > 14) ? kilka : wiele;
 }
 
-/**
- * Kafelek liczby. Trzeci wiersz jest opcjonalny i mówi, skąd liczba się bierze
- * — bez niego „2/3" wymaga wiedzy, której użytkownik nie ma skąd wziąć.
- */
-function kafelek(wartosc, podpis, wyjasnienie) {
-  return `<li><b>${wartosc}</b><span>${esc(podpis)}</span>${
-    wyjasnienie ? `<small>${esc(wyjasnienie)}</small>` : ""
-  }</li>`;
+function kafelek(wartosc, podpis) {
+  return `<li><b>${wartosc}</b><span>${esc(podpis)}</span></li>`;
 }
 
 /** Wiersz porównania z poprzednim tygodniem. Kolor bierze się z oceny serwera. */
@@ -151,18 +145,10 @@ export function panelTygodnia(tydzien) {
       }
 
       <ul class="liczby">
-        ${kafelek(
-          zaokr(dieta.srednie.kcal),
-          "śr. kcal / dzień",
-          `z ${zamkniete} ${mnoga(zamkniete, "zamkniętego dnia", "zamkniętych dni", "zamkniętych dni")}`,
-        )}
-        ${kafelek(`${cel.trafione}/${cel.dni_za_nami}`, "dni w celu", "±5% od celu kcal")}
-        ${kafelek(
-          `${plan.zrobione}/${plan.zaplanowane}`,
-          "treningi z planu",
-          "dni planu do dziś",
-        )}
-        ${kafelek(zaokr(trening.objetosc_kg), "kg objętości", "powtórzenia × ciężar")}
+        ${kafelek(zaokr(dieta.srednie.kcal), "śr. kcal / dzień")}
+        ${kafelek(`${cel.trafione}/${cel.dni_za_nami}`, "dni w celu")}
+        ${kafelek(`${plan.zrobione}/${plan.zaplanowane}`, "treningi z planu")}
+        ${kafelek(zaokr(trening.objetosc_kg), "kg objętości")}
       </ul>
 
       ${wierszZmiany(zmiana, "niż o tej porze tydzień temu")}

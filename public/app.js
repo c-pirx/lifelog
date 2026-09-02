@@ -1471,6 +1471,60 @@ function wykresKalorii(dni) {
     </div>`;
 }
 
+/** Makro dnia, w kolejności pasków na ekranie Dziś. */
+const MAKRA = [
+  { pole: "kcal", cel: "cel_kcal", nazwa: "Kalorie", jednostka: "kcal" },
+  { pole: "bialko_g", cel: "cel_bialko_g", nazwa: "Białko", jednostka: "g" },
+  { pole: "wegle_g", cel: "cel_wegle_g", nazwa: "Węglowodany", jednostka: "g" },
+  { pole: "tluszcz_g", cel: "cel_tluszcz_g", nazwa: "Tłuszcze", jednostka: "g" },
+];
+
+/**
+ * Jeden składnik jako słupki wysokości ćwiartki dużego wykresu.
+ *
+ * Bez podpisów dat i bez oznaczania przekroczeń: cztery takie obok siebie
+ * czyta się kształtem, a nie liczbami — od tego jest wykres kalorii wyżej
+ * i paski na ekranie Dziś. Zostaje jedno: linia celu, bo bez niej słupki
+ * nie mówią, czy dzień był dobry.
+ */
+function miniWykres(dni, makro) {
+  const WYS_MINI = 58;
+  const wartosci = dni.map((d) => d[makro.pole] ?? 0);
+  const cel = dni.at(-1)?.[makro.cel] ?? null;
+  const maks = Math.max(...wartosci, cel ?? 0, 1);
+  const szerokosc = SZER / dni.length;
+
+  const slupki = wartosci
+    .map((v, i) => {
+      const wysokosc = (v / maks) * WYS_MINI;
+      return `<rect x="${(i * szerokosc + szerokosc * 0.15).toFixed(1)}" y="${(WYS_MINI - wysokosc).toFixed(1)}"
+                width="${(szerokosc * 0.7).toFixed(1)}" height="${wysokosc.toFixed(1)}"
+                class="slupek"><title>${esc(dni[i].data)}: ${zaokr(v)} ${makro.jednostka}</title></rect>`;
+    })
+    .join("");
+
+  const liniaCelu = cel
+    ? `<line x1="0" x2="${SZER}" y1="${(WYS_MINI - (cel / maks) * WYS_MINI).toFixed(1)}"
+             y2="${(WYS_MINI - (cel / maks) * WYS_MINI).toFixed(1)}" class="cel-linia" />`
+    : "";
+
+  const srednia = wartosci.length
+    ? zaokr(wartosci.reduce((s, v) => s + v, 0) / wartosci.length)
+    : 0;
+
+  return `
+    <div class="mini">
+      <h3>${makro.nazwa}</h3>
+      <svg class="wykres" viewBox="0 -4 ${SZER} ${WYS_MINI + 8}" role="img"
+           aria-label="${makro.nazwa}: ${dni.length} dni, średnio ${srednia} ${makro.jednostka}">
+        ${slupki}${liniaCelu}
+      </svg>
+      <p class="podpis-mini">śr. ${srednia} ${makro.jednostka}${
+        cel ? ` <span class="cel">z ${zaokr(cel)}</span>` : ""
+      }</p>
+    </div>`;
+}
+
 function ekranPostepy(postepy, waga) {
   const ostatnia = waga.ostatnia;
 
@@ -1501,6 +1555,15 @@ function ekranPostepy(postepy, waga) {
     <section class="karta">
       <h2>Kalorie — 30 dni</h2>
       ${wykresKalorii(postepy.dni)}
+    </section>
+
+    <section class="karta">
+      <h2>Makro — 30 dni</h2>
+      ${
+        postepy.dni.length
+          ? `<div class="mini-wykresy">${MAKRA.map((m) => miniWykres(postepy.dni, m)).join("")}</div>`
+          : '<div class="pusto">Brak danych.</div>'
+      }
     </section>`;
 }
 
