@@ -504,3 +504,81 @@ describe("aktywności poza planem w raporcie", () => {
     expect(stary?.trening.serie).toBe(4);
   });
 });
+
+describe("kafelki tygodnia w toku", () => {
+  /** Trening przypisany do dnia planu — inaczej niż helper `trening`, który idzie bez planu. */
+  function treningZPlanu(data: string, kod: string) {
+    rozpocznijTrening(db, { kod, ts: wPoludnie(data) });
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 60, ts: wPoludnie(data) });
+    zakonczTrening(db, { ts: `${data}T11:00:00.000Z` });
+  }
+
+  function planDwaDni() {
+    dodajDzienPlanu(db, { kod: "A", nazwa: "Nogi", dzien_tygodnia: 1, cwiczenia: [] });
+    dodajDzienPlanu(db, { kod: "B", nazwa: "Plecy", dzien_tygodnia: 4, cwiczenia: [] });
+  }
+
+  it("mianownik dni w celu liczy dni kalendarza, z dzisiejszym włącznie", () => {
+    cele(2000);
+    posilek(TYDZIEN_4, 2000); // niedziela — trafiona
+    // Poniedziałek bez ani jednego posiłku: pominięty dzień zostaje w mianowniku.
+    posilek("2026-08-25", 500); // wtorek, dzień w toku
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).cel_kcal).toEqual({
+      trafione: 1,
+      dni_za_nami: 3,
+    });
+  });
+
+  it("dzisiejsze trafienie dolicza się od razu", () => {
+    cele(2000);
+    posilek(TYDZIEN_4, 2000);
+    posilek("2026-08-25", 2000);
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).cel_kcal.trafione).toBe(2);
+  });
+
+  it("sesje z planu: czwartkowy dzień nie obciąża wtorkowego licznika", () => {
+    planDwaDni();
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).plan).toEqual({ zrobione: 0, zaplanowane: 1 });
+  });
+
+  it("odrobiony poniedziałek zamyka pozycję", () => {
+    planDwaDni();
+    treningZPlanu("2026-08-24", "A");
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).plan).toEqual({ zrobione: 1, zaplanowane: 1 });
+  });
+
+  it("zaległy dzień wolno nadrobić później w tygodniu", () => {
+    planDwaDni();
+    treningZPlanu("2026-08-25", "A"); // poniedziałkowy dzień zrobiony we wtorek
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).plan).toEqual({ zrobione: 1, zaplanowane: 1 });
+  });
+
+  it("trening spoza planu nie liczy się do realizacji planu", () => {
+    planDwaDni();
+    trening("2026-08-24", [{ cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 60 }]);
+    zapiszAktywnosc(db, { dyscyplina: "bieg", dystans_m: 5000, ts: wPoludnie("2026-08-24") });
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).plan.zrobione).toBe(0);
+  });
+
+  it("sesja bez ani jednej serii nie jest odrobionym dniem", () => {
+    planDwaDni();
+    rozpocznijTrening(db, { kod: "A", ts: wPoludnie("2026-08-24") });
+    zakonczTrening(db, { ts: "2026-08-24T11:00:00.000Z" });
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).plan.zrobione).toBe(0);
+  });
+
+  it("nadprogramowy trening nie robi ułamka większego od jedności", () => {
+    planDwaDni();
+    treningZPlanu("2026-08-24", "A");
+    treningZPlanu("2026-08-25", "B"); // czwartkowy dzień zrobiony we wtorek, przed czasem
+
+    expect(tydzienWToku(db, { teraz: WTOREK }).plan).toEqual({ zrobione: 2, zaplanowane: 2 });
+  });
+});

@@ -1515,6 +1515,25 @@ header h1 {
   line-height: 1.2;
 }
 
+/* Trzeci wiersz kafelka: skąd bierze się liczba. Czytany raz, przy pierwszym
+   spojrzeniu na kartę — dlatego cichszy od etykiety, ale nie niewidzialny. */
+.liczby small {
+  font-size: 0.6rem;
+  color: var(--tekst-cichy);
+  opacity: 0.7;
+  line-height: 1.15;
+}
+
+/* Panel bieżącego tygodnia dostaje 2×2 zamiast rzędu czterech: ułamki
+   („2/4", „1/2") i podpisy nie mieszczą się w ćwiartce szerokości telefonu. */
+.tydzien .liczby {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.tydzien .liczby b {
+  font-size: 1.35rem;
+}
+
 .zmiana {
   display: flex;
   align-items: flex-start;

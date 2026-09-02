@@ -36,8 +36,23 @@ export function zakresTygodnia(od, doDaty) {
   return `${dzienIMiesiac(od)} – ${dzienIMiesiac(doDaty)}`;
 }
 
-function kafelek(wartosc, podpis) {
-  return `<li><b>${wartosc}</b><span>${esc(podpis)}</span></li>`;
+/** Polska odmiana po liczbie: 1 seria, 2 serie, 5 serii. Zero idzie z „wiele". */
+function mnoga(n, jeden, kilka, wiele) {
+  const ile = Math.abs(zaokr(n));
+  if (ile === 1) return jeden;
+  const reszta = ile % 100;
+  const jednosci = ile % 10;
+  return jednosci >= 2 && jednosci <= 4 && (reszta < 12 || reszta > 14) ? kilka : wiele;
+}
+
+/**
+ * Kafelek liczby. Trzeci wiersz jest opcjonalny i mówi, skąd liczba się bierze
+ * — bez niego „2/3" wymaga wiedzy, której użytkownik nie ma skąd wziąć.
+ */
+function kafelek(wartosc, podpis, wyjasnienie) {
+  return `<li><b>${wartosc}</b><span>${esc(podpis)}</span>${
+    wyjasnienie ? `<small>${esc(wyjasnienie)}</small>` : ""
+  }</li>`;
 }
 
 /** Wiersz porównania z poprzednim tygodniem. Kolor bierze się z oceny serwera. */
@@ -46,8 +61,8 @@ function wierszZmiany(zmiana, podpis) {
 
   const czesci = [
     `${zeZnakiem(zmiana.kcal_dziennie)} kcal dziennie`,
-    `${zeZnakiem(zmiana.dni_w_celu)} dni w celu`,
-    `${zeZnakiem(zmiana.serie)} serii`,
+    `${zeZnakiem(zmiana.dni_w_celu)} ${mnoga(zmiana.dni_w_celu, "dzień", "dni", "dni")} w celu`,
+    `${zeZnakiem(zmiana.serie)} ${mnoga(zmiana.serie, "seria", "serie", "serii")}`,
   ];
   if (zmiana.waga_kg !== null && zmiana.waga_kg !== undefined) {
     czesci.push(`${zmiana.waga_kg > 0 ? "+" : ""}${zmiana.waga_kg} kg`);
@@ -114,11 +129,16 @@ export function panelTygodnia(tydzien) {
 
   const { dieta, trening, prognoza, zmiana, dni_zamkniete: zamkniete } = tydzien;
 
+  // Odpowiedź spod cache'u service workera może być sprzed wdrożenia tych pól —
+  // wtedy kafelki wracają do starej arytmetyki zamiast pokazać „undefined".
+  const cel = tydzien.cel_kcal ?? { trafione: dieta.dni_w_celu, dni_za_nami: dieta.dni_z_zapisem };
+  const plan = tydzien.plan ?? { zrobione: trening.sesje, zaplanowane: trening.sesje_w_planie };
+
   return `
     <section class="karta tydzien">
       <h2>Ten tydzień</h2>
       <p class="cel zakres">${zakresTygodnia(tydzien.tydzien_od, tydzien.tydzien_do)} ·
-        ${zamkniete} z 7 dni za nami</p>
+        ${cel.dni_za_nami} z 7 dni tygodnia</p>
 
       ${
         prognoza
@@ -131,10 +151,18 @@ export function panelTygodnia(tydzien) {
       }
 
       <ul class="liczby">
-        ${kafelek(zaokr(dieta.srednie.kcal), "kcal / dzień")}
-        ${kafelek(`${dieta.dni_w_celu}/${dieta.dni_z_zapisem}`, "dni w celu")}
-        ${kafelek(`${trening.sesje}${trening.sesje_w_planie ? `/${trening.sesje_w_planie}` : ""}`, "sesje")}
-        ${kafelek(zaokr(trening.objetosc_kg), "kg objętości")}
+        ${kafelek(
+          zaokr(dieta.srednie.kcal),
+          "śr. kcal / dzień",
+          `z ${zamkniete} ${mnoga(zamkniete, "zamkniętego dnia", "zamkniętych dni", "zamkniętych dni")}`,
+        )}
+        ${kafelek(`${cel.trafione}/${cel.dni_za_nami}`, "dni w celu", "±5% od celu kcal")}
+        ${kafelek(
+          `${plan.zrobione}/${plan.zaplanowane}`,
+          "treningi z planu",
+          "dni planu do dziś",
+        )}
+        ${kafelek(zaokr(trening.objetosc_kg), "kg objętości", "powtórzenia × ciężar")}
       </ul>
 
       ${wierszZmiany(zmiana, "niż o tej porze tydzień temu")}
@@ -142,7 +170,7 @@ export function panelTygodnia(tydzien) {
       ${
         prognoza && prognoza.dzis.kcal > 0
           ? `<p class="cel">Dzisiaj w toku: ${zaokr(prognoza.dzis.kcal)} kcal —
-             do prognozy nie wchodzi, bo dzień jeszcze trwa.</p>`
+             do dni w celu liczy się już teraz, do średniej i prognozy wejdzie jutro.</p>`
           : ""
       }
     </section>`;

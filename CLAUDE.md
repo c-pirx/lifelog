@@ -575,9 +575,28 @@ systemd oznaczałaby edycję `02-aplikacja.sh` — patrz pułapka wyżej.
 zestawione z siedmioma poprzedniego zawsze pokażą „gorzej", niezależnie od tego,
 jak dobry jest tydzień.
 
-**Prognoza i „dni w celu" liczą się z dni zamkniętych, bez dzisiaj.** Trening
+**Prognoza i średnia kalorii liczą się z dni zamkniętych, bez dzisiaj.** Trening
 i waga odwrotnie — dzisiejsze serie to fakt dokonany i mają być widoczne zaraz
-po powrocie z siłowni. Ta asymetria jest celowa.
+po powrocie z siłowni. Ta asymetria jest celowa: dzień w toku zaniżałby średnią
+od rana do kolacji, a to jedyna liczba na karcie zestawiana z celem wprost.
+
+**Kafelki bieżącego tygodnia liczą jednak dniami kalendarza, z dzisiejszym
+włącznie** — `cel_kcal` i `plan` w `PostepTygodnia`, osobno od `dieta`
+i `trening`, bo te dwie struktury idą też do migawki raportu. „Dni w celu"
+pokazuje w niedzielę 0/1, w poniedziałek 1/2 i tak dalej: dzień pominięty
+zostaje w mianowniku, bo pytanie brzmi „ile dni tego tygodnia trafiłem", a nie
+„ile z tych, o których pamiętałem". Mianownik zgadza się z nagłówkiem karty
+(„4 z 7 dni tygodnia") — rozjazd tych dwóch liczb był pierwszym, co myliło.
+
+**„Treningi z planu" mierzą dni planu, które już wypadły**, nie cały tydzień
+(`realizacjaPlanu`). Liczą się wyłącznie sesje z dni **aktywnego** planu,
+zakończone i mające choć jedną serię — bieg czy rower to nie realizacja planu
+siłowego, a pusta sesja to ślad po otwarciu i zamknięciu treningu. Zaległy dzień
+wolno nadrobić kiedykolwiek w tygodniu, więc licznik patrzy na cały zakres,
+a nie na zgodność z dniem tygodnia; mianownik podnosi się do licznika, żeby
+trening zrobiony przed czasem nie dał „3/2". Migawki raportów zostają przy
+starej parze liczb (`dni_z_zapisem`, `sesje_w_planie`) — raz policzonego raportu
+nie przeliczamy, a widok archiwum czyta je bez zmian.
 
 **Ocena „lepiej / gorzej" bierze się z trafień w cel i liczby serii**, nigdy
 z kalorii ani wagi: przy redukcji zjedzenie mniej jest dobre, przy budowaniu

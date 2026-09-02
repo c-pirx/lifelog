@@ -17,6 +17,7 @@ import type { Baza } from "../db/index.js";
 import * as repo from "../db/repo.js";
 import {
   dataLokalna,
+  dzienTygodniaDaty,
   godzinaLokalna,
   przesunDate,
   terazUtc,
@@ -29,7 +30,7 @@ import { BladDomeny } from "./bledy.js";
 import { celeNaDzien } from "./diet.js";
 import { trendWagi } from "./metrics.js";
 import { dodajMakro, odejmijMakro, MAKRO_ZERO, type Makro } from "./typy.js";
-import { planTreningowy } from "./workouts.js";
+import { historiaSesji, planTreningowy } from "./workouts.js";
 
 export type Opcje = { strefa?: string; teraz?: string };
 
@@ -126,6 +127,33 @@ export type Prognoza = {
   dzis: Makro;
 };
 
+/**
+ * Trafienia w cel kaloryczny liczone dniami kalendarza, a nie dniami z zapisem.
+ *
+ * Mianownik `dni_za_nami` rośnie z każdym dniem tygodnia — w niedzielę 0/1,
+ * w poniedziałek 1/2 i tak dalej. Dzień pominięty zostaje w mianowniku, bo
+ * pytanie brzmi „ile dni tego tygodnia trafiłem", a nie „ile z tych, o których
+ * pamiętałem". Migawka raportu ma osobną, starszą parę liczb (`StatDiety`),
+ * której nie przeliczamy.
+ */
+export type TrafieniaWCel = {
+  trafione: number;
+  dni_za_nami: number;
+};
+
+/**
+ * Realizacja planu treningowego na teraz — mianownik też rośnie w ciągu tygodnia.
+ *
+ * Liczą się wyłącznie sesje z dni aktywnego planu: bieg i rower to nie jest
+ * realizacja planu siłowego (ta sama zasada, co przy ocenie tygodnia), a sesja
+ * bez ani jednej serii to ślad po otwarciu i zamknięciu treningu.
+ */
+export type RealizacjaPlanu = {
+  zrobione: number;
+  /** Dni planu, które wypadły od niedzieli do dziś włącznie. */
+  zaplanowane: number;
+};
+
 export type PostepTygodnia = {
   tydzien_od: string;
   tydzien_do: string;
@@ -134,6 +162,10 @@ export type PostepTygodnia = {
   waga: StatWagi;
   trening: StatTreningu;
   aktywnosci: StatAktywnosci;
+  /** Dieta „na bieżąco" — inaczej niż `dieta`, liczy też dzień w toku. */
+  cel_kcal: TrafieniaWCel;
+  /** Trening „na bieżąco" — inaczej niż `trening.sesje_w_planie`, bez końca tygodnia. */
+  plan: RealizacjaPlanu;
   prognoza: Prognoza | null;
   zmiana: Zmiana | null;
 };
@@ -473,6 +505,39 @@ function policzPrognoze(
 }
 
 /**
+ * Ile dni planu wypadło do tej pory i ile z nich odrobiono.
+ *
+ * Zaległy dzień wolno nadrobić kiedykolwiek w tygodniu, więc licznik patrzy na
+ * cały zakres, a nie na zgodność z dniem tygodnia — pominięty poniedziałek
+ * odhaczony w środę zamyka poniedziałkową pozycję. Nadrobienie ponad plan nie
+ * robi ułamka większego od jedności: mianownik podnosi się do licznika, żeby
+ * kafelek nie pokazał „3/2".
+ */
+function realizacjaPlanu(
+  db: Baza,
+  od: string,
+  doDaty: string,
+  strefa: string,
+): RealizacjaPlanu {
+  const dniPlanu = planTreningowy(db).filter((d) => d.aktywny);
+  const wPlanie = new Set(dniPlanu.map((d) => d.id));
+
+  const zaplanowane = zakresDat(od, doDaty).reduce(
+    (ile, data) =>
+      ile + dniPlanu.filter((d) => d.dzien_tygodnia === dzienTygodniaDaty(data)).length,
+    0,
+  );
+
+  // `historiaSesji` oddaje tylko sesje zakończone i mające choć jedną serię —
+  // ten sam próg, którym ekran Trening uznaje dzień za zrobiony.
+  const zrobione = historiaSesji(db, od, doDaty, { strefa }).filter(
+    (sesja) => sesja.dzien_id !== null && wPlanie.has(sesja.dzien_id),
+  ).length;
+
+  return { zrobione, zaplanowane: Math.max(zaplanowane, zrobione) };
+}
+
+/**
  * Bieżący tydzień: stan, prognoza i porównanie z poprzednim tygodniem.
  *
  * Dwie rzeczy, na których łatwo się przejechać:
@@ -529,6 +594,12 @@ export function tydzienWToku(db: Baza, opcje: Opcje = {}): PostepTygodnia {
     dieta: dietaDniZamknietych,
     waga: biezacy.waga,
     trening: biezacy.trening,
+    // Kafelki na ekranie Postępy odpowiadają na pytanie „jak mi idzie w tym
+    // tygodniu", więc liczą dniami kalendarza razem z dzisiejszym. Średnia
+    // kalorii została przy dniach zamkniętych: dzień w toku zaniżałby ją od
+    // rana do kolacji, a to jedyna liczba na karcie porównywana z celem wprost.
+    cel_kcal: { trafione: biezacy.dieta.dni_w_celu, dni_za_nami: dniZamkniete + 1 },
+    plan: realizacjaPlanu(db, tydzien.od, dzis, strefa),
     // Jak trening: dzisiejszy wyjazd to fakt dokonany i ma być widoczny zaraz
     // po powrocie, a nie dopiero jutro.
     aktywnosci: biezacy.aktywnosci,

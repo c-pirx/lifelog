@@ -476,6 +476,64 @@ describe("widok tygodnia", () => {
   });
 });
 
+describe("kafelki tygodnia", () => {
+  const tydzien = {
+    tydzien_od: "2026-08-23",
+    tydzien_do: "2026-08-29",
+    dni_zamkniete: 3,
+    dieta: { dni_z_zapisem: 3, srednie: { kcal: 2663 }, dni_w_celu: 2 },
+    trening: { sesje: 2, sesje_w_planie: 2, serie: 17, objetosc_kg: 8530 },
+    cel_kcal: { trafione: 2, dni_za_nami: 4 },
+    plan: { zrobione: 1, zaplanowane: 2 },
+    prognoza: null,
+    zmiana: null,
+  };
+
+  it("bierze oba ułamki gotowe z serwera, nie liczy ich sam", () => {
+    const html = panelTygodnia(tydzien);
+
+    expect(html).toContain("2/4");
+    expect(html).toContain("1/2");
+    // Stara arytmetyka dzieliła przez dni z zapisem i wszystkie sesje tygodnia.
+    expect(html).not.toContain("2/3");
+    expect(html).not.toContain("2/2");
+  });
+
+  it("mianownik dni w celu zgadza się z nagłówkiem karty", () => {
+    expect(panelTygodnia(tydzien)).toContain("4 z 7 dni tygodnia");
+  });
+
+  it("odpowiedź sprzed wdrożenia nowych pól nie wypisuje undefined", () => {
+    // Service worker potrafi oddać odpowiedź zapisaną przed aktualizacją.
+    const { cel_kcal: _cel, plan: _plan, ...stary } = tydzien;
+    const html = panelTygodnia(stary);
+
+    expect(html).not.toContain("undefined");
+    expect(html).toContain("2/3");
+  });
+
+  it("odmienia liczebniki w wierszu porównania", () => {
+    const z = (dni: number, serie: number) =>
+      panelTygodnia({
+        ...tydzien,
+        zmiana: {
+          kcal_dziennie: 0,
+          dni_w_celu: dni,
+          serie,
+          objetosc_kg: 0,
+          waga_kg: null,
+          ocena: "lepiej",
+        },
+      });
+
+    expect(z(1, 3)).toContain("+1 dzień w celu");
+    expect(z(1, 3)).toContain("+3 serie");
+    expect(z(2, 5)).toContain("+2 dni w celu");
+    expect(z(2, 5)).toContain("+5 serii");
+    expect(z(0, 0)).toContain("0 serii");
+  });
+});
+
 describe("wpis posiłku", () => {
   const posilek = {
     id: 5,
