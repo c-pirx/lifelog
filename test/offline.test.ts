@@ -19,6 +19,7 @@ import {
 } from "../public/aktywnosci.js";
 import { ekranDieta } from "../public/dieta.js";
 import { decyzjaKolejki } from "../public/kolejka.js";
+import { kartaMakro, PASMO } from "../public/makra.js";
 import {
   nalozNaAktywnosci,
   nalozNaDzien,
@@ -29,6 +30,7 @@ import {
 import { ekranNotatki } from "../public/notatki.js";
 import { wpisPosilku } from "../public/posilek.js";
 import { ekranRaporty, panelTygodnia } from "../public/raporty.js";
+import { PASMO_CELU } from "../src/domain/raporty.js";
 
 /** Południe UTC: ta sama data lokalna w każdej strefie, w której test może biec. */
 const CZAS = "2026-08-25T12:05:00.000Z";
@@ -531,6 +533,71 @@ describe("kafelki tygodnia", () => {
     expect(z(2, 5)).toContain("+2 dni w celu");
     expect(z(2, 5)).toContain("+5 serii");
     expect(z(0, 0)).toContain("0 serii");
+  });
+});
+
+describe("karta makro", () => {
+  const dzien = (data: string, kcal: number, cel: number | null = 2600) => ({
+    data,
+    kcal,
+    bialko_g: 150,
+    wegle_g: 250,
+    tluszcz_g: 80,
+    cel_kcal: cel,
+    cel_bialko_g: cel === null ? null : 160,
+    cel_wegle_g: cel === null ? null : 300,
+    cel_tluszcz_g: cel === null ? null : 85,
+  });
+
+  it("pasmo jest tym samym progiem co w domenie", () => {
+    expect(PASMO).toBe(PASMO_CELU);
+  });
+
+  it("liczy trafienia i barwi kropki z celu każdego dnia", () => {
+    // 2600 ±5 % = 2470–2730: 2500 w paśmie, 2790 ponad, 2100 poniżej.
+    const html = kartaMakro([
+      dzien("2026-08-23", 2500),
+      dzien("2026-08-24", 2790),
+      dzien("2026-08-25", 2100),
+    ]);
+
+    expect(html).toContain("średnie z 3 dni · pasmo ±5 % wokół celu");
+    expect(html).toContain("<b>1 z 3 dni</b> w paśmie");
+    expect(html).toContain("<b>2463</b> <span class=\"cel\">/ 2600 kcal</span>");
+    expect(html).toMatch(/class="pelna"><title>2026-08-23: 2500 kcal/);
+    expect(html).toMatch(/class="ponad"><title>2026-08-24: 2790 kcal/);
+    expect(html).toMatch(/class="pusta"><title>2026-08-25: 2100 kcal/);
+    expect((html.match(/<li class="makro-wiersz"/g) ?? []).length).toBe(4);
+    expect(html).not.toContain("undefined");
+    expect(html).not.toContain("NaN");
+  });
+
+  it("bez celu pokazuje samą średnią i nieme kropki", () => {
+    const html = kartaMakro([dzien("2026-08-25", 2100, null)]);
+
+    expect(html).toContain("średnie z 1 dnia</p>");
+    expect(html).not.toContain("pasmo");
+    expect(html).toContain("<b>2100</b> <span class=\"cel\">kcal</span>");
+    expect(html).toContain(">bez celu<");
+    expect(html).toContain('class="niema"');
+    expect(html).not.toContain("undefined");
+    expect(html).not.toContain("NaN");
+  });
+
+  it("trzydzieści dni daje trzydzieści kropek w każdym wierszu", () => {
+    const dni = Array.from({ length: 30 }, (_, i) =>
+      dzien(`2026-08-${String(i + 1).padStart(2, "0")}`, 2600),
+    );
+    const html = kartaMakro(dni);
+
+    expect((html.match(/<circle /g) ?? []).length).toBe(120);
+    expect(html).toContain("<b>30 z 30 dni</b> w paśmie");
+    expect(html).not.toContain("undefined");
+    expect(html).not.toContain("NaN");
+  });
+
+  it("pusty okres mówi o braku danych", () => {
+    expect(kartaMakro([])).toContain("Brak danych");
   });
 });
 

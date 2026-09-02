@@ -957,33 +957,110 @@ nav button[aria-current="page"] {
   vector-effect: non-scaling-stroke;
 }
 
-/* Cztery składniki obok siebie: 2×2, bo w rzędzie czterech słupki schodzą
-   poniżej szerokości piksela na telefonie i wykres robi się szumem. */
-.mini-wykresy {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 14px 12px;
-  margin-top: 12px;
-}
+/* === Makro — 30 dni ==================================================== */
 
-.mini h3 {
+/* Cztery wiersze jak w tabeli notowań: nazwa nad jedną dużą liczbą, licznik
+   dni na tej samej linii bazowej, pod spodem rząd kropek dzień po dniu —
+   ten sam znak, którym karta ćwiczenia liczy serie: pełna = dzień w paśmie,
+   pusta = poniżej, bursztyn = ponad. Między wierszami włosowa linia zamiast
+   ramek; karta ma się czytać jak fragment gazety, nie jak cztery kafelki. */
+.makra {
+  list-style: none;
   margin: 0;
-  font-size: 0.72rem;
-  font-weight: 600;
+  padding: 0;
+}
+
+/* Klucz do liczb, raz nad tabelą — jak zakres pod nagłówkiem „Ten tydzień". */
+.makra-klucz {
+  margin: -6px 0 6px;
+}
+
+.makro-wiersz {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--obramowanie);
+}
+
+.makro-wiersz:first-child {
+  border-top: 0;
+  padding-top: 6px;
+}
+
+.makro-wiersz:last-child {
+  padding-bottom: 2px;
+}
+
+.makro-wiersz .nazwa {
+  grid-column: 1 / -1;
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1;
   color: var(--tekst-cichy);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
-.mini .wykres {
-  margin-top: 6px;
-}
-
-.podpis-mini {
-  margin: 4px 0 0;
-  font-size: 0.72rem;
-  color: var(--tekst);
+/* Średnia to jedyna duża liczba w wierszu — 1.2rem, żeby średnia z miesiąca
+   nie krzyczała nad werdyktem tygodnia wyżej; cel i jednostka siedzą przy niej
+   ciszej, w zapisie z ekranu Dziś. */
+.makro-wiersz .srednia {
+  align-self: baseline;
+  margin-top: 2px;
+  font-size: 1.2rem;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.makro-wiersz .srednia b {
+  font-weight: 650;
+}
+
+.makro-wiersz .srednia .cel {
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.makro-wiersz .dni {
+  align-self: baseline;
+  text-align: right;
+  font-size: 0.72rem;
+  color: var(--tekst-cichy);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.makro-wiersz .dni b {
+  font-weight: 600;
+  color: var(--tekst);
+}
+
+/* Kropki skalują się w dół tylko wtedy, gdy trzydzieści nie mieści się
+   w karcie (389 px przy 309 px na telefonie); przy kilku dniach stoją
+   w naturalnym rozmiarze, od lewej — jak daty na wykresach. */
+.makro-wiersz .kropki {
+  grid-column: 1 / -1;
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-top: 6px;
+  color: var(--akcent);
+}
+
+.makro-wiersz .kropki circle {
+  vector-effect: non-scaling-stroke;
+}
+
+/* Dzień ponad celem: ten sam bursztyn co słupek `ponad` na wykresie wyżej. */
+.makro-wiersz .kropki .ponad {
+  fill: var(--ostrzezenie);
+}
+
+/* Dzień bez celu nie ma czego trafiać. */
+.makro-wiersz .kropki .niema {
+  fill: var(--obramowanie);
 }
 
 .podpis {

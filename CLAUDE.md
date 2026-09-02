@@ -386,8 +386,11 @@ Tą samą zasadą rządzą się `public/raporty.js` (panel tygodnia i archiwum),
 `public/dieta.js` i `public/posilek.js` (zakładka Dieta i wspólny renderer wpisu
 posiłku) oraz `public/aktywnosci.js` (zakładka Aktywności razem z rendererem
 wpisu — jeden plik, bo `aktywnosc.js` obok `aktywnosci.js` prosiłoby się
-o pomyłkę przy imporcie) i `public/notatki.js` (zakładka Notatki: foldery,
-lista i pojedyncza notatka), wsparte `public/seria.js` (jak seria czyta się
+o pomyłkę przy imporcie), `public/notatki.js` (zakładka Notatki: foldery,
+lista i pojedyncza notatka) i `public/makra.js` (karta „Makro — 30 dni" na
+ekranie Postępy: cztery wiersze z rzędem kropek dzień po dniu; próg ±5 %
+to eksportowane `PASMO`, a test pilnuje, że równa się `PASMO_CELU` z domeny —
+kropki i kafelek „dni w celu" mają liczyć to samo), wsparte `public/seria.js` (jak seria czyta się
 w tekście — wspólne z ekranem Trening, bo dwie kopie tej samej funkcji
 rozjechałyby się przy pierwszej poprawce): renderują, ale nie oceniają — werdykty „na kursie"
 i „idzie lepiej" przychodzą gotowe z serwera. Testy leżą obok,
