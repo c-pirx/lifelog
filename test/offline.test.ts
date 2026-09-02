@@ -8,6 +8,8 @@
  * o tym, czy jeden odrzucony wpis nie zablokuje wysyłki całego treningu.
  */
 
+import { readFileSync } from "node:fs";
+
 import { describe, expect, it } from "vitest";
 
 import {
@@ -598,6 +600,22 @@ describe("karta makro", () => {
 
   it("pusty okres mówi o braku danych", () => {
     expect(kartaMakro([])).toContain("Brak danych");
+  });
+});
+
+describe("powłoka service workera", () => {
+  it("ma na liście każdy moduł, który importuje app.js", () => {
+    // Moduł spoza listy nie trafia do cache'u, a bez zasięgu nieudany import
+    // kładzie CAŁY app.js — aplikacja na siłowni nie wstaje. Tak zniknął
+    // makra.js przy pierwszym wdrożeniu karty Makro.
+    const sw = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
+    const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
+
+    const powloka = sw.match(/const POWLOKA = \[([^\]]*)\]/)?.[1] ?? "";
+    const importy = [...app.matchAll(/from "\.\/([\w-]+\.js)"/g)].map((m) => `/${m[1]}`);
+
+    expect(importy.length).toBeGreaterThan(0);
+    for (const modul of importy) expect(powloka).toContain(`"${modul}"`);
   });
 });
 
