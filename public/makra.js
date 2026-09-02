@@ -27,7 +27,7 @@ const MAKRA = [
  * w celu" tygodnia i kropki tutaj mają liczyć to samo. Pilnuje tego test
  * w test/offline.test.ts.
  */
-export const PASMO = 0.05;
+export const PASMO = 0.07;
 
 const dniSlowo = (n) => `${n} ${n === 1 ? "dnia" : "dni"}`;
 

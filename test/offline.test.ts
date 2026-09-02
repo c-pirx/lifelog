@@ -556,14 +556,14 @@ describe("karta makro", () => {
   });
 
   it("liczy trafienia i barwi kropki z celu każdego dnia", () => {
-    // 2600 ±5 % = 2470–2730: 2500 w paśmie, 2790 ponad, 2100 poniżej.
+    // 2600 ±7 % = 2418–2782: 2500 w paśmie, 2790 ponad, 2100 poniżej.
     const html = kartaMakro([
       dzien("2026-08-23", 2500),
       dzien("2026-08-24", 2790),
       dzien("2026-08-25", 2100),
     ]);
 
-    expect(html).toContain("średnie z 3 dni · pasmo ±5 % wokół celu");
+    expect(html).toContain("średnie z 3 dni · pasmo ±7 % wokół celu");
     expect(html).toContain("<b>1 z 3 dni</b> w paśmie");
     expect(html).toContain("<b>2463</b> <span class=\"cel\">/ 2600 kcal</span>");
     expect(html).toMatch(/class="pelna"><title>2026-08-23: 2500 kcal/);

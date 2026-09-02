@@ -42,7 +42,7 @@ const DNI_TYGODNIA = 7;
  * Jedyna liczba w tym pliku, którą warto podkręcić po kilku tygodniach
  * używania — reszta wynika z kalendarza.
  */
-export const PASMO_CELU = 0.05;
+export const PASMO_CELU = 0.07;
 
 /** Godzina lokalna, o której publikujemy raport za miniony tydzień. */
 const GODZINA_RAPORTU = "09:00";
