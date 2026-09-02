@@ -25,9 +25,15 @@ fetch("/api/konto", { credentials: "same-origin" })
 // === Podpis strony: zdanie zamienia się w zapis ==========================
 
 /**
- * Trzy przykłady, po jednym na drogę zapisu: posiłek, seria, notatka.
- * Etykiety pól są dokładnie te, których używa dziennik — to ma być podgląd
- * produktu, nie jego reklama.
+ * Po jednym przykładzie na drogę zapisu: posiłek, seria, notatka, waga,
+ * aktywność, poprawka wpisu i cele. Etykiety pól są dokładnie te, których
+ * używa dziennik — to ma być podgląd produktu, nie jego reklama.
+ *
+ * Każde zdanie musi się kończyć WPISEM, bo to obiecuje nagłówek nad ramą.
+ * Odczyty („ile mi zostało do celu”) tu nie pasują, choć produkt je umie.
+ *
+ * Żadne zdanie nie może być dłuższe od kolarskiego — to ono jest miarką
+ * rezerwującą wysokość ramy, a wyższa rama spycha formularz poniżej ekranu.
  */
 const PRZYKLADY = [
   {
@@ -48,6 +54,22 @@ const PRZYKLADY = [
     ],
   },
   {
+    // Notatka powstaje głosem i to model porządkuje formę — stąd zdanie
+    // brzmi jak mowa, a wpis jak zdanie. Folder też wybiera model.
+    mowa: "zanotuj że kolano znowu bolało przy przysiadach",
+    pola: [
+      ["notatka", "kolano boli przy przysiadach"],
+      ["folder", "dziennik"],
+    ],
+  },
+  {
+    mowa: "ważyłem się rano, osiemdziesiąt jeden i pół",
+    pola: [
+      ["waga", "81,5 kg"],
+      ["średnia 7 dni", "81,9 kg"],
+    ],
+  },
+  {
     mowa: "przejechałem dwadzieścia dwa kilometry w godzinę i pięć",
     pola: [
       ["aktywność", "rower"],
@@ -55,6 +77,39 @@ const PRZYKLADY = [
       ["czas", "1:05"],
     ],
   },
+  {
+    // Jedyny przykład, który nie zakłada wpisu, tylko go poprawia. Strzałka
+    // w wartości mówi to bez podpisu.
+    mowa: "ten obiad to jednak była pół porcji",
+    pola: [
+      ["poprawka", "obiad"],
+      ["kcal", "620 → 310"],
+      ["b/w/t", "31 / 20 / 12"],
+    ],
+  },
+  {
+    // Data wejścia w życie jest tu sednem: stare dni zachowują stare cele.
+    mowa: "od poniedziałku 2200 kcal, 170 gram białka",
+    pola: [
+      ["cel od", "8 września"],
+      ["kcal", "2200"],
+      ["b/w/t", "170 / 245 / 60"],
+    ],
+  },
+];
+
+/**
+ * Pełny obrót siedmiu przykładów trwa ponad pół minuty — dłużej, niż ktokolwiek
+ * patrzy na podpis strony. Pierwszy zostaje na miejscu, bo to on stoi w HTML-u
+ * jako stan początkowy; resztę tasujemy, żeby dwie osoby zobaczyły dwie różne
+ * pary przykładów zamiast tej samej.
+ */
+const KOLEJNOSC = [
+  PRZYKLADY[0],
+  ...PRZYKLADY.slice(1)
+    .map((p) => ({ p, klucz: Math.random() }))
+    .sort((a, b) => a.klucz - b.klucz)
+    .map(({ p }) => p),
 ];
 
 const PREFERUJE_SPOKOJ = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -141,7 +196,7 @@ async function karuzela() {
   let i = 0;
   for (;;) {
     await czekajAzWidoczna();
-    const przyklad = PRZYKLADY[i % PRZYKLADY.length];
+    const przyklad = KOLEJNOSC[i % KOLEJNOSC.length];
     zapis.replaceChildren();
     await napisz(przyklad.mowa);
     await czekaj(320);
