@@ -1198,6 +1198,13 @@ footer p {
   margin: 0 0 0.5rem;
 }
 
+/* Podpis wykonawcy: widoczny, ale nigdy pierwszy w kolejce do oka. */
+footer .podpis {
+  margin-top: 1.75rem;
+  font-size: 0.72rem;
+  opacity: 0.55;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;
