@@ -246,6 +246,11 @@ JavaScriptu kompiluje kod w locie i inaczej Node nie wystartuje.
 inaczej telefon potrafi tygodniami serwować starą wersję i poprawki nie
 docierają do użytkownika.
 
+**`/etc/asystent/env` nie jest skryptem shella.** `source` albo `. /etc/asystent/env`
+przerywa na `MAIL_OD=Lifelog <adres@domena>` — nawiasy ostre shell czyta jako
+przekierowanie („Syntax error: newline unexpected"). Format `EnvironmentFile`
+systemd na to pozwala, powłoka nie. Wartość wyciąga się `grep -m1 '^KLUCZ=' … | cut -d= -f2-`.
+
 **`web-push` importujemy DOMYŚLNIE, nigdy nazwanymi eksportami.** Paczka jest
 CommonJS-em, a jej eksporty powstają wywołaniem `.bind()`, którego
 `cjs-module-lexer` nie rozpoznaje. `import { sendNotification } from "web-push"`
