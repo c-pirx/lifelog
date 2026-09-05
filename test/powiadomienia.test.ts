@@ -19,8 +19,10 @@ import {
 } from "../src/db/rejestr.js";
 import { przeslijPowiadomienia } from "../src/harmonogram.js";
 import { zapewnijRaporty } from "../src/domain/raporty.js";
+import { przesunDate } from "../src/lib/time.js";
 import type { Ladunek, Push } from "../src/lib/push.js";
 import { ustawCele, zapiszPosilek } from "../src/domain/diet.js";
+import { zapiszWage } from "../src/domain/metrics.js";
 import { utworzKonto } from "../src/domain/konta.js";
 import {
   odczytajRodzaje,
@@ -394,6 +396,83 @@ describe("raport tygodnia", () => {
     const [powiadomienie] = sprawdz(chwila(NIEDZIELA_PUBLIKACJI, 9));
 
     expect(powiadomienie?.tresc).not.toMatch(/lepiej|gorzej|podobnie/);
+  });
+});
+
+describe("cisza na wadze", () => {
+  const WIECZOREM = 19;
+
+  /** Waga zapisana tyle dni przed poniedziałkiem odniesienia. */
+  function wagaSprzed(dni: number) {
+    const data = przesunDate(PONIEDZIALEK, -dni);
+    zapiszWage(db, 78.4, { ts: `${data}T07:00:00.000Z`, strefa: STREFA });
+  }
+
+  it("odzywa się dokładnie po dziesięciu dniach ciszy", () => {
+    wagaSprzed(10);
+
+    const [powiadomienie] = sprawdz(o(WIECZOREM));
+
+    expect(powiadomienie?.rodzaj).toBe("waga_cisza");
+    expect(powiadomienie?.tytul).toContain("10 dni");
+    expect(powiadomienie?.tresc).toContain("78.4");
+    expect(powiadomienie?.ekran).toBe("postepy");
+  });
+
+  it("dzień wcześniej jeszcze milczy", () => {
+    wagaSprzed(9);
+
+    expect(rodzaje(o(WIECZOREM))).toEqual([]);
+  });
+
+  it("dzień później też milczy — nie powtarza się codziennie", () => {
+    // To jest test chroniący przed powodzią: warunek „minęło 10 dni" jest
+    // prawdziwy każdego kolejnego dnia, a ślad chroni tylko dobę.
+    wagaSprzed(11);
+
+    expect(rodzaje(o(WIECZOREM))).toEqual([]);
+  });
+
+  it("wraca po kolejnych dziesięciu dniach", () => {
+    wagaSprzed(20);
+
+    const [powiadomienie] = sprawdz(o(WIECZOREM));
+
+    expect(powiadomienie?.tytul).toContain("20 dni");
+  });
+
+  it("w dniu ważenia nie odzywa się mimo reszty zero", () => {
+    // Zero dzieli się przez dziesięć bez reszty — bez dolnej granicy alarm
+    // przyszedłby tego samego dnia, w którym użytkownik stanął na wadze.
+    wagaSprzed(0);
+
+    expect(rodzaje(o(WIECZOREM))).toEqual([]);
+  });
+
+  it("konto, które nigdy się nie ważyło, milczy", () => {
+    // Bez ani jednego pomiaru nie ma ciszy do przerwania, jest brak nawyku —
+    // a powiadomienie byłoby wtedy bezwarunkowe i szłoby bez końca.
+    expect(rodzaje(o(WIECZOREM))).toEqual([]);
+  });
+
+  it("przed dziewiętnastą milczy", () => {
+    wagaSprzed(10);
+
+    expect(rodzaje(o(18))).not.toContain("waga_cisza");
+  });
+
+  it("wychodzi mimo pustej listy przełączników", () => {
+    wagaSprzed(10);
+
+    expect(sprawdz(o(WIECZOREM), { wlaczone: [] }).map((p) => p.rodzaj)).toEqual(["waga_cisza"]);
+  });
+
+  it("ślad z dziś go wycisza", () => {
+    wagaSprzed(10);
+
+    expect(
+      sprawdz(o(WIECZOREM), { juzWyslane: ["waga_cisza"] }).map((p) => p.rodzaj),
+    ).not.toContain("waga_cisza");
   });
 });
 

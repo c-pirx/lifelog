@@ -19,8 +19,15 @@
  */
 
 import type { Baza } from "../db/index.js";
-import { dataLokalna, godzinaLokalna, przesunDate, STREFA_DOMYSLNA } from "../lib/time.js";
+import {
+  dataLokalna,
+  godzinaLokalna,
+  przesunDate,
+  zakresDat,
+  STREFA_DOMYSLNA,
+} from "../lib/time.js";
 import { podsumowanieDnia } from "./diet.js";
+import { ostatniaWaga } from "./metrics.js";
 import { raport } from "./raporty.js";
 import { aktywnaSesja, planNaDzis } from "./workouts.js";
 
@@ -79,6 +86,22 @@ export const GODZINA_NOCNA = 22;
  * Realny trening z rozgrzewką i przerwami mieści się w dwóch.
  */
 export const GODZIN_WISZACEJ_SESJI = 3;
+
+/**
+ * Godzina sygnału o ciszy na wadze — wieczorem, bo waga mierzy się rano
+ * na czczo. O dziewiątej byłoby już po, a przypomnienie „na jutro" trafia
+ * dokładnie w moment planowania następnego dnia.
+ */
+export const GODZINA_WAGI = 19;
+
+/**
+ * Co ile dni ciszy odzywa się sygnał o wadze — i to samo „co ile", nie tylko
+ * „po ilu". Warunek „minęło 10 dni" jest prawdziwy KAŻDEGO kolejnego dnia,
+ * a ślad chroni tylko dobę, więc bez reszty z dzielenia byłoby to codzienne
+ * powiadomienie o stałej porze — czyli dokładnie to, co kończy się wyciszeniem
+ * całego kanału. Tak odzywa się w 10., 20. i 30. dniu.
+ */
+export const DNI_CISZY_WAGI = 10;
 
 /**
  * Progi jako UŁAMEK celu dziennego, nie sztywne kalorie.
@@ -169,6 +192,11 @@ export function powiadomieniaNaTeraz(db: Baza, opcje: OpcjePowiadomien): DoWysla
   if (nieBylo("raport")) {
     const gotowy = trescRaportu(db, opcje.teraz, strefa);
     if (gotowy) wynik.push(gotowy);
+  }
+
+  if (godzina >= GODZINA_WAGI && nieBylo("waga_cisza")) {
+    const cisza = trescCiszyWagi(db, opcje.teraz, strefa);
+    if (cisza) wynik.push(cisza);
   }
 
   return wynik;
@@ -292,6 +320,36 @@ function trescRaportu(db: Baza, teraz: string, strefa: string): DoWyslania | nul
     // a powiadomienie ma pokazywać. Od interpretacji jest komentarz w raporcie.
     tresc: `${najnowszy.tydzien_od} – ${najnowszy.tydzien_do}: ${czesci.join(", ")}.`,
     ekran: "raporty",
+  };
+}
+
+/**
+ * Cisza na wadze — jedyna liczba mierząca skutek przestała napływać.
+ *
+ * To NIE jest „zważ się codziennie": taki wariant został odrzucony jako
+ * najbardziej irytujący z rozważanych. Chodzi o rzadki sygnał, że nawyk się
+ * urwał — przy budowaniu masy bez wagi je się w ciemno.
+ *
+ * Konto, które nigdy nie zapisało wagi, MILCZY. Bez ani jednego pomiaru nie ma
+ * ciszy do przerwania, jest brak nawyku — a powiadomienie byłoby wtedy
+ * bezwarunkowe, bo nic poza pierwszym ważeniem by go nie zgasiło. Zachęta do
+ * zaczęcia to robota rozmowy z Claude'em, nie push-a.
+ */
+function trescCiszyWagi(db: Baza, teraz: string, strefa: string): DoWyslania | null {
+  const ostatnia = ostatniaWaga(db);
+  if (!ostatnia) return null;
+
+  // Odstęp liczony tak, jak liczy go `tydzienWToku` — nowej funkcji w `time.ts`
+  // nie dodajemy. Ubocznie: `zakresDat` przerywa po 3650 dniach, więc pomiar
+  // sprzed dekady da liczbę przybliżoną. Warunek dolny i tak trzyma.
+  const dni = zakresDat(ostatnia.data_lokalna, dataLokalna(teraz, strefa)).length - 1;
+  if (dni < DNI_CISZY_WAGI || dni % DNI_CISZY_WAGI !== 0) return null;
+
+  return {
+    rodzaj: "waga_cisza",
+    tytul: `${dni} dni bez ważenia`,
+    tresc: `Ostatni pomiar: ${ostatnia.kg} kg. Kolejny pokaże, co dał ten czas.`,
+    ekran: "postepy",
   };
 }
 
