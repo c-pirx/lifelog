@@ -14,6 +14,7 @@ import {
   uzytkownikPoId,
   wyslaneDzis,
   zapiszPowiadomienia,
+  zapiszWylacznikPowiadomien,
   zapiszSubskrypcje,
 } from "../src/db/rejestr.js";
 import { przeslijPowiadomienia } from "../src/harmonogram.js";
@@ -441,6 +442,7 @@ describe("tik harmonogramu", () => {
     });
 
     zapiszPowiadomienia(rejestr, ania, "trening_rano,trening_wieczor,kalorie");
+    zapiszWylacznikPowiadomien(rejestr, ania, true);
     zapiszSubskrypcje(rejestr, {
       uzytkownik_id: ania,
       endpoint: ENDPOINT,
@@ -474,13 +476,35 @@ describe("tik harmonogramu", () => {
     expect(push.wyslane).toHaveLength(1);
   });
 
-  it("konto z wyłączonymi powiadomieniami jest pomijane", () => {
-    zapiszPowiadomienia(rejestr, ania, "");
+  it("główny wyłącznik gasi wszystko i nie zostawia śladu", () => {
+    zapiszWylacznikPowiadomien(rejestr, ania, false);
 
     przeslijPowiadomienia({ rejestr, pula }, push, o(9));
 
     expect(push.wyslane).toEqual([]);
     expect(wyslaneDzis(rejestr, ania, PONIEDZIALEK)).toEqual([]);
+  });
+
+  it("odhaczenie wszystkich przełączników nie gasi kont — gasi je dopiero wyłącznik", () => {
+    // Pusta lista rodzajów znaczy „nie chcę codziennych przypomnień", a nie
+    // „nie chcę powiadomień". Kolejny etap doda rodzaje stałe, które właśnie
+    // w tym stanie mają nadal dochodzić; tu pilnujemy samego przejścia dalej.
+    zapiszPowiadomienia(rejestr, ania, "");
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+
+    expect(push.wyslane).toEqual([]);
+    expect(uzytkownikPoId(rejestr, ania)?.powiadomienia_wlaczone).toBe(1);
+  });
+
+  it("nowe konto ma wyłącznik zgaszony, dopóki nie przejdzie przez włączanie", () => {
+    const tomek = utworzKonto(rejestr, {
+      login: "tomek-swiezy",
+      haslo: "haslo-testowe-9",
+      zgoda: true,
+    }).id;
+
+    expect(uzytkownikPoId(rejestr, tomek)?.powiadomienia_wlaczone).toBe(0);
   });
 
   it("konto bez subskrypcji nie zostawia śladu — inaczej straciłoby pierwsze powiadomienie", () => {
@@ -549,6 +573,7 @@ describe("tik harmonogramu", () => {
       strefa: "Pacific/Auckland",
     }).id;
     zapiszPowiadomienia(rejestr, zaOceanem, "trening_rano,trening_wieczor");
+    zapiszWylacznikPowiadomien(rejestr, zaOceanem, true);
     zapiszSubskrypcje(rejestr, {
       uzytkownik_id: zaOceanem,
       endpoint: "https://push.example/kiwi",

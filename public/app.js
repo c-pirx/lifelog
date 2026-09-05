@@ -1684,7 +1684,16 @@ async function odswiez() {
     // Odświeżenie subskrypcji obok renderu, nie przed nim: ekran ma się pokazać
     // od razu, a nieudany zapis nie może go zasłonić. Cisza w razie błędu jest
     // tu właściwa — użytkownik niczego nie prosił.
-    if (konto.powiadomienia.dziala && przegladarkaUmiePush() && Notification.permission === "granted") {
+    //
+    // Warunek `glowny` jest konieczny, nie ozdobny: zapis subskrypcji WŁĄCZA
+    // powiadomienia, więc bez niego samo wejście na ekran Konto cofałoby przed
+    // chwilą wyłączony przełącznik.
+    if (
+      konto.powiadomienia.dziala &&
+      konto.powiadomienia.glowny &&
+      przegladarkaUmiePush() &&
+      Notification.permission === "granted"
+    ) {
       zapewnijSubskrypcje(konto.powiadomienia.klucz_publiczny).catch(() => {});
     }
     return;
@@ -1745,11 +1754,11 @@ function sekcjaPowiadomien(stan) {
       strony. Odblokuj je tam, a potem wróć tutaj.</p>`;
   }
 
-  if (Notification.permission !== "granted") {
+  if (Notification.permission !== "granted" || !stan.glowny) {
     return `
-      <p class="cel">Trzy przypomnienia, każde milknie samo, gdy przestaje mieć sens:
-      rano o dniu treningowym, o 20:00 gdy trening wciąż niezrobiony, o 18:00 o bilansie
-      kalorii.</p>
+      <p class="cel">Przypomnienia milkną same, gdy przestają mieć sens: rano o dniu
+      treningowym, o 20:00 gdy trening wciąż niezrobiony, o 18:00 o bilansie kalorii.
+      Do tego trzy rzadkie, o których warto wiedzieć zawsze.</p>
       <button class="przycisk glowny" type="button" data-akcja="powiadomienia-wlacz">
         Włącz powiadomienia
       </button>`;
@@ -1764,9 +1773,17 @@ function sekcjaPowiadomien(stan) {
       </label>`,
   ).join("");
 
+  // Rodzaje bez przełącznika wymienione wprost. Ukrycie ich byłoby gorsze niż
+  // brak checkboxa: użytkownik ma wiedzieć, co może przyjść, nawet jeśli nie
+  // może tego pojedynczo zgasić.
+  const stale = `
+    <p class="cel">Zawsze przychodzą, bo rzadko i o rzeczach, które trudno odzyskać:
+    wiszący otwarty trening, gotowy raport tygodnia, dziesięć dni bez ważenia.
+    Gasi je dopiero „Wyłącz powiadomienia" poniżej.</p>`;
+
   const cisza =
     stan.wlaczone.length === 0
-      ? `<p class="cel">Wszystkie wyłączone — nic nie przyjdzie.</p>`
+      ? `<p class="cel">Codzienne przypomnienia wyłączone — zostają te trzy.</p>`
       : "";
 
   // Tryb bez ustawionych celów nie ma do czego się odnosić: próg liczy się jako
@@ -1787,8 +1804,14 @@ function sekcjaPowiadomien(stan) {
   return `
     <div class="przelaczniki">${przelaczniki}</div>
     ${cisza}
+    ${stale}
     <h3>Kierunek</h3>
-    ${tryb}`;
+    ${tryb}
+    <div class="przyciski">
+      <button class="przycisk" type="button" data-akcja="powiadomienia-wylacz">
+        Wyłącz powiadomienia
+      </button>
+    </div>`;
 }
 
 /** Co konkretnie zrobi wieczorne przypomnienie w tym trybie. */
@@ -2117,8 +2140,19 @@ widok.addEventListener("click", (zdarzenie) => {
       await zapewnijSubskrypcje(konto.powiadomienia.klucz_publiczny);
       // Po włączeniu działają wszystkie trzy — wyłączanie pojedynczych jest
       // wtedy decyzją, a nie kolejnym krokiem konfiguracji.
-      await zapiszUstawieniaPowiadomien({ wlaczone: RODZAJE_POWIADOMIEN.map((r) => r.rodzaj) });
+      await zapiszUstawieniaPowiadomien({
+        glowny: true,
+        wlaczone: RODZAJE_POWIADOMIEN.map((r) => r.rodzaj),
+      });
     });
+    return;
+  }
+
+  // Główny wyłącznik. Subskrypcja zostaje — ponowne włączenie ma być jednym
+  // stuknięciem, bez powtarzania pytania przeglądarki o zgodę.
+  const wylacz = cel.closest('[data-akcja="powiadomienia-wylacz"]');
+  if (wylacz) {
+    akcjaPrzycisku(wylacz, () => zapiszUstawieniaPowiadomien({ glowny: false }), "Wyłączone");
     return;
   }
 

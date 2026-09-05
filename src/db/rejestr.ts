@@ -20,8 +20,10 @@ export type WierszUzytkownika = {
   utworzono: string;
   ostatnie_uzycie_konektora: string | null;
   aktywny: number;
-  /** Włączone rodzaje powiadomień po przecinku; pusto = wyłączone. */
+  /** Włączone rodzaje przełączalne po przecinku. Nie dotyczy rodzajów stałych. */
   powiadomienia: string;
+  /** Główny wyłącznik: 0 gasi wszystko, także rodzaje bez własnego przełącznika. */
+  powiadomienia_wlaczone: number;
 };
 
 export type NowyUzytkownik = {
@@ -136,6 +138,14 @@ export function usunSubskrypcje(db: Baza, id: number): void {
 
 export function zapiszPowiadomienia(db: Baza, uzytkownikId: number, zapis: string): void {
   db.prepare("UPDATE uzytkownicy SET powiadomienia = ? WHERE id = ?").run(zapis, uzytkownikId);
+}
+
+/** Główny wyłącznik. Osobno od listy rodzajów, bo gasi także te bez przełącznika. */
+export function zapiszWylacznikPowiadomien(db: Baza, uzytkownikId: number, wlaczone: boolean): void {
+  db.prepare("UPDATE uzytkownicy SET powiadomienia_wlaczone = ? WHERE id = ?").run(
+    wlaczone ? 1 : 0,
+    uzytkownikId,
+  );
 }
 
 /**

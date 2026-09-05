@@ -41,11 +41,15 @@ export type Konto = {
   strefa: string;
   ostatnie_uzycie_konektora: string | null;
   /**
-   * Włączone rodzaje powiadomień po przecinku; pusto = wyłączone. Surowy zapis,
-   * bo tik odsiewa po nim konta ZANIM sięgnie do puli o dziennik — a to
-   * najtańszy możliwy odsiew przy koncie, które powiadomień nie chce.
+   * Włączone rodzaje PRZEŁĄCZALNE po przecinku. Surowy zapis, bo tik czyta go
+   * zaraz po wierszu konta, zanim sięgnie do puli o dziennik.
    */
   powiadomienia: string;
+  /**
+   * Główny wyłącznik. Po nim tik odsiewa konta jako pierwsze — konto, które
+   * powiadomień nie chce, nie ma po co otwierać dziennika.
+   */
+  powiadomienia_wlaczone: boolean;
 };
 
 export type DaneKonta = {
@@ -88,6 +92,7 @@ function wierszNaKonto(wiersz: WierszUzytkownika): Konto {
     strefa: wiersz.strefa,
     ostatnie_uzycie_konektora: wiersz.ostatnie_uzycie_konektora,
     powiadomienia: wiersz.powiadomienia,
+    powiadomienia_wlaczone: wiersz.powiadomienia_wlaczone === 1,
   };
 }
 

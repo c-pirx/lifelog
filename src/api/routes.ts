@@ -41,7 +41,11 @@ import {
 } from "../domain/wiadomosci.js";
 import type { Poczta, Wiadomosc } from "../lib/poczta.js";
 import type { Push } from "../lib/push.js";
-import { zapiszPowiadomienia, zapiszSubskrypcje } from "../db/rejestr.js";
+import {
+  zapiszPowiadomienia,
+  zapiszSubskrypcje,
+  zapiszWylacznikPowiadomien,
+} from "../db/rejestr.js";
 import {
   odczytajRodzaje,
   zapiszRodzaje,
@@ -200,6 +204,8 @@ const schematSubskrypcji = z.object({
 });
 
 const schematPowiadomien = z.object({
+  /** Główny wyłącznik — gasi także rodzaje bez własnego przełącznika. */
+  glowny: z.boolean().optional(),
   // Ta sama lista, na której stoi `zapiszRodzaje`. Gdyby walidacja i zapis stały
   // na dwóch różnych, checkbox rodzaju stałego przeszedłby walidację i cicho
   // znikał przy zapisie — użytkownik widziałby przełącznik odznaczający się sam.
@@ -523,6 +529,7 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
     c.json({
       ...c.var.konto,
       powiadomienia: {
+        glowny: c.var.konto.powiadomienia_wlaczone,
         wlaczone: odczytajRodzaje(c.var.konto.powiadomienia),
         tryb: celeNaDzien(c.var.db, dzisiaj(c.var.strefa))?.tryb ?? null,
         klucz_publiczny: ustawienia.push?.kluczPubliczny ?? null,
@@ -544,14 +551,20 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
       utworzono: terazUtc(),
     });
 
+    // Zapisanie subskrypcji JEST włączeniem powiadomień — użytkownik przed chwilą
+    // przeszedł przez pytanie przeglądarki o zgodę. Osobny krok „a teraz jeszcze
+    // je włącz" byłby pułapką: zgoda udzielona, a mimo to cisza.
+    zapiszWylacznikPowiadomien(rejestr, c.var.konto.id, true);
+
     return c.json({ ok: true }, 201);
   });
 
   // Przełączniki i tryb w jednym miejscu, bo w aplikacji stoją obok siebie.
   // Rodzaje idą do rejestru, tryb do dziennika — dwie bazy, jedna trasa.
   api.post("/powiadomienia", async (c) => {
-    const { wlaczone, tryb } = schematPowiadomien.parse(await c.req.json());
+    const { glowny, wlaczone, tryb } = schematPowiadomien.parse(await c.req.json());
 
+    if (glowny !== undefined) zapiszWylacznikPowiadomien(rejestr, c.var.konto.id, glowny);
     if (wlaczone) {
       zapiszPowiadomienia(rejestr, c.var.konto.id, zapiszRodzaje(wlaczone as RodzajPrzelaczalny[]));
     }

@@ -98,12 +98,18 @@ export function przeslijPowiadomienia(
   for (const konto of aktywneKonta(zrodla.rejestr)) {
     try {
       // Odsiew od najtańszego: konto, które powiadomień nie chce, nie ma po co
-      // otwierać dziennika. Kolumna `powiadomienia` jest już w wierszu konta.
-      const wlaczone = odczytajRodzaje(konto.powiadomienia);
-      if (wlaczone.length === 0) continue;
+      // otwierać dziennika. Główny wyłącznik jest już w wierszu konta.
+      //
+      // Pusta lista rodzajów NIE przerywa: rodzaje stałe (wisząca sesja, gotowy
+      // raport, cisza na wadze) własnych przełączników nie mają, więc odhaczenie
+      // wszystkich trzech szczegółowych znaczy „nie chcę codziennych przypomnień",
+      // a nie „nie chcę wiedzieć, że otwarta sesja blokuje mi trening".
+      if (!konto.powiadomienia_wlaczone) continue;
 
       const subskrypcje = subskrypcjeUzytkownika(zrodla.rejestr, konto.id);
       if (subskrypcje.length === 0) continue;
+
+      const wlaczone = odczytajRodzaje(konto.powiadomienia);
 
       const data = dataLokalna(teraz, konto.strefa);
 
