@@ -19,6 +19,16 @@ export type Konfiguracja = {
    * brak choćby jednego zostawia aplikację działającą, tylko bez maili.
    */
   poczta: KonfiguracjaPoczty | null;
+  /** Powiadomienia push. Ta sama zasada „komplet albo nic" co przy poczcie. */
+  push: KonfiguracjaPush | null;
+};
+
+export type KonfiguracjaPush = {
+  /** Klucz publiczny VAPID — trafia też do przeglądarki. */
+  publiczny: string;
+  prywatny: string;
+  /** Kontakt do właściciela serwera, format `mailto:…`. Wymaga go standard. */
+  kontakt: string;
 };
 
 export type KonfiguracjaPoczty = {
@@ -94,6 +104,21 @@ function wczytajPoczte(): KonfiguracjaPoczty | null {
   return { klucz, nadawca, gospodarz, adresPubliczny };
 }
 
+/**
+ * Powiadomienia push — opcjonalne z tego samego powodu co poczta i tak samo
+ * „komplet albo nic". Sam klucz publiczny bez prywatnego dałby aplikację, która
+ * pozwala się zasubskrybować, a potem nigdy nic nie wysyła: gorzej niż wyłączona
+ * wprost, bo użytkownik czeka na powiadomienia, które nie przyjdą.
+ */
+function wczytajPush(): KonfiguracjaPush | null {
+  const publiczny = process.env["VAPID_PUBLICZNY"]?.trim();
+  const prywatny = process.env["VAPID_PRYWATNY"]?.trim();
+  const kontakt = process.env["VAPID_KONTAKT"]?.trim();
+
+  if (!publiczny || !prywatny || !kontakt) return null;
+  return { publiczny, prywatny, kontakt };
+}
+
 export function wczytajKonfiguracje(): Konfiguracja {
   const braki: string[] = [];
 
@@ -108,6 +133,7 @@ export function wczytajKonfiguracje(): Konfiguracja {
     sekretSesji: wymagana("SESSION_SECRET", braki),
     strefa: process.env["TZ_APP"] ?? "Europe/Warsaw",
     poczta: wczytajPoczte(),
+    push: wczytajPush(),
   };
 
   if (braki.length > 0) {

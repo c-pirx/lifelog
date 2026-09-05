@@ -40,6 +40,14 @@ import {
   wiadomoscZaproszenie,
 } from "../domain/wiadomosci.js";
 import type { Poczta, Wiadomosc } from "../lib/poczta.js";
+import type { Push } from "../lib/push.js";
+import { zapiszPowiadomienia, zapiszSubskrypcje } from "../db/rejestr.js";
+import {
+  odczytajRodzaje,
+  zapiszRodzaje,
+  RODZAJE_POWIADOMIEN,
+  type RodzajPowiadomienia,
+} from "../domain/powiadomienia.js";
 import {
   celeNaDzien,
   czestePosilki,
@@ -48,12 +56,19 @@ import {
   sumyDzienne,
   ustawCele,
   zapiszPosilek,
+  zmienTryb,
 } from "../domain/diet.js";
 import { zmienWpis } from "../domain/edits.js";
 import { ostatniaWaga, trendWagi, zapiszWage } from "../domain/metrics.js";
 import { historiaNotatek, zapiszNotatke } from "../domain/notatki.js";
 import { raporty, tydzienWToku, zapewnijRaporty } from "../domain/raporty.js";
-import { KATEGORIE_NOTATEK, PORY, TRYBY_CELU, TYPY_CWICZEN } from "../domain/typy.js";
+import {
+  KATEGORIE_NOTATEK,
+  PORY,
+  TRYBY_CELU,
+  TYPY_CWICZEN,
+  type TrybCelu,
+} from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
@@ -68,7 +83,7 @@ import {
   zakonczTrening,
   zapiszSerie,
 } from "../domain/workouts.js";
-import { dzisiaj, parsujCzas, przesunDate } from "../lib/time.js";
+import { dzisiaj, parsujCzas, przesunDate, terazUtc } from "../lib/time.js";
 
 export const NAZWA_CIASTECZKA = "sesja";
 
@@ -121,6 +136,12 @@ export type UstawieniaApi = {
   ciasteczkoTylkoHttps?: boolean;
   /** Brak = zapisy na listę działają, maile nie wychodzą. */
   poczta?: UslugaPoczty;
+  /**
+   * Brak = aplikacja działa, powiadomienia nie wychodzą. Bez opakowania w rodzaju
+   * `UslugaPoczty`: push nie potrzebuje niczego poza kluczem publicznym,
+   * a ten siedzi już w samym transporcie.
+   */
+  push?: Push;
 };
 
 /**
@@ -168,6 +189,18 @@ const schematCelow = z.object({
   // Pominięty dziedziczy z poprzednich celów — patrz `ustawCele`. Musi tu stać
   // jawnie: `z.object` usuwa nieznane klucze po cichu, więc bez tej linii
   // przełącznik trybu wyglądałby, jakby działał.
+  tryb: z.enum(TRYBY_CELU as unknown as [string, ...string[]]).optional(),
+});
+
+// Kształt narzucony przez `PushSubscription.toJSON()` w przeglądarce —
+// przepisywanie go po drodze byłoby okazją do literówki w kluczu.
+const schematSubskrypcji = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({ p256dh: z.string().min(1), auth: z.string().min(1) }),
+});
+
+const schematPowiadomien = z.object({
+  wlaczone: z.array(z.enum(RODZAJE_POWIADOMIEN as unknown as [string, ...string[]])).optional(),
   tryb: z.enum(TRYBY_CELU as unknown as [string, ...string[]]).optional(),
 });
 
@@ -477,7 +510,52 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
 
   // === Konto ============================================================
 
-  api.get("/konto", (c) => c.json(c.var.konto));
+  // Ekran Konto woła tę jedną trasę, więc stan powiadomień jedzie razem
+  // z kontem — drugie żądanie na tym samym ekranie to dokładnie to, czego
+  // unikają `/dzien` i `/postepy`, dokładając pola zamiast tras.
+  //
+  // Surowy zapis `powiadomienia` z rejestru zostaje podmieniony strukturą:
+  // aplikacja i tak potrzebuje listy, a nie tekstu po przecinku.
+  api.get("/konto", (c) =>
+    c.json({
+      ...c.var.konto,
+      powiadomienia: {
+        wlaczone: odczytajRodzaje(c.var.konto.powiadomienia),
+        tryb: celeNaDzien(c.var.db, dzisiaj(c.var.strefa))?.tryb ?? null,
+        klucz_publiczny: ustawienia.push?.kluczPubliczny ?? null,
+        dziala: ustawienia.push?.wlaczona ?? false,
+      },
+    }),
+  );
+
+  // Subskrypcja przeglądarki. `kolejkuj: false` po stronie aplikacji — odłożony
+  // zapis subskrypcji nie ma sensu, bo klucze rotują razem z instalacją.
+  api.post("/powiadomienia/subskrypcja", async (c) => {
+    const { endpoint, keys } = schematSubskrypcji.parse(await c.req.json());
+
+    zapiszSubskrypcje(rejestr, {
+      uzytkownik_id: c.var.konto.id,
+      endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+      utworzono: terazUtc(),
+    });
+
+    return c.json({ ok: true }, 201);
+  });
+
+  // Przełączniki i tryb w jednym miejscu, bo w aplikacji stoją obok siebie.
+  // Rodzaje idą do rejestru, tryb do dziennika — dwie bazy, jedna trasa.
+  api.post("/powiadomienia", async (c) => {
+    const { wlaczone, tryb } = schematPowiadomien.parse(await c.req.json());
+
+    if (wlaczone) {
+      zapiszPowiadomienia(rejestr, c.var.konto.id, zapiszRodzaje(wlaczone as RodzajPowiadomienia[]));
+    }
+    if (tryb) zmienTryb(c.var.db, tryb as TrybCelu, { strefa: c.var.strefa });
+
+    return c.json({ ok: true });
+  });
 
   // Rotacja tokenu konektora. Rejestr trzyma sam hasz, więc to jedyna droga
   // do zobaczenia adresu — także po zgubieniu tego z rejestracji.

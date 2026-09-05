@@ -14,6 +14,7 @@ import { Hono } from "hono";
 
 import { utworzRouterApi, type UslugaPoczty } from "./api/routes.js";
 import type { ZrodlaDanych } from "./db/pula.js";
+import type { Push } from "./lib/push.js";
 import { dzisiaj } from "./lib/time.js";
 import { utworzRouterMcp } from "./mcp/server.js";
 
@@ -32,6 +33,8 @@ export type UstawieniaApp = {
   ciasteczkoTylkoHttps?: boolean;
   /** Brak = aplikacja działa, maile nie wychodzą. Patrz `config.wczytajPoczte`. */
   poczta?: UslugaPoczty;
+  /** Brak = aplikacja działa, powiadomienia nie wychodzą. Patrz `config.wczytajPush`. */
+  push?: Push;
 };
 
 export function utworzApp(zrodla: ZrodlaDanych, ustawienia: UstawieniaApp) {
@@ -45,6 +48,9 @@ export function utworzApp(zrodla: ZrodlaDanych, ustawienia: UstawieniaApp) {
       // Jedyny sygnał, że wysyłka jest nieskonfigurowana — brak maila
       // sam z siebie nie rzuca się w oczy.
       poczta: ustawienia.poczta?.transport.wlaczona ?? false,
+      // Tym bardziej przy powiadomieniach: nieprzysłane wygląda dokładnie
+      // tak samo jak „dziś nie było o czym przypominać".
+      push: ustawienia.push?.wlaczona ?? false,
     }),
   );
 
@@ -57,6 +63,7 @@ export function utworzApp(zrodla: ZrodlaDanych, ustawienia: UstawieniaApp) {
       strefa: ustawienia.strefa,
       ciasteczkoTylkoHttps: ustawienia.ciasteczkoTylkoHttps,
       ...(ustawienia.poczta ? { poczta: ustawienia.poczta } : {}),
+      ...(ustawienia.push ? { push: ustawienia.push } : {}),
     }),
   );
 

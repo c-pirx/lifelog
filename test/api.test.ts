@@ -23,6 +23,7 @@ import { otworzBaze } from "../src/db/index.js";
 import { utworzPule, type PulaBaz } from "../src/db/pula.js";
 import { utworzKonto } from "../src/domain/konta.js";
 import { zapiszNaListe, zapros } from "../src/domain/lista.js";
+import type { Ladunek, Push } from "../src/lib/push.js";
 import type { PlanNaDzis, PodsumowanieDnia, StanTreningu } from "../src/domain/typy.js";
 
 const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
@@ -38,6 +39,19 @@ let pula: PulaBaz;
 let serwer: ReturnType<typeof serve>;
 let adres: string;
 let ciasteczko = "";
+
+/**
+ * Push, który niczego nie wysyła — tylko zapamiętuje, co miało pójść.
+ * Wzorem atrapy poczty z `lista.test.ts`: żaden test nie dobija się do sieci.
+ */
+const push: Push & { wyslane: Array<{ endpoint: string; ladunek: Ladunek }> } = {
+  wyslane: [],
+  wlaczona: true,
+  kluczPubliczny: "testowy-klucz-publiczny-vapid",
+  async wyslij(subskrypcja, ladunek) {
+    push.wyslane.push({ endpoint: subskrypcja.endpoint, ladunek });
+  },
+};
 
 async function zadanie(sciezka: string, opcje: RequestInit = {}): Promise<Response> {
   return fetch(`${adres}${sciezka}`, {
@@ -74,6 +88,7 @@ beforeAll(async () => {
       sekretSesji: SEKRET,
       strefa: "Europe/Warsaw",
       ciasteczkoTylkoHttps: false,
+      push,
     },
   );
 
@@ -807,5 +822,121 @@ describe("notatki", () => {
     // notatka z testu godziny wysyłki.
     const zostale = (await folder("inne")).notatki.map((n) => n.tresc);
     expect(zostale).not.toContain("Po poprawce");
+  });
+});
+
+describe("powiadomienia", () => {
+  type StanKonta = {
+    powiadomienia: {
+      wlaczone: string[];
+      tryb: string | null;
+      klucz_publiczny: string | null;
+      dziala: boolean;
+    };
+  };
+
+  const SUBSKRYPCJA = {
+    endpoint: "https://push.example/api-test",
+    keys: { p256dh: "klucz-przegladarki", auth: "sekret-przegladarki" },
+  };
+
+  it("konto niesie stan powiadomień razem z resztą — bez drugiego żądania", async () => {
+    const konto = await pobierz<StanKonta>("/api/konto");
+
+    expect(konto.powiadomienia.dziala).toBe(true);
+    expect(konto.powiadomienia.klucz_publiczny).toBe("testowy-klucz-publiczny-vapid");
+  });
+
+  it("przyjmuje subskrypcję w kształcie, który oddaje przeglądarka", async () => {
+    const odpowiedz = await wyslij("/api/powiadomienia/subskrypcja", SUBSKRYPCJA);
+
+    expect(odpowiedz.status).toBe(201);
+  });
+
+  it("ta sama subskrypcja przysłana dwa razy nie jest błędem", async () => {
+    // Przeglądarka ponawia zapis przy każdym uruchomieniu aplikacji.
+    await wyslij("/api/powiadomienia/subskrypcja", SUBSKRYPCJA);
+    const powtorka = await wyslij("/api/powiadomienia/subskrypcja", SUBSKRYPCJA);
+
+    expect(powtorka.status).toBe(201);
+  });
+
+  it("odrzuca subskrypcję bez kluczy", async () => {
+    const odpowiedz = await wyslij("/api/powiadomienia/subskrypcja", {
+      endpoint: "https://push.example/bez-kluczy",
+    });
+
+    expect(odpowiedz.status).toBe(400);
+  });
+
+  it("zapisuje przełączniki i oddaje je przy następnym odczycie konta", async () => {
+    const zapis = await wyslij("/api/powiadomienia", {
+      wlaczone: ["kalorie", "trening_rano"],
+    });
+    expect(zapis.status).toBe(200);
+
+    // Kolejność jest znormalizowana — zapisujemy wg RODZAJE_POWIADOMIEN.
+    expect((await pobierz<StanKonta>("/api/konto")).powiadomienia.wlaczone).toEqual([
+      "trening_rano",
+      "kalorie",
+    ]);
+  });
+
+  it("wyłączenie wszystkiego zostawia pustą listę, a nie stare ustawienia", async () => {
+    await wyslij("/api/powiadomienia", { wlaczone: ["kalorie"] });
+    await wyslij("/api/powiadomienia", { wlaczone: [] });
+
+    expect((await pobierz<StanKonta>("/api/konto")).powiadomienia.wlaczone).toEqual([]);
+  });
+
+  it("bez ustawionych celów odmawia zmiany trybu i mówi dlaczego", async () => {
+    // Osobne konto, więc osobny plik dziennika: reszta pliku dzieli jedną bazę
+    // i cele są w niej ustawione od dawna. Świeże konto to zresztą dokładnie
+    // ta sytuacja, o którą chodzi — nikt jeszcze nie rozmawiał z Claude'em.
+    const rejestracja = await wyslij("/api/rejestracja", {
+      kod: zaproszonyKod("bez.celow@osoba.pl"),
+      login: "bez-celow",
+      haslo: "haslo-bez-celow-1",
+      zgoda: true,
+    });
+    const sesja = (rejestracja.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+
+    const odpowiedz = await fetch(`${adres}/api/powiadomienia`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie: sesja },
+      body: JSON.stringify({ tryb: "masa" }),
+    });
+
+    expect(odpowiedz.status).toBe(400);
+    expect((await odpowiedz.json()) as { kod: string }).toMatchObject({ kod: "brak_celow" });
+  });
+
+  it("zmiana trybu nie rusza makro w celach", async () => {
+    await wyslij("/api/cele", { kcal: 2800, bialko_g: 180, wegle_g: 300, tluszcz_g: 90 });
+
+    const zmiana = await wyslij("/api/powiadomienia", { tryb: "masa" });
+    expect(zmiana.status).toBe(200);
+
+    const cele = await pobierz<{ kcal: number; tryb: string }>("/api/cele");
+    expect(cele.tryb).toBe("masa");
+    expect(cele.kcal).toBe(2800);
+  });
+
+  it("odrzuca tryb, którego nie zna", async () => {
+    const odpowiedz = await wyslij("/api/powiadomienia", { tryb: "rzezba" });
+
+    expect(odpowiedz.status).toBe(400);
+  });
+
+  it("wszystkie trasy powiadomień wymagają zalogowania", async () => {
+    const bezCiasteczka = (sciezka: string) =>
+      fetch(`${adres}${sciezka}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+
+    expect((await bezCiasteczka("/api/powiadomienia")).status).toBe(401);
+    expect((await bezCiasteczka("/api/powiadomienia/subskrypcja")).status).toBe(401);
   });
 });

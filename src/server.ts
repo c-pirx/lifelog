@@ -16,6 +16,7 @@ import { katalogMigracjiRejestru, otworzBaze } from "./db/index.js";
 import { utworzPule, zmigrujWszystkie } from "./db/pula.js";
 import { uruchomHarmonogram } from "./harmonogram.js";
 import { pocztaResend } from "./lib/poczta.js";
+import { pushWebPush } from "./lib/push.js";
 
 wczytajPlikEnv();
 
@@ -60,6 +61,19 @@ if (!konfiguracja.poczta) {
   );
 }
 
+// Ta sama zasada przy powiadomieniach — i ten sam powód, dla którego brak
+// zmiennych nie może zatrzymać startu: systemd restartowałby aplikację w pętli
+// przez jedno pole zapomniane w /etc/asystent/env.
+const push = konfiguracja.push ? pushWebPush(konfiguracja.push) : null;
+
+if (!push) {
+  console.warn(
+    "Powiadomienia push wyłączone — brak kompletu VAPID_PUBLICZNY, VAPID_PRYWATNY, VAPID_KONTAKT.\n" +
+      "Aplikacja działa w całości, tylko przypomnienia o treningu i kaloriach nie wyjdą.\n" +
+      "Klucze generuje `npx web-push generate-vapid-keys` — wymiana unieważnia wszystkie subskrypcje.",
+  );
+}
+
 const app = utworzApp(zrodla, {
   sekretSesji: konfiguracja.sekretSesji,
   strefa: konfiguracja.strefa,
@@ -78,6 +92,7 @@ const app = utworzApp(zrodla, {
         },
       }
     : {}),
+  ...(push ? { push } : {}),
 });
 
 // Wołane tylko tutaj, nigdy z utworzApp() — inaczej każdy test stawiający
