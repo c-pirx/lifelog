@@ -71,6 +71,13 @@ RESEND_API_KEY=
 MAIL_OD=Lifelog <powitanie@twojadomena.pl>
 MAIL_GOSPODARZ=
 PUBLICZNY_ADRES=http://localhost:3000
+
+# Powiadomienia push. Ta sama zasada: komplet trzech albo żadnej.
+# Klucze generuje \`npx web-push generate-vapid-keys\` — RAZ, bo ich wymiana
+# unieważnia wszystkie subskrypcje.
+VAPID_PUBLICZNY=
+VAPID_PRYWATNY=
+VAPID_KONTAKT=mailto:ty@twojadomena.pl
 `;
 
 writeFileSync(PLIK, tresc, "utf8");

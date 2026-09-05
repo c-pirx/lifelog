@@ -65,6 +65,31 @@ pokazuje `"poczta": true`.
 instalacji** (potem plik zostaje nietknięty), więc na działającym serwerze
 trzeba dopisać je ręcznie: `sudo nano /etc/asystent/env` i restart usługi.
 
+### Powiadomienia push
+
+Trzy zmienne w `/etc/asystent/env`: `VAPID_PUBLICZNY`, `VAPID_PRYWATNY`,
+`VAPID_KONTAKT` (adres w formacie `mailto:`). **Komplet albo żadna** — bez nich
+aplikacja działa w całości, tylko przypomnienia o treningu i kaloriach nie
+wychodzą. Sprawdzenie: `curl -s https://<domena>/zdrowie` pokazuje `"push": true`.
+
+Klucze generuje się **raz** i zostawia na zawsze:
+
+```bash
+npx web-push generate-vapid-keys
+sudo nano /etc/asystent/env      # wklej trzy zmienne
+sudo systemctl restart asystent
+```
+
+**Wymiana kluczy unieważnia wszystkie subskrypcje** — każdy użytkownik musiałby
+włączyć powiadomienia od nowa, a wiersze w `subskrypcje_push` zostałyby martwe
+do czasu, aż wysyłka dostanie na nie 410. To ta sama pułapka co przy kluczu
+sesji: `02-aplikacja.sh` dopisuje zmienne wyłącznie do świeżego pliku env, więc
+na działającym serwerze wdrożenie przejdzie bez słowa, a jedynym śladem braku
+będzie `"push": false` w `/zdrowie`.
+
+Powiadomienia wysyła tik w procesie aplikacji, co pięć minut — nie ma tu
+osobnej jednostki systemd do skonfigurowania.
+
 Aplikacja działa jako konto systemowe `asystent` bez powłoki. Nasłuchuje
 wyłącznie na `127.0.0.1:3000`; do internetu wystawia ją nginx.
 

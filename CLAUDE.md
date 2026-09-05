@@ -246,6 +246,13 @@ JavaScriptu kompiluje kod w locie i inaczej Node nie wystartuje.
 inaczej telefon potrafi tygodniami serwować starą wersję i poprawki nie
 docierają do użytkownika.
 
+**`web-push` importujemy DOMYŚLNIE, nigdy nazwanymi eksportami.** Paczka jest
+CommonJS-em, a jej eksporty powstają wywołaniem `.bind()`, którego
+`cjs-module-lexer` nie rozpoznaje. `import { sendNotification } from "web-push"`
+przechodzi `tsc` bez słowa i wywala **proces przy starcie** — czyli błąd typu
+„działało u mnie", który wychodzi dopiero na produkcji. Stąd jeden
+`import webpush from "web-push"` w całym projekcie, w `src/lib/push.ts`.
+
 **Limit narzędzi MCP: 12.** Obecnie 12 — budżet jest wyczerpany co do jednego.
 Ostatnie miejsce zajęły `notatki`, więc każda następna możliwość musi iść przez
 parametr istniejącego narzędzia (wzorzec: `zmien_wpis`), nie przez kolejną
@@ -603,12 +610,78 @@ nie przeliczamy, a widok archiwum czyta je bez zmian.
 
 **Ocena „lepiej / gorzej" bierze się z trafień w cel i liczby serii**, nigdy
 z kalorii ani wagi: przy redukcji zjedzenie mniej jest dobre, przy budowaniu
-masy złe, a system nie zna zamiaru użytkownika. Werdykt powstaje w domenie
-(`ocenZmiane`), żeby czat i aplikacja nie oceniły tego samego tygodnia inaczej.
+masy złe, a system nie zna zamiaru użytkownika — poza jednym miejscem, opisanym
+niżej przy powiadomieniach. Werdykt powstaje w domenie (`ocenZmiane`), żeby czat
+i aplikacja nie oceniły tego samego tygodnia inaczej.
 
 Komentarz do raportu dopisuje Claude przez `podsumowanie_dnia` z parametrem
 `komentarz` — serwer liczby ma, interpretacji nie. Zadanie cykliczne po stronie
 claude.ai opisane jest w [INSTRUKCJA.md](INSTRUKCJA.md).
+
+## Powiadomienia push
+
+Trzy przypomnienia, wszystkie **warunkowe i milknące, gdy warunek znika**:
+rano (8:00–20:00) o dniu treningowym, o 20:00 o ostatniej szansie na ten sam
+dzień, o 18:00 o bilansie kalorii. Odhaczony trening gasi oba treningowe,
+dopisana kolacja gasi kaloryczne. **To jest tu najważniejsze**: bezwarunkowe
+powiadomienie o stałej porze zostaje wyciszone w systemie w ciągu dwóch tygodni
+i zabiera ze sobą dwa pozostałe.
+
+Poranne ma **górną** granicę godziny, nie tylko dolną. Bez niej telefon włączony
+pierwszy raz o 20:05 spełniałby oba warunki treningowe i dostawał dwa
+powiadomienia o tej samej sprawie.
+
+Logika w `src/domain/powiadomienia.ts` — jedna czysta funkcja
+(`powiadomieniaNaTeraz`) z podawaną chwilą, jak `trendWagi`. Stan dnia czyta
+wyłącznie przez `planNaDzis` i `podsumowanieDnia`, więc czat, aplikacja
+i powiadomienie mówią to samo.
+
+**Tryb celu to jedyne miejsce, w którym system zna zamiar użytkownika.** Kolumna
+`tryb` w tabeli `cele` (`redukcja` / `utrzymanie` / `masa`, lista `TRYBY_CELU`
+w `typy.ts`, bez `CHECK` w SQL). Progi to procent celu — `PROG_ZA_MALO` 55 %
+i `PROG_ZA_DUZO` 85 % — bo przy celu 3500 kcal alarm od sztywnych 1500 nie
+przyszedłby nigdy, a przy celu 1600 codziennie. Zniesienie zasady jest wąskie:
+raport i `ocenZmiane` trybu nie czytają.
+
+**Pominięty `tryb` dziedziczy po poprzednich celach.** Inaczej prośba „obniż mi
+kalorie" cicho przestawiałaby redukcję na utrzymanie, a użytkownik dowiedziałby
+się o tym z treści wieczornego powiadomienia, które zmieniłoby stronę.
+
+**Idempotencja zamiast punktualności.** Tik chodzi co pięć minut (osobny od
+godzinnego tiku raportów) i pyta „minęła osiemnasta i dziś nie poszło", a nie
+„czy jest dokładnie 18:00". Ślad w `wyslane_powiadomienia` z `UNIQUE
+(uzytkownik_id, data_lokalna, rodzaj)` — ten sam chwyt co `UNIQUE (tydzien_od)`
+przy raportach. Bez tego restart o 8:37 przesunąłby tik na 9:37, 10:37
+i osiemnasta nie wypadłaby nigdy.
+
+**Znak wysyłki stawiamy PRZED wysłaniem.** Przy niedostępnym push service
+odwrotna kolejność dawałaby ponawianie co pięć minut do północy — zgubione
+powiadomienie jest kłopotem, powódź awarią. Konto **bez subskrypcji** śladu
+jednak nie dostaje, inaczej dzień włączenia powiadomień byłby zawsze dniem
+bez powiadomienia.
+
+**Subskrypcje w rejestrze, nie w dzienniku** (`migrations-rejestr/0003`): to dana
+konta, a dziennik świadomie nie zna pojęcia użytkownika. Zapis jest UPSERT-em
+po `endpoint` z przepięciem konta — telefon dzielony przez domowników inaczej
+wysyłałby powiadomienia jednego na urządzenie drugiego.
+
+**Transport opcjonalny jak poczta** (`src/lib/push.ts`, biblioteka `web-push`).
+Brak kompletu `VAPID_PUBLICZNY` + `VAPID_PRYWATNY` + `VAPID_KONTAKT` zostawia
+działającą aplikację i `push: false` w `/zdrowie`. Wymiana kluczy unieważnia
+**wszystkie** subskrypcje, więc generuje się je raz.
+
+W aplikacji: sekcja na ekranie Konto, cztery stany (serwer bez kluczy,
+przeglądarka bez obsługi, zgoda odmówiona, zgoda udzielona). Na iPhonie push
+wymaga aplikacji dodanej do ekranu głównego (iOS 16.4+) i sekcja mówi to wprost —
+sam przycisk „Włącz" wyglądałby na zepsuty, bo `requestPermission` odmawia bez
+wyjaśnienia. Zgoda musi paść w reakcji na stuknięcie: Safari egzekwuje to cicho.
+
+Świadomie odłożone: koniec przerwy między seriami (technicznie niepewny —
+`setTimeout` w service workerze bywa ubijany, a Notification Triggers API nie
+wyszło poza flagę), sygnał o zatrzymanej kolejce offline, wisząca otwarta sesja,
+raport tygodniowy push-em (przychodzi już zadaniem cyklicznym Claude'a), poranna
+waga i wszelkie serie oraz odznaki — te ostatnie kłócą się z zasadą „pokazuj,
+nie oceniaj".
 
 ## Po MVP (kolejność wg wartości)
 
@@ -634,7 +707,9 @@ Konto z adresem konektora i zmianą hasła (sekcja „Wielodostęp" wyżej), a n
 koniec lista oczekujących: strona powitalna pod `/` z formularzem zapisu,
 aplikacja pod `/app`, jednorazowe kody zaproszeń zamiast wspólnego hasła
 bramy, maile przez Resend i `npm run lista` (sekcja „Lista oczekujących"
-wyżej).
+wyżej), a po niej powiadomienia push: trzy warunkowe przypomnienia, tryb celu
+`redukcja / utrzymanie / masa` i sekcja na ekranie Konto (sekcja
+„Powiadomienia push" wyżej).
 
 Z listy odłożonych spadło przez to „lista ostatnich sesji"; **poprawianie serii
 wstecz nadal czeka** — zakładka pokazuje wyniki, ale ich nie edytuje.
