@@ -1,7 +1,18 @@
+import { fileURLToPath } from "node:url";
+
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { otworzBaze, type Baza } from "../src/db/index.js";
+import {
+  oznaczWyslane,
+  subskrypcjeUzytkownika,
+  usunSubskrypcje,
+  uzytkownikPoId,
+  wyslaneDzis,
+  zapiszSubskrypcje,
+} from "../src/db/rejestr.js";
 import { ustawCele, zapiszPosilek } from "../src/domain/diet.js";
+import { utworzKonto } from "../src/domain/konta.js";
 import {
   odczytajRodzaje,
   powiadomieniaNaTeraz,
@@ -26,6 +37,8 @@ beforeEach(() => {
  * reguła. Przesunięcie strefy sprawdza osobny przypadek na końcu pliku.
  */
 const STREFA = "UTC";
+
+const MIGRACJE_REJESTRU = fileURLToPath(new URL("../migrations-rejestr/", import.meta.url));
 
 /** Poniedziałek — dzień, na który zaplanowany jest dzień A. */
 const PONIEDZIALEK = "2026-08-17";
@@ -246,6 +259,90 @@ describe("strefa użytkownika", () => {
     // dwa różne powiadomienia.
     expect(dla("2026-08-17T08:00:00.000Z", "UTC")).toEqual(["trening_rano"]);
     expect(dla("2026-08-17T08:00:00.000Z", "Pacific/Auckland")).toEqual(["trening_wieczor"]);
+  });
+});
+
+describe("subskrypcje i ślad wysyłki w rejestrze", () => {
+  let rejestr: Baza;
+  let ania: number;
+  let tomek: number;
+
+  const SUBSKRYPCJA = {
+    endpoint: "https://push.example/abc",
+    p256dh: "klucz-publiczny",
+    auth: "sekret",
+    utworzono: "2026-08-17T06:00:00.000Z",
+  };
+
+  beforeEach(() => {
+    rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
+    ania = utworzKonto(rejestr, { login: "ania", haslo: "haslo-testowe-1", zgoda: true }).id;
+    tomek = utworzKonto(rejestr, { login: "tomek", haslo: "haslo-testowe-2", zgoda: true }).id;
+  });
+
+  it("nowe konto ma powiadomienia wyłączone", () => {
+    expect(uzytkownikPoId(rejestr, ania)?.powiadomienia).toBe("");
+  });
+
+  it("ten sam endpoint zapisany po raz drugi nie mnoży wierszy, tylko odświeża klucze", () => {
+    zapiszSubskrypcje(rejestr, { ...SUBSKRYPCJA, uzytkownik_id: ania });
+    zapiszSubskrypcje(rejestr, { ...SUBSKRYPCJA, uzytkownik_id: ania, p256dh: "nowy-klucz" });
+
+    const jej = subskrypcjeUzytkownika(rejestr, ania);
+
+    expect(jej).toHaveLength(1);
+    expect(jej[0]?.p256dh).toBe("nowy-klucz");
+  });
+
+  it("jeden telefon przepięty na drugie konto przestaje dostawać powiadomienia pierwszego", () => {
+    // Domownicy dzielący telefon to zwyczajny przypadek, nie egzotyka. Bez
+    // przepięcia `uzytkownik_id` Tomek dostawałby powiadomienia Ani.
+    zapiszSubskrypcje(rejestr, { ...SUBSKRYPCJA, uzytkownik_id: ania });
+    zapiszSubskrypcje(rejestr, { ...SUBSKRYPCJA, uzytkownik_id: tomek });
+
+    expect(subskrypcjeUzytkownika(rejestr, ania)).toEqual([]);
+    expect(subskrypcjeUzytkownika(rejestr, tomek)).toHaveLength(1);
+  });
+
+  it("ślad stawia się raz na dobę i rodzaj", () => {
+    const znacz = () =>
+      oznaczWyslane(rejestr, {
+        uzytkownik_id: ania,
+        data_lokalna: PONIEDZIALEK,
+        rodzaj: "kalorie",
+        wyslano: o(18),
+      });
+
+    expect(znacz()).toBe(true);
+    expect(znacz()).toBe(false);
+    expect(wyslaneDzis(rejestr, ania, PONIEDZIALEK)).toEqual(["kalorie"]);
+  });
+
+  it("ślad jednego konta nie zasłania drugiego ani innego dnia", () => {
+    oznaczWyslane(rejestr, {
+      uzytkownik_id: ania,
+      data_lokalna: PONIEDZIALEK,
+      rodzaj: "kalorie",
+      wyslano: o(18),
+    });
+
+    expect(wyslaneDzis(rejestr, tomek, PONIEDZIALEK)).toEqual([]);
+    expect(wyslaneDzis(rejestr, ania, "2026-08-18")).toEqual([]);
+  });
+
+  it("usunięcie subskrypcji zdejmuje ją tylko właścicielowi", () => {
+    zapiszSubskrypcje(rejestr, { ...SUBSKRYPCJA, uzytkownik_id: ania });
+    zapiszSubskrypcje(rejestr, {
+      ...SUBSKRYPCJA,
+      endpoint: "https://push.example/xyz",
+      uzytkownik_id: tomek,
+    });
+
+    const jej = subskrypcjeUzytkownika(rejestr, ania);
+    usunSubskrypcje(rejestr, jej[0]!.id);
+
+    expect(subskrypcjeUzytkownika(rejestr, ania)).toEqual([]);
+    expect(subskrypcjeUzytkownika(rejestr, tomek)).toHaveLength(1);
   });
 });
 

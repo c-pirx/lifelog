@@ -20,6 +20,8 @@ export type WierszUzytkownika = {
   utworzono: string;
   ostatnie_uzycie_konektora: string | null;
   aktywny: number;
+  /** Włączone rodzaje powiadomień po przecinku; pusto = wyłączone. */
+  powiadomienia: string;
 };
 
 export type NowyUzytkownik = {
@@ -87,6 +89,82 @@ export function odnotujUzycieKonektora(db: Baza, id: number, ts: string): void {
  */
 export function wTransakcji<T>(db: Baza, dzialanie: () => T): T {
   return db.transaction(dzialanie)();
+}
+
+// === Powiadomienia push ==================================================
+
+export type WierszSubskrypcji = {
+  id: number;
+  uzytkownik_id: number;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  utworzono: string;
+};
+
+/**
+ * UPSERT po `endpoint`, nie zwykły INSERT.
+ *
+ * Dwa zwyczajne przypadki dawałyby inaczej błąd zamiast zapisu: przeglądarka
+ * rotuje klucze zachowując adres oraz jeden telefon obsługuje dwa konta.
+ * Ten drugi jest ważniejszy — bez przepięcia `uzytkownik_id` powiadomienia
+ * jednego domownika szłyby na urządzenie zalogowane teraz na drugie konto.
+ */
+export function zapiszSubskrypcje(db: Baza, dane: Omit<WierszSubskrypcji, "id">): void {
+  db.prepare(
+    `INSERT INTO subskrypcje_push (uzytkownik_id, endpoint, p256dh, auth, utworzono)
+     VALUES (@uzytkownik_id, @endpoint, @p256dh, @auth, @utworzono)
+     ON CONFLICT (endpoint) DO UPDATE SET
+       uzytkownik_id = excluded.uzytkownik_id,
+       p256dh        = excluded.p256dh,
+       auth          = excluded.auth`,
+  ).run(dane);
+}
+
+export function subskrypcjeUzytkownika(db: Baza, uzytkownikId: number): WierszSubskrypcji[] {
+  return db
+    .prepare<[number], WierszSubskrypcji>(
+      "SELECT * FROM subskrypcje_push WHERE uzytkownik_id = ? ORDER BY id",
+    )
+    .all(uzytkownikId);
+}
+
+/** Kasujemy po odpowiedzi 404/410 — przeglądarka wyrzuciła subskrypcję. */
+export function usunSubskrypcje(db: Baza, id: number): void {
+  db.prepare("DELETE FROM subskrypcje_push WHERE id = ?").run(id);
+}
+
+export function zapiszPowiadomienia(db: Baza, uzytkownikId: number, zapis: string): void {
+  db.prepare("UPDATE uzytkownicy SET powiadomienia = ? WHERE id = ?").run(zapis, uzytkownikId);
+}
+
+/**
+ * Znak wysyłki stawiany PRZED wysłaniem; `false` znaczy „już dziś poszło".
+ *
+ * Kolejność jest tu całą regułą. Przy niedostępnym push service oznaczanie po
+ * udanej wysyłce dawałoby ponawianie co pięć minut aż do północy — a zgubione
+ * powiadomienie jest kłopotem, powódź powiadomień awarią.
+ */
+export function oznaczWyslane(
+  db: Baza,
+  dane: { uzytkownik_id: number; data_lokalna: string; rodzaj: string; wyslano: string },
+): boolean {
+  const wynik = db
+    .prepare(
+      `INSERT OR IGNORE INTO wyslane_powiadomienia (uzytkownik_id, data_lokalna, rodzaj, wyslano)
+       VALUES (@uzytkownik_id, @data_lokalna, @rodzaj, @wyslano)`,
+    )
+    .run(dane);
+  return wynik.changes === 1;
+}
+
+export function wyslaneDzis(db: Baza, uzytkownikId: number, dataLokalna: string): string[] {
+  return db
+    .prepare<[number, string], { rodzaj: string }>(
+      "SELECT rodzaj FROM wyslane_powiadomienia WHERE uzytkownik_id = ? AND data_lokalna = ?",
+    )
+    .all(uzytkownikId, dataLokalna)
+    .map((w) => w.rodzaj);
 }
 
 // === Lista oczekujących ==================================================
