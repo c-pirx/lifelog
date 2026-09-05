@@ -14,7 +14,7 @@ import { kartaMakro } from "./makra.js";
 import {
   nalozNaAktywnosci,
   nalozNaDzien,
-  nalozNaDzienRuchu,
+  nalozNaHistorieRuchu,
   nalozNaNotatki,
   nalozNaTreningi,
   nalozNaTrening,
@@ -1570,7 +1570,11 @@ async function odswiez() {
     stan.dzien.aktywnosci = nalozNaAktywnosci(dzien.aktywnosci ?? [], kolejka, dzien.data);
     stan.dzien.treningi = nalozNaTreningi(dzien.treningi ?? [], kolejka);
     stan.czeste = czeste;
-    dataEkranu.textContent = stan.dzien.data;
+    // Nagłówek oddaje datę pigułce z paska dat — ta stoi 60 px niżej, jest
+    // większa i niesie strzałki przewijania dni. Dwa napisy o tym samym,
+    // w dodatku jeden po ludzku („sb 05.09 · dziś"), a drugi maszynowo
+    // („2026-09-05"), to nie zapas informacji, tylko szum.
+    dataEkranu.textContent = "";
     widok.innerHTML = ekranDzis(stan.dzien, czeste);
     return;
   }
@@ -1590,7 +1594,11 @@ async function odswiez() {
       if (c.propozycja) propozycje.set(c.nazwa, c.propozycja);
     }
 
-    dataEkranu.textContent = stanTreningu.dzis?.data ?? "";
+    // Po ludzku, tak jak wszędzie indziej w aplikacji: „sb 05.09" zamiast
+    // „2026-09-05". Format maszynowy nie mówi tu nic więcej, a czyta się gorzej.
+    dataEkranu.textContent = stanTreningu.dzis?.data
+      ? etykietaDnia(stanTreningu.dzis.data, dzisiajData)
+      : "";
 
     const otwarte = otwarteCwiczenie && wszystkie.find((c) => c.nazwa === otwarteCwiczenie);
     if (otwarte) {
@@ -1649,10 +1657,9 @@ async function odswiez() {
     // Rosnące okno jak przy diecie — doklejane strony przepadałyby przy każdym
     // odswiez(), a poprawka wpisu sprzed miesiąca zwijałaby listę do początku.
     const historia = await api(`/aktywnosci?dni=${14 * stronAktywnosci}`);
-    stan.aktywnosci = {
-      ...historia,
-      dni: historia.dni.map((d) => nalozNaDzienRuchu(d, kolejka)),
-    };
+    // Sumy okna idą nałożeniem razem z dniami: kafelki nad listą i lista
+    // czytają się jednym spojrzeniem i nie mogą pokazywać różnych stanów.
+    stan.aktywnosci = nalozNaHistorieRuchu(historia, kolejka);
     dataEkranu.textContent = `${14 * stronAktywnosci} dni`;
     widok.innerHTML = ekranAktywnosci(
       stan.aktywnosci,

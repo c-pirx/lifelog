@@ -17,6 +17,7 @@
 
 import { etykietaDnia } from "./kalendarz.js";
 import { serieZgrupowane } from "./seria.js";
+import { ZNAK_POPRAW, ZNAK_SZTANGA, ZNAK_USUN, znakDyscypliny } from "./znaki.js";
 
 const esc = (tekst) =>
   String(tekst ?? "").replace(
@@ -103,8 +104,10 @@ export function wpisAktywnosci(a, edytowana) {
         // wrócą, gdy kolejka go wyśle.
         a.oczekuje
           ? ""
-          : `<button class="przycisk cichy" data-edytuj-aktywnosc="${a.id}" aria-label="Popraw">✎</button>
-             <button class="przycisk cichy" data-usun-aktywnosc="${a.id}" aria-label="Usuń">✕</button>`
+          : `<div class="akcje-wpisu">
+               <button class="przycisk cichy" data-edytuj-aktywnosc="${a.id}" aria-label="Popraw">${ZNAK_POPRAW}</button>
+               <button class="przycisk cichy niszczy" data-usun-aktywnosc="${a.id}" aria-label="Usuń">${ZNAK_USUN}</button>
+             </div>`
       }
     </div>`;
 }
@@ -147,7 +150,9 @@ export function wpisTreningu(t) {
       ${
         t.oczekujace_usuniecie
           ? ""
-          : `<button class="przycisk cichy" data-usun-sesje="${t.id}" aria-label="Usuń trening">✕</button>`
+          : `<div class="akcje-wpisu">
+               <button class="przycisk cichy niszczy" data-usun-sesje="${t.id}" aria-label="Usuń trening">${ZNAK_USUN}</button>
+             </div>`
       }
     </div>`;
 }
@@ -197,30 +202,121 @@ function skrotDnia(d) {
   return grupy.map((g) => (g.ile > 1 ? `${g.opis} ×${g.ile}` : g.opis)).join(" · ");
 }
 
+/**
+ * Kolumna znaków przy wierszu dnia — CZYM był ten dzień, zanim przeczyta się
+ * napis. Rzut oka po liście w dół odpowiada „ile było siłowni, a ile roweru"
+ * bez czytania ani jednego słowa; sam skrót tekstowy wymaga przeczytania
+ * każdego wiersza osobno.
+ *
+ * Powtórzenia znikają: dzień z czterema seriami na siłowni dostaje jedną
+ * sztangę. Trzy znaki to sufit — czwarty i piąty rozpychają wiersz, a dzień
+ * z pięcioma dyscyplinami zdarza się rzadziej niż raz na miesiąc.
+ */
+function znakiDnia(d) {
+  const znaki = [];
+  // Sztanga dostaje kolor akcentu, reszta zostaje szara. To nie ozdoba:
+  // trening z planu i wyjazd rowerem to dwa różne byty w całej aplikacji —
+  // pierwszy liczy się do realizacji planu, drugi świadomie nie. Kolor mówi
+  // to samo, co rozdział tabel w bazie, tylko szybciej.
+  if ((d.treningi ?? []).length) znaki.push(`<span class="trening">${ZNAK_SZTANGA}</span>`);
+  for (const a of d.aktywnosci ?? []) {
+    const znak = znakDyscypliny(a.dyscyplina);
+    if (!znaki.includes(znak)) znaki.push(znak);
+  }
+  return `<span class="znaki-dnia" aria-hidden="true">${znaki.slice(0, 3).join("")}</span>`;
+}
+
 function kartaDnia(d, rozwiniety, edytowana, dzisiaj) {
   const wpisy = wpisyDnia(d);
 
   return `
-    <section class="karta">
-      <button class="dzien-diety ${rozwiniety ? "rozwiniety" : ""}" data-dzien-aktywnosci="${esc(d.data)}">
-        <span class="data">${etykietaDnia(d.data, dzisiaj)}</span>
-        <span class="liczby-dnia">${esc(skrotDnia(d))}</span>
+    <div class="dzien ${rozwiniety ? "rozwiniety" : ""}">
+      <button class="naglowek-dnia" data-dzien-aktywnosci="${esc(d.data)}"
+              aria-expanded="${rozwiniety ? "true" : "false"}">
+        ${znakiDnia(d)}
+        <span class="opis-dnia">
+          <span class="data">${etykietaDnia(d.data, dzisiaj)}</span>
+          <span class="liczby-dnia">${esc(skrotDnia(d))}</span>
+        </span>
+        <span class="szewron" aria-hidden="true"></span>
       </button>
       ${
         rozwiniety
-          ? wpisy
+          ? `<div class="wpisy-dnia">${wpisy
               .map((w) =>
                 w.rodzaj === "trening" ? wpisTreningu(w.dane) : wpisAktywnosci(w.dane, edytowana),
               )
-              .join("")
+              .join("")}</div>`
           : ""
       }
-    </section>`;
+    </div>`;
 }
 
-export function ekranAktywnosci(historia, rozwinietyDzien, edytowana, dzisiaj) {
-  const formularz = `
+/** „62,4 km" — przecinek, bo to napis dla człowieka, a nie liczba do maszyny. */
+const kmDoNapisu = (metry) => kilometry(metry).replace(".", ",");
+
+/**
+ * „6 h 38" na kafelku zamiast „6 h 38 min".
+ *
+ * Kafelek ma ćwierć szerokości ekranu i pełny zapis łamie się na dwie linie —
+ * a rząd, w którym jedna liczba stoi niżej od trzech pozostałych, przestaje się
+ * czytać jednym spojrzeniem. Poniżej godziny „min" zostaje: samo „38" nie
+ * mówiłoby, o jaką jednostkę chodzi.
+ */
+const czasKafelka = (sekundy) => {
+  const pelny = czasWysilku(sekundy);
+  return pelny.includes(" h ") ? pelny.replace(" min", "") : pelny;
+};
+
+/** „1 trening", „3 treningi", „7 treningów" — liczba i rzeczownik muszą się zgadzać. */
+const odmianaTreningow = (ile) => {
+  if (ile === 1) return "trening";
+  const dziesiatki = ile % 100;
+  const jednosci = ile % 10;
+  const jak234 = jednosci >= 2 && jednosci <= 4 && !(dziesiatki >= 12 && dziesiatki <= 14);
+  return jak234 ? "treningi" : "treningów";
+};
+
+/**
+ * Nagłówek okna: cztery liczby, których lista dni nie daje.
+ *
+ * To one, a nie przycisk „dodaj", zasługują na pierwszy ekran w zakładce, której
+ * jedyne pytanie brzmi „co i ile robiłem". Dotąd stała tu karta z samym
+ * klawiszem dodawania — najrzadsza czynność na ekranie zajmowała jego najlepsze
+ * miejsce, a odpowiedź na pytanie trzeba było złożyć z kilkunastu wierszy
+ * w pamięci.
+ *
+ * Liczby przychodzą gotowe z `historiaRuchu` (pole `sumy`), a offline dolicza
+ * je nakładka — widok niczego tu nie sumuje, więc czat i aplikacja nie mogą
+ * podać za ten sam okres dwóch różnych wyników.
+ */
+function kartaSum(historia) {
+  const s = historia?.sumy;
+  const okno = historia?.dni_okna;
+
+  const kafelki = s?.dni_z_ruchem
+    ? [
+        [s.treningi, odmianaTreningow(s.treningi)],
+        // Kilometry i czas milkną, gdy ich nie ma: „0,0 km" po dwóch tygodniach
+        // samej siłowni czyta się jak wyrzut, a nie jak informacja.
+        ...(s.dystans_m ? [[`${kmDoNapisu(s.dystans_m)} km`, "dystans"]] : []),
+        ...(s.czas_s ? [[czasKafelka(s.czas_s), "w ruchu"]] : []),
+        ...(okno ? [[`${s.dni_z_ruchem}/${okno}`, "dni z ruchem"]] : []),
+      ]
+    : // Okno bez ani jednego wpisu nie dostaje kafelków wcale. Rząd zer nad
+      // pustą listą powtarzałby to, co i tak mówi komunikat pod spodem —
+      // dwa razy to samo, raz liczbami i raz zdaniem.
+      [];
+
+  return `
     <section class="karta">
+      ${
+        kafelki.length
+          ? `<ul class="liczby">
+               ${kafelki.map(([wartosc, opis]) => `<li><b>${esc(wartosc)}</b><span>${opis}</span></li>`).join("")}
+             </ul>`
+          : ""
+      }
       <form id="formularz-aktywnosci" hidden>
         <div class="pola">${polaAktywnosci()}</div>
         <div class="przyciski">
@@ -232,24 +328,35 @@ export function ekranAktywnosci(historia, rozwinietyDzien, edytowana, dzisiaj) {
         <button class="przycisk pelny" data-pokaz="formularz-aktywnosci">+ Dodaj aktywność</button>
       </div>
     </section>`;
+}
 
+export function ekranAktywnosci(historia, rozwinietyDzien, edytowana, dzisiaj) {
+  // Wyciszony i wyśrodkowany, nie na pełną szerokość: to dociążenie listy,
+  // a nie akcja równa dodawaniu wpisu. Pełnowymiarowy klawisz na dole ekranu
+  // wyglądał jak jego główny przycisk.
   const starsze = `
-    <div class="przyciski">
-      <button class="przycisk pelny" data-starsze-aktywnosci>Pokaż starsze</button>
+    <div class="przyciski dociazenie">
+      <button class="przycisk cichy" data-starsze-aktywnosci>Pokaż starsze ↓</button>
     </div>`;
 
   if (!historia?.dni?.length) {
     return `
-      ${formularz}
+      ${kartaSum(historia)}
       <section class="karta">
         <div class="pusto">Żadnego ruchu od ${esc(historia?.od ?? "")} — odbyte treningi pojawią się tu same, a bieg, rower i spacer zapiszesz powyżej albo zdaniem do Claude'a.</div>
       </section>
       ${starsze}`;
   }
 
-  return `${formularz}
-    ${historia.dni
-      .map((d) => kartaDnia(d, d.data === rozwinietyDzien, edytowana, dzisiaj))
-      .join("")}
+  // Jedna karta na całą listę, a nie karta na dzień: dziewięć jednakowych
+  // pudełek pod rząd nie tworzy hierarchii, tylko rytm, w którym nic nie
+  // wyróżnia się od niczego. Włosowa linia między wierszami mówi „to jedna
+  // lista" i oszczędza dwie trzecie pionowego miejsca.
+  return `${kartaSum(historia)}
+    <section class="karta lista-dni">
+      ${historia.dni
+        .map((d) => kartaDnia(d, d.data === rozwinietyDzien, edytowana, dzisiaj))
+        .join("")}
+    </section>
     ${starsze}`;
 }

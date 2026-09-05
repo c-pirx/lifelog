@@ -154,6 +154,48 @@ describe("dzień i historia", () => {
     expect(historia.do).toBe("2026-08-24");
     expect(historia.dni).toHaveLength(0);
   });
+
+  it("podaje sumy całego okna, żeby widok nie musiał ich składać sam", () => {
+    const historia = historiaRuchu(db, { dni: 14, przed: "2026-08-26" });
+
+    expect(historia.dni_okna).toBe(14);
+    expect(historia.sumy.aktywnosci).toBe(3);
+    expect(historia.sumy.dystans_m).toBe(13_000);
+    expect(historia.sumy.czas_s).toBe(4500);
+    // Dwa dni z wpisami z czternastu w oknie — mianownik zostaje przy oknie.
+    expect(historia.sumy.dni_z_ruchem).toBe(2);
+  });
+
+  it("do sum wchodzą też odbyte treningi, ale nie dokładają kilometrów", () => {
+    rozpocznijTrening(db, { bez_planu: true, ts: "2026-08-24T16:00:00.000Z" });
+    zapiszSerie(db, {
+      cwiczenie: "przysiad",
+      typ: "silowe",
+      powtorzenia: 5,
+      ciezar_kg: 100,
+      ts: "2026-08-24T16:10:00.000Z",
+    });
+    zakonczTrening(db, { ts: "2026-08-24T17:00:00.000Z" });
+
+    const historia = historiaRuchu(db, { dni: 14, przed: "2026-08-26" });
+
+    expect(historia.sumy.treningi).toBe(1);
+    // Trening siłowy nie ma kilometrów i suma okna nie może ich sobie dorobić.
+    expect(historia.sumy.dystans_m).toBe(13_000);
+    expect(historia.sumy.dni_z_ruchem).toBe(3);
+  });
+
+  it("okno bez wpisów oddaje same zera, a nie brak pola", () => {
+    const historia = historiaRuchu(db, { dni: 3, przed: "2026-08-01" });
+
+    expect(historia.sumy).toEqual({
+      treningi: 0,
+      aktywnosci: 0,
+      dystans_m: 0,
+      czas_s: 0,
+      dni_z_ruchem: 0,
+    });
+  });
 });
 
 describe("statystyka tygodnia", () => {

@@ -340,9 +340,32 @@ export type DzienRuchu = {
   treningi: SesjaZWynikami[];
 };
 
+/**
+ * Sumy całego okna historii ruchu — odpowiedź na „ile tego było", której sama
+ * lista dni nie daje: żeby ją złożyć, trzeba przeczytać kilkanaście wierszy
+ * i dodać w pamięci.
+ *
+ * Liczy je domena, a nie widok, z tego samego powodu co werdykt tygodnia:
+ * inaczej aplikacja i czat umiałyby podać za ten sam okres inne liczby.
+ */
+export type SumyRuchu = {
+  /** Odbyte treningi z planu i poza planem — sesje, nie dni. */
+  treningi: number;
+  /** Aktywności poza planem: bieg, rower, spacer, basen. */
+  aktywnosci: number;
+  /** Jak w `DzienRuchu`: kilometry i czas dotyczą wyłącznie aktywności. */
+  dystans_m: number;
+  czas_s: number;
+  /** Ile dni okna niesie jakikolwiek ruch — mianownik zostaje przy `dni`. */
+  dni_z_ruchem: number;
+};
+
 export type HistoriaRuchu = {
   od: string;
   do: string;
+  /** Długość okna w dniach — mianownik do `sumy.dni_z_ruchem`. */
+  dni_okna: number;
+  sumy: SumyRuchu;
   dni: DzienRuchu[];
 };
 

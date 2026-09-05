@@ -404,9 +404,21 @@ ekranie Postępy: cztery wiersze z rzędem kropek dzień po dniu; próg ±7 %
 to eksportowane `PASMO`, a test pilnuje, że równa się `PASMO_CELU` z domeny —
 kropki i kafelek „dni w celu" mają liczyć to samo), wsparte `public/seria.js` (jak seria czyta się
 w tekście — wspólne z ekranem Trening, bo dwie kopie tej samej funkcji
-rozjechałyby się przy pierwszej poprawce): renderują, ale nie oceniają — werdykty „na kursie"
+rozjechałyby się przy pierwszej poprawce), `public/kalendarz.js` (etykieta dnia:
+„wt 25.08", z dopiskiem dla dziś i wczoraj — dwa dni, które użytkownik ma
+w głowie bez liczenia; trzeci dopisek przestałby wyróżniać) oraz
+`public/znaki.js` (sztanga, rower, biegacz, spacerowicz, fale, puls; dobór po
+słowie kluczowym w dyscyplinie — to sprawa WYGLĄDU, bo dyscyplina jest wolnym
+tekstem i domena świadomie jej nie kategoryzuje): renderują, ale nie oceniają — werdykty „na kursie"
 i „idzie lepiej" przychodzą gotowe z serwera. Testy leżą obok,
 w `test/offline.test.ts`.
+
+**Nowy moduł musi trafić do `POWLOKA` w `sw.js` razem z podbiciem `WERSJA`.**
+Plik spoza listy nie wchodzi do cache'u, a bez zasięgu nieudany import kładzie
+**cały** `app.js` — aplikacja na siłowni nie wstaje. Pilnuje tego test, który
+idzie po GRAFIE importów, a nie po samych importach `app.js`: `znaki.js` wchodzi
+przez `aktywnosci.js` i `posilek.js`, więc płaskie sprawdzenie przepuściłoby go
+bez słowa.
 
 Każdy zapis z aplikacji niesie `czas` powstania wpisu. Bez tego seria wpisana
 o 18:05 i wysłana o 19:30 wylądowałaby w historii pod złą godziną.
@@ -481,6 +493,27 @@ i ocena tygodnia dalej trzymają rozdział. Do historii wchodzą tylko sesje
 **zakończone i mające choć jedną serię** — pusta sesja to ślad po otwarciu
 i zamknięciu treningu, w historii nic nie znaczy. Ekran Dziś i `podsumowanie_dnia`
 pokazują to samo, żeby pytanie „co dziś robiłem" nie dawało dwóch odpowiedzi.
+
+**Sumy okna liczy `historiaRuchu`, nie widok** (pole `sumy`: treningi,
+aktywności, dystans, czas, dni z ruchem — obok `dni_okna` jako mianownika).
+Kafelki nad listą odpowiadają na „ile tego było" — pytanie, na które sama lista
+dni każe złożyć odpowiedź z kilkunastu wierszy w pamięci. Liczą się w domenie
+z tej samej listy dni, którą widać na ekranie: drugie zapytanie do SQL mogłoby
+się z nią rozjechać. Bez zasięgu dolicza je `nalozNaHistorieRuchu` — rower
+dopisany w kolejce widoczny w liście, ale niedoliczony do „62,4 km", wyglądałby
+na zepsutą aplikację, a nie na wpis czekający na wysyłkę.
+
+**Dni to wiersze jednej karty, nie stos kart.** Dziewięć jednakowych pudełek
+pod rząd daje rytm bez hierarchii — nic się w nim nie wyróżnia, bo wszystko waży
+tyle samo, a ramki i przerwy między nimi zjadały dwie trzecie pionu. Włosowa
+linia mówi „to jedna lista", szewron mówi „to się rozwija" (bez niego stuknięcie
+w wiersz było do odkrycia przez przypadek), a kolumna znaków po lewej mówi CZYM
+był dzień, zanim przeczyta się napis. **Kolor akcentu dostaje sztanga, nie
+pierwszy znak w kolumnie**: dzień bez treningu zaczyna się od roweru i akcent na
+nim kłamałby o tym, co właśnie odróżnia — realizację planu od ruchu poza planem.
+Ten sam układ ma zakładka Dieta, gdzie wiersz niesie dodatkowo pasek trafienia
+w cel; rozjazd tych dwóch ekranów byłby dwiema odpowiedziami na to samo pytanie
+„jak czyta się dzień wstecz".
 
 **Usunięcie treningu idzie przez `zmien_wpis` z `typ='sesja'`** (tylko `usun`;
 poprawianie odmawia i kieruje do `typ='seria'`). Serie znikają **kaskadą ze

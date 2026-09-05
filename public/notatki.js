@@ -12,6 +12,7 @@
  */
 
 import { etykietaDnia } from "./kalendarz.js";
+import { ZNAK_USUN } from "./znaki.js";
 
 const esc = (tekst) =>
   String(tekst ?? "").replace(
@@ -79,7 +80,7 @@ export function wpisNotatki(n, otwarta) {
           // kolejka ją wyśle.
           n.oczekuje
             ? ""
-            : `<button class="przycisk cichy" data-usun-notatke="${esc(n.id)}" aria-label="Usuń">✕</button>`
+            : `<button class="przycisk cichy niszczy" data-usun-notatke="${esc(n.id)}" aria-label="Usuń">${ZNAK_USUN}</button>`
         }
       </div>
       ${
@@ -187,24 +188,27 @@ function ekranFolderu(folder, otwarta, dzisiaj) {
 
   if (folder.notatki.length === 0) {
     return `${powrot}
-      ${formularzNotatki(folder.kategoria)}
       <section class="karta">
-        <div class="pusto">Folder ${esc(nazwa)} jest pusty — podyktuj notatkę Claude'owi albo dopisz ją powyżej.</div>
-      </section>`;
+        <div class="pusto">Folder ${esc(nazwa)} jest pusty — podyktuj notatkę Claude'owi albo dopisz ją poniżej.</div>
+      </section>
+      ${formularzNotatki(folder.kategoria)}`;
   }
 
   // „Pokaż starsze" tylko wtedy, gdy pobrana porcja nie objęła całego folderu.
   const starsze =
     folder.notatki.length < folder.ile
-      ? `<div class="przyciski">
-           <button class="przycisk pelny" data-starsze-notatek>Pokaż starsze</button>
+      ? `<div class="przyciski dociazenie">
+           <button class="przycisk cichy" data-starsze-notatek>Pokaż starsze ↓</button>
          </div>`
       : "";
 
+  // Formularz pod listą, nie nad nią. Zakładka jest czytnikiem — dopisanie
+  // notatki z ręki to wyjątek od zasady „notatki powstają w czacie", więc jego
+  // klawisz nie ma prawa zajmować pierwszego ekranu przed treścią folderu.
   return `${powrot}
-    ${formularzNotatki(folder.kategoria)}
     ${dniFolderu(folder.notatki, otwarta, dzisiaj)}
-    ${starsze}`;
+    ${starsze}
+    ${formularzNotatki(folder.kategoria)}`;
 }
 
 export function ekranNotatki(historia, otwartyFolder, otwartaNotatka, dzisiaj) {
@@ -219,8 +223,10 @@ export function ekranNotatki(historia, otwartyFolder, otwartaNotatka, dzisiaj) {
 
   const pusto = foldery.every((f) => f.ile === 0);
 
+  // Foldery pierwsze, klawisz dopisania po nich — tak jak w zakładce
+  // Aktywności. Karta z samym przyciskiem na górze zabierała cały pierwszy
+  // ekran czynności, którą w tej zakładce robi się najrzadziej.
   return `
-    ${formularzNotatki("dziennik")}
     ${foldery.map(kartaFolderu).join("")}
     ${
       pusto
@@ -228,5 +234,6 @@ export function ekranNotatki(historia, otwartyFolder, otwartaNotatka, dzisiaj) {
              <div class="pusto">Jeszcze nic tu nie ma. Podyktuj notatkę Claude'owi — uporządkuje ją i odłoży do folderu.</div>
            </section>`
         : ""
-    }`;
+    }
+    ${formularzNotatki("dziennik")}`;
 }

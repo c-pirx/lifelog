@@ -163,20 +163,35 @@ export function historiaRuchu(
     dzien(sesja.data_lokalna).treningi.push(sesja);
   }
 
+  const posortowane = [...poDniu.entries()]
+    .sort(([a], [b]) => (a < b ? 1 : -1))
+    .map(([data, wpisy]): DzienRuchu => ({
+      data,
+      // Sumy dotyczą aktywności — kilometry z treningu siłowego nie istnieją,
+      // a doliczanie tam bieżni mieszałoby dwie różne rzeczy.
+      dystans_m: sumujPole(wpisy.aktywnosci, "dystans_m"),
+      czas_s: sumujPole(wpisy.aktywnosci, "czas_s"),
+      aktywnosci: wpisy.aktywnosci,
+      treningi: wpisy.treningi,
+    }));
+
   return {
     od,
     do: koniec,
-    dni: [...poDniu.entries()]
-      .sort(([a], [b]) => (a < b ? 1 : -1))
-      .map(([data, wpisy]): DzienRuchu => ({
-        data,
-        // Sumy dotyczą aktywności — kilometry z treningu siłowego nie istnieją,
-        // a doliczanie tam bieżni mieszałoby dwie różne rzeczy.
-        dystans_m: sumujPole(wpisy.aktywnosci, "dystans_m"),
-        czas_s: sumujPole(wpisy.aktywnosci, "czas_s"),
-        aktywnosci: wpisy.aktywnosci,
-        treningi: wpisy.treningi,
-      })),
+    dni_okna: dni,
+    // Sumy okna schodzą z listy dni, a nie z osobnego zapytania: te same wpisy
+    // policzone drugi raz w SQL mogłyby się rozjechać z tym, co widać na
+    // ekranie — dokładnie tego pilnuje zasada „jedna droga do jednej liczby".
+    sumy: {
+      treningi: posortowane.reduce((suma, d) => suma + d.treningi.length, 0),
+      aktywnosci: posortowane.reduce((suma, d) => suma + d.aktywnosci.length, 0),
+      dystans_m: posortowane.reduce((suma, d) => suma + d.dystans_m, 0),
+      czas_s: posortowane.reduce((suma, d) => suma + d.czas_s, 0),
+      // Mapa ma klucz tylko dla dni z jakimkolwiek wpisem, więc jej rozmiar
+      // JEST liczbą dni z ruchem — pusty dzień nigdy tu nie trafia.
+      dni_z_ruchem: posortowane.length,
+    },
+    dni: posortowane,
   };
 }
 

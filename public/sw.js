@@ -10,7 +10,7 @@
  * umiałby najwyżej udać, że się udało.
  */
 
-const WERSJA = "v18";
+const WERSJA = "v19";
 const CACHE_POWLOKI = `powloka-${WERSJA}`;
 const CACHE_API = `api-${WERSJA}`;
 
@@ -33,6 +33,7 @@ const POWLOKA = [
   "/przerwa.js",
   "/raporty.js",
   "/seria.js",
+  "/znaki.js",
   "/style.css",
   "/manifest.json",
   "/icons/ikona-180.png",

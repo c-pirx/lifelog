@@ -1175,6 +1175,29 @@ label {
   padding: 8px 10px;
 }
 
+/* Kasowanie ma wyglądać inaczej niż poprawka — dotąd oba przyciski były tym
+   samym szarym znakiem obok siebie i różniły się wyłącznie glifem. Kolor
+   pojawia się dopiero pod palcem: czerwony kosz stojący przy każdym wpisie
+   robiłby z listy tablicę ostrzeżeń. */
+.przycisk.cichy.niszczy:active {
+  color: var(--blad);
+}
+
+.przycisk .znak {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+/* Poprawka i kasowanie w jednej kolumnie z odstępem: przy 10 px między nimi
+   kciuk trafiał w kosz, celując w ołówek. */
+.akcje-wpisu {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .przycisk:active {
   transform: scale(0.985);
 }
@@ -1187,6 +1210,20 @@ label {
 
 .przyciski > * {
   flex: 1;
+}
+
+/* „Pokaż starsze" — dociążenie listy, nie akcja główna ekranu. Jako
+   pełnowymiarowy klawisz na dole wyglądało na najważniejszą rzecz na ekranie,
+   choć jest czynnością, którą robi się raz na kilka wejść. */
+.przyciski.dociazenie {
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.przyciski.dociazenie > * {
+  flex: 0 0 auto;
+  font-weight: 500;
+  font-size: 0.88rem;
 }
 
 /* Powrót z widoku ćwiczenia to wiersz nawigacji, nie kolejny klawisz w karcie.
@@ -1502,44 +1539,152 @@ header h1 {
   background: var(--obramowanie);
 }
 
-/* === Zakładka Dieta ==================================================== */
+/* === Zakładki Dieta i Aktywności: lista dni ============================ */
 
-/* Nagłówek dnia jest przyciskiem na pełną szerokość karty — jak nagłówek
-   raportu w archiwum: data z lewej, sumy pod spodem, stuknięcie rozwija. */
-.dzien-diety,
+/* Dni mieszkają w JEDNEJ karcie, rozdzielone włosową linią — nie w stosie
+   osobnych kart, jak było. Dziewięć jednakowych pudełek pod rząd daje rytm
+   bez hierarchii: nic się w nim nie wyróżnia, bo wszystko waży tyle samo,
+   a ramki i przerwy między nimi zjadały dwie trzecie pionu.
+
+   Karta listy nie ma własnego wewnętrznego marginesu: wiersze mają go same
+   i dzięki temu linia rozdzielająca biegnie od krawędzi do krawędzi. */
+.karta.lista-dni {
+  padding: 0;
+  overflow: hidden;
+}
+
+.lista-dni .dzien + .dzien {
+  border-top: 1px solid var(--obramowanie);
+}
+
+/* Rozwinięty dzień dostaje ciemniejsze tło całą wysokością — to on jest teraz
+   tematem ekranu, a sąsiednie wiersze mają zejść na drugi plan. */
+.lista-dni .dzien.rozwiniety {
+  background: color-mix(in srgb, var(--powierzchnia-2) 55%, transparent);
+}
+
+.naglowek-dnia,
 .folder {
   appearance: none;
   border: 0;
   background: none;
   color: var(--tekst);
   font: inherit;
-  width: calc(100% + 2 * var(--odstep));
-  min-height: 56px;
-  margin: calc(-1 * var(--odstep));
+  width: 100%;
+  min-height: 60px;
   padding: 12px var(--odstep);
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
+  align-items: center;
+  gap: 12px;
   text-align: left;
   cursor: pointer;
 }
 
-.dzien-diety .data,
+/* Folder notatek zostaje jednokolumnowy: stoi sam w karcie, więc nie ma czego
+   ustawiać w kolumnę z sąsiadami. */
+.folder {
+  width: calc(100% + 2 * var(--odstep));
+  margin: calc(-1 * var(--odstep));
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.opis-dnia {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.naglowek-dnia .data,
 .folder .data {
   font-weight: 550;
 }
 
-.dzien-diety .liczby-dnia,
+.naglowek-dnia .liczby-dnia,
 .folder .liczby-dnia {
   color: var(--tekst-cichy);
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
 
-.dzien-diety.rozwiniety {
-  margin-bottom: 0;
-  border-bottom: 1px solid var(--obramowanie);
+/* Skrót dnia w historii ruchu potrafi mieć pięć członów („Trening A · Trening D
+   · …"). Dwie linie to sufit: trzecia rozpycha wiersz i lista przestaje się
+   skanować, a ucięty tekst i tak jest tylko zapowiedzią rozwinięcia. */
+.naglowek-dnia .liczby-dnia {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+/* Kolumna znaków: CZYM był dzień, zanim przeczyta się napis. Stała szerokość,
+   żeby daty i skróty stały w jednej linii pionowej przez całą listę — kolumna
+   „skacząca" w prawo i w lewo psułaby cały zysk ze skanowania. */
+.znaki-dnia {
+  flex-shrink: 0;
+  width: 50px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  color: var(--tekst-cichy);
+}
+
+.znaki-dnia .znak {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+
+/* Kolor dostaje SZTANGA, a nie pierwszy znak w kolumnie: dzień bez treningu
+   zaczyna się od roweru albo biegacza i akcent na nich kłamałby o tym, co
+   właśnie odróżnia — realizację planu od ruchu poza planem. */
+.znaki-dnia .trening {
+  color: var(--akcent);
+}
+
+/* Szewron — jedyna rzecz, która mówi „to się rozwija". Bez niego stuknięcie
+   w wiersz było do odkrycia wyłącznie przez przypadek. Rysowany obrotem
+   kwadratu, a nie znakiem z fontu: glify ‹ › mają na każdym telefonie inną
+   grubość i inną wysokość x. */
+.szewron {
+  flex-shrink: 0;
+  width: 8px;
+  height: 8px;
+  margin-right: 4px;
+  border-right: 2px solid var(--tekst-cichy);
+  border-bottom: 2px solid var(--tekst-cichy);
+  transform: rotate(-45deg);
+  transition: transform 0.18s ease;
+}
+
+.dzien.rozwiniety .szewron {
+  /* Obrót o 45° w drugą stronę celuje w dół: „to jest teraz otwarte". */
+  transform: rotate(45deg) translate(-2px, -2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .szewron {
+    transition: none;
+  }
+}
+
+/* Wpisy rozwiniętego dnia wcięte pod kolumnę znaków — wcięcie mówi
+   „to należy do wiersza wyżej" bez dokładania ramki. */
+.wpisy-dnia {
+  padding: 0 var(--odstep) 4px;
+}
+
+/* Pasek trafienia w cel pod liczbami dnia diety. Cieńszy niż pasek makro na
+   ekranie Dziś: tam jest treścią karty, tutaj tylko znakiem przy wierszu. */
+.naglowek-dnia .pasek {
+  display: block;
+  height: 4px;
+  margin-top: 2px;
 }
 
 /* === Tydzień w toku i raporty ========================================== */
@@ -1613,6 +1758,9 @@ header h1 {
 .liczby b {
   font-size: 1.05rem;
   font-variant-numeric: tabular-nums;
+  /* Wartość złamana na dwie linie zawsze wygląda na zepsutą, a nie na długą —
+     rząd kafelków przestaje się wtedy czytać jednym spojrzeniem. */
+  white-space: nowrap;
 }
 
 .liczby span {

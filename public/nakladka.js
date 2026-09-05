@@ -375,6 +375,38 @@ export function nalozNaDzienRuchu(dzien, kolejka = []) {
 }
 
 /**
+ * Całe okno historii ruchu: dni z nałożoną kolejką i przeliczone sumy okresu.
+ *
+ * Sumy MUSZĄ tu wejść razem z dniami. Kafelki nad listą i sama lista czytają się
+ * jednym spojrzeniem, więc rower dopisany bez zasięgu widoczny w liście, ale
+ * niedoliczony do „62,4 km" wyglądałby na zepsutą aplikację — a nie na wpis
+ * czekający w kolejce.
+ *
+ * To ta sama arytmetyka i ten sam wyjątek co przy makro w `nalozNaDzien`:
+ * dodawanie liczb, które serwer już policzył, a nie ocenianie czegokolwiek.
+ * Dni z ruchem liczymy po nałożeniu, bo usunięcie ostatniego wpisu dnia zabiera
+ * go z listy i mianownik musi to zobaczyć.
+ */
+export function nalozNaHistorieRuchu(historia, kolejka = []) {
+  const dni = (historia?.dni ?? []).map((d) => nalozNaDzienRuchu(d, kolejka));
+  const suma = (wybierz) => dni.reduce((s, d) => s + wybierz(d), 0);
+
+  return {
+    ...historia,
+    dni,
+    sumy: {
+      ...historia?.sumy,
+      treningi: suma((d) => (d.treningi ?? []).length),
+      aktywnosci: suma((d) => (d.aktywnosci ?? []).length),
+      dystans_m: suma((d) => Number(d.dystans_m) || 0),
+      czas_s: suma((d) => Number(d.czas_s) || 0),
+      dni_z_ruchem: dni.filter((d) => (d.treningi ?? []).length || (d.aktywnosci ?? []).length)
+        .length,
+    },
+  };
+}
+
+/**
  * Foldery notatek z doliczonymi wpisami czekającymi w kolejce.
  *
  * Polityka jak przy treningach i posiłkach: dodania widać od razu ze

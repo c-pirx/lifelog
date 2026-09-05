@@ -20,18 +20,21 @@ import {
   wpisyDnia,
 } from "../public/aktywnosci.js";
 import { ekranDieta } from "../public/dieta.js";
+import { etykietaDnia } from "../public/kalendarz.js";
 import { decyzjaKolejki } from "../public/kolejka.js";
 import { kartaMakro, PASMO } from "../public/makra.js";
 import {
   nalozNaAktywnosci,
   nalozNaDzien,
   nalozNaDzienRuchu,
+  nalozNaHistorieRuchu,
   nalozNaNotatki,
   nalozNaTrening,
 } from "../public/nakladka.js";
 import { ekranNotatki } from "../public/notatki.js";
 import { wpisPosilku } from "../public/posilek.js";
 import { ekranRaporty, panelTygodnia } from "../public/raporty.js";
+import { ZNAK_BASEN, ZNAK_PULS, ZNAK_ROWER, znakDyscypliny } from "../public/znaki.js";
 import { PASMO_CELU } from "../src/domain/raporty.js";
 
 /** Południe UTC: ta sama data lokalna w każdej strefie, w której test może biec. */
@@ -604,18 +607,35 @@ describe("karta makro", () => {
 });
 
 describe("powłoka service workera", () => {
-  it("ma na liście każdy moduł, który importuje app.js", () => {
+  it("ma na liście każdy moduł osiągalny z app.js, także pośrednio", () => {
     // Moduł spoza listy nie trafia do cache'u, a bez zasięgu nieudany import
     // kładzie CAŁY app.js — aplikacja na siłowni nie wstaje. Tak zniknął
     // makra.js przy pierwszym wdrożeniu karty Makro.
+    //
+    // Graf, a nie sama lista importów app.js: znaki.js wchodzi przez
+    // aktywnosci.js i posilek.js, więc płaskie sprawdzenie przepuściłoby go
+    // bez słowa — a skutek byłby dokładnie ten sam, co przy makra.js.
     const sw = readFileSync(new URL("../public/sw.js", import.meta.url), "utf8");
-    const app = readFileSync(new URL("../public/app.js", import.meta.url), "utf8");
-
     const powloka = sw.match(/const POWLOKA = \[([^\]]*)\]/)?.[1] ?? "";
-    const importy = [...app.matchAll(/from "\.\/([\w-]+\.js)"/g)].map((m) => `/${m[1]}`);
 
-    expect(importy.length).toBeGreaterThan(0);
-    for (const modul of importy) expect(powloka).toContain(`"${modul}"`);
+    const osiagalne = new Set<string>();
+    const doOdwiedzenia = ["app.js"];
+
+    while (doOdwiedzenia.length) {
+      const plik = doOdwiedzenia.pop()!;
+      if (osiagalne.has(plik)) continue;
+      osiagalne.add(plik);
+
+      const tresc = readFileSync(new URL(`../public/${plik}`, import.meta.url), "utf8");
+      for (const [, importowany] of tresc.matchAll(/from "\.\/([\w-]+\.js)"/g)) {
+        doOdwiedzenia.push(importowany!);
+      }
+    }
+
+    // Sam app.js jest w liście pod inną postacią — sprawdzamy zależności.
+    osiagalne.delete("app.js");
+    expect(osiagalne.size).toBeGreaterThan(0);
+    for (const modul of osiagalne) expect(powloka).toContain(`"/${modul}"`);
   });
 });
 
@@ -1325,5 +1345,206 @@ describe("ekran notatek", () => {
 
     expect(ekran).toMatch(/jest pusty/);
     expect(ekran).toMatch(/data-zamknij-folder/);
+  });
+});
+
+describe("etykieta dnia", () => {
+  it("wyróżnia dziś i wczoraj, resztę zostawia samą datą", () => {
+    expect(etykietaDnia("2026-08-25", "2026-08-25")).toBe("wt 25.08 · dziś");
+    expect(etykietaDnia("2026-08-24", "2026-08-25")).toBe("pn 24.08 · wczoraj");
+    expect(etykietaDnia("2026-08-23", "2026-08-25")).toBe("nd 23.08");
+  });
+
+  it("przeskok przez pierwszy dzień miesiąca liczy się poprawnie", () => {
+    // Odejmowanie doby od południa UTC przechodzi przez granicę miesiąca
+    // i przez zmianę czasu — obie przesuwają dobę najwyżej o godzinę.
+    expect(etykietaDnia("2026-08-31", "2026-09-01")).toBe("pn 31.08 · wczoraj");
+    expect(etykietaDnia("2026-10-24", "2026-10-25")).toBe("sb 24.10 · wczoraj");
+  });
+
+  it("bez podanego dzisiaj nie dopisuje niczego", () => {
+    expect(etykietaDnia("2026-08-25")).toBe("wt 25.08");
+  });
+});
+
+describe("znaki dyscyplin", () => {
+  it("dobiera znak po słowie kluczowym, niezależnie od wielkości liter", () => {
+    expect(znakDyscypliny("Rower")).toBe(ZNAK_ROWER);
+    expect(znakDyscypliny("rower szosowy")).toBe(ZNAK_ROWER);
+    expect(znakDyscypliny("pływanie")).toBe(ZNAK_BASEN);
+    // Wariant bez polskich znaków — dyktowana dyscyplina bywa zapisana i tak.
+    expect(znakDyscypliny("plywanie")).toBe(ZNAK_BASEN);
+  });
+
+  it("nierozpoznana dyscyplina dostaje znak zastępczy, a nie dziurę", () => {
+    expect(znakDyscypliny("wspinaczka")).toBe(ZNAK_PULS);
+    expect(znakDyscypliny(null)).toBe(ZNAK_PULS);
+    expect(znakDyscypliny("")).toBe(ZNAK_PULS);
+  });
+});
+
+describe("nagłówek okna historii ruchu", () => {
+  const historia = (dni: unknown[], sumy = {}) => ({
+    od: "2026-08-12",
+    do: "2026-08-25",
+    dni_okna: 14,
+    sumy: { treningi: 0, aktywnosci: 0, dystans_m: 0, czas_s: 0, dni_z_ruchem: 0, ...sumy },
+    dni,
+  });
+
+  const dzienZRowerem = {
+    data: "2026-08-25",
+    dystans_m: 18_000,
+    czas_s: 3600,
+    aktywnosci: [
+      { id: 1, godzina: "17:20", data_lokalna: "2026-08-25", dyscyplina: "rower", dystans_m: 18_000, czas_s: 3600, rpe: null, notatka: null },
+    ],
+    treningi: [],
+  };
+
+  it("pokazuje sumy okna zamiast samej karty z przyciskiem", () => {
+    const html = ekranAktywnosci(
+      historia([dzienZRowerem], { treningi: 3, dystans_m: 62_400, czas_s: 19_200, dni_z_ruchem: 9 }),
+      null,
+      null,
+      "2026-08-25",
+    );
+
+    expect(html).toContain("3</b>");
+    expect(html).toContain("62,4 km");
+    expect(html).toContain("9/14");
+    // Godziny na wąskim kafelku bez „min" — pełny zapis łamał go na dwie linie.
+    expect(html).toContain("5 h 20</b>");
+  });
+
+  it("odmienia „trening” razem z liczbą", () => {
+    const dla = (ile: number) =>
+      ekranAktywnosci(historia([dzienZRowerem], { treningi: ile, dni_z_ruchem: 1 }), null, null, "2026-08-25");
+
+    expect(dla(1)).toContain("<span>trening</span>");
+    expect(dla(3)).toContain("<span>treningi</span>");
+    expect(dla(7)).toContain("<span>treningów</span>");
+    // Nastolatki idą jak 5+, mimo końcówki 2, 3 i 4.
+    expect(dla(12)).toContain("<span>treningów</span>");
+  });
+
+  it("milczy o kilometrach i czasie, gdy ich nie było", () => {
+    const html = ekranAktywnosci(
+      historia([dzienZRowerem], { treningi: 4, dni_z_ruchem: 4 }),
+      null,
+      null,
+      "2026-08-25",
+    );
+
+    expect(html).toContain("4</b>");
+    // Kafelków szukamy po etykiecie, nie po samym słowie: „dystans" stoi też
+    // w ukrytym formularzu dodawania wpisu, który jest w tej karcie zawsze.
+    expect(html).not.toContain("<span>dystans</span>");
+    expect(html).not.toContain("<span>w ruchu</span>");
+  });
+
+  it("okno bez ruchu nie dostaje rzędu zer, ale nadal pozwala dodać wpis", () => {
+    const html = ekranAktywnosci(historia([]), null, null, "2026-08-25");
+
+    expect(html).not.toContain('class="liczby"');
+    expect(html).toContain("Dodaj aktywność");
+  });
+});
+
+describe("wiersz dnia w listach historii", () => {
+  const dzienDiety = {
+    data: "2026-08-25",
+    cel_kcal: 2600,
+    spozyte: { kcal: 1300, bialko_g: 90, wegle_g: 120, tluszcz_g: 40 },
+    posilki: [],
+  };
+
+  it("nagłówek dnia mówi czytnikowi ekranu, czy jest rozwinięty", () => {
+    const historia = { od: "2026-08-12", do: "2026-08-25", dni: [dzienDiety] };
+
+    expect(ekranDieta(historia, null, null, "2026-08-25")).toContain('aria-expanded="false"');
+    expect(ekranDieta(historia, "2026-08-25", null, "2026-08-25")).toContain('aria-expanded="true"');
+  });
+
+  it("pasek dnia diety pokazuje udział w celu, a przekroczenie osobnym stanem", () => {
+    const wCelu = ekranDieta({ od: "2026-08-12", do: "2026-08-25", dni: [dzienDiety] }, null, null, "2026-08-25");
+    expect(wCelu).toContain("width:50.0%");
+    expect(wCelu).not.toContain("pasek przekroczony");
+
+    const ponad = ekranDieta(
+      { od: "2026-08-12", do: "2026-08-25", dni: [{ ...dzienDiety, spozyte: { ...dzienDiety.spozyte, kcal: 3000 } }] },
+      null,
+      null,
+      "2026-08-25",
+    );
+    // Pasek nie wychodzi poza 100 %, ale kolor mówi, że cel padł.
+    expect(ponad).toContain("pasek przekroczony");
+    expect(ponad).toContain("width:100.0%");
+  });
+
+  it("dzień bez celu nie dostaje paska — nie ma czego z czym zestawić", () => {
+    const html = ekranDieta(
+      { od: "2026-08-12", do: "2026-08-25", dni: [{ ...dzienDiety, cel_kcal: null }] },
+      null,
+      null,
+      "2026-08-25",
+    );
+
+    expect(html).not.toContain('class="pasek');
+  });
+});
+
+describe("nakładka na całe okno historii ruchu", () => {
+  const historiaZSerwera = () => ({
+    od: "2026-08-12",
+    do: "2026-08-25",
+    dni_okna: 14,
+    sumy: { treningi: 0, aktywnosci: 1, dystans_m: 5000, czas_s: 1500, dni_z_ruchem: 1 },
+    dni: [
+      {
+        data: "2026-08-25",
+        dystans_m: 5000,
+        czas_s: 1500,
+        aktywnosci: [
+          { id: 1, godzina: "07:10", data_lokalna: "2026-08-25", dyscyplina: "bieg", dystans_m: 5000, czas_s: 1500, rpe: null, notatka: null },
+        ],
+        treningi: [],
+      },
+    ],
+  });
+
+  it("rower dopisany bez zasięgu wchodzi i do listy, i do sum okna", () => {
+    const wynik = nalozNaHistorieRuchu(historiaZSerwera(), [
+      {
+        id: 4,
+        sciezka: "/aktywnosci",
+        czas_lokalny: CZAS,
+        dane: { dyscyplina: "rower", dystans_m: 12_000, czas_s: 2400, czas: "2026-08-25 17:20" },
+      },
+    ]);
+
+    expect(wynik.dni[0]!.aktywnosci).toHaveLength(2);
+    expect(wynik.sumy.dystans_m).toBe(17_000);
+    expect(wynik.sumy.czas_s).toBe(3900);
+    expect(wynik.sumy.aktywnosci).toBe(2);
+  });
+
+  it("usunięcie ostatniego wpisu dnia zabiera go z licznika dni z ruchem", () => {
+    const wynik = nalozNaHistorieRuchu(historiaZSerwera(), [
+      { id: 5, sciezka: "/wpis", dane: { typ: "aktywnosc", id: 1, akcja: "usun" } },
+    ]);
+
+    expect(wynik.sumy.dni_z_ruchem).toBe(0);
+    expect(wynik.sumy.dystans_m).toBe(0);
+    // Okno zostaje w kształcie, jaki przyszedł z serwera — mianownik się nie rusza.
+    expect(wynik.dni_okna).toBe(14);
+  });
+
+  it("pusta kolejka nie zmienia niczego", () => {
+    const zSerwera = historiaZSerwera();
+    const wynik = nalozNaHistorieRuchu(zSerwera, []);
+
+    expect(wynik.sumy).toEqual(zSerwera.sumy);
+    expect(wynik.dni[0]).toBe(zSerwera.dni[0]);
   });
 });

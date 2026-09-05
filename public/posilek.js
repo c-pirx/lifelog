@@ -13,6 +13,8 @@
  * od jawnego zastąpienia tą samą listą.
  */
 
+import { ZNAK_POPRAW, ZNAK_USUN } from "./znaki.js";
+
 const esc = (tekst) =>
   String(tekst ?? "").replace(
     /[&<>"']/g,
@@ -61,7 +63,7 @@ function wierszPozycji(p = {}) {
       <input name="poz-bialko" inputmode="decimal" placeholder="B" value="${p.bialko_g ?? ""}" />
       <input name="poz-wegle" inputmode="decimal" placeholder="W" value="${p.wegle_g ?? ""}" />
       <input name="poz-tluszcz" inputmode="decimal" placeholder="T" value="${p.tluszcz_g ?? ""}" />
-      <button type="button" class="przycisk cichy" data-usun-wiersz aria-label="Usuń składnik">✕</button>
+      <button type="button" class="przycisk cichy niszczy" data-usun-wiersz aria-label="Usuń składnik">${ZNAK_USUN}</button>
     </div>`;
 }
 
@@ -107,8 +109,10 @@ export function wpisPosilku(p, edytowanyPosilek) {
         // wrócą, gdy kolejka go wyśle.
         p.oczekuje
           ? ""
-          : `<button class="przycisk cichy" data-edytuj-posilek="${p.id}" aria-label="Popraw">✎</button>
-             <button class="przycisk cichy" data-usun-posilek="${p.id}" aria-label="Usuń">✕</button>`
+          : `<div class="akcje-wpisu">
+               <button class="przycisk cichy" data-edytuj-posilek="${p.id}" aria-label="Popraw">${ZNAK_POPRAW}</button>
+               <button class="przycisk cichy niszczy" data-usun-posilek="${p.id}" aria-label="Usuń">${ZNAK_USUN}</button>
+             </div>`
       }
     </div>`;
 }
