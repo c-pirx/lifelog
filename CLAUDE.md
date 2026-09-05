@@ -625,12 +625,54 @@ claude.ai opisane jest w [INSTRUKCJA.md](INSTRUKCJA.md).
 
 ## Powiadomienia push
 
-Trzy przypomnienia, wszystkie **warunkowe i milknące, gdy warunek znika**:
-rano (8:00–20:00) o dniu treningowym, o 20:00 o ostatniej szansie na ten sam
-dzień, o 18:00 o bilansie kalorii. Odhaczony trening gasi oba treningowe,
-dopisana kolacja gasi kaloryczne. **To jest tu najważniejsze**: bezwarunkowe
+Sześć rodzajów, wszystkie **warunkowe i milknące, gdy warunek znika**. Odhaczony
+trening gasi oba treningowe i alarm o sesji, dopisana kolacja gasi kaloryczne,
+wejście na wagę gasi sygnał o ciszy. **To jest tu najważniejsze**: bezwarunkowe
 powiadomienie o stałej porze zostaje wyciszone w systemie w ciągu dwóch tygodni
-i zabiera ze sobą dwa pozostałe.
+i zabiera ze sobą wszystkie pozostałe.
+
+**Trzy z przełącznikiem** (`RODZAJE_PRZELACZALNE`, kolumna `uzytkownicy.powiadomienia`):
+rano (8:00–20:00) o dniu treningowym, o 20:00 o ostatniej szansie, o 18:00
+o bilansie kalorii.
+
+**Trzy bez przełącznika** (typ `RodzajZawsze`, żadnej listy — pilnuje ich typ):
+wisząca otwarta sesja (8:00–22:00, ponad 3 godziny), gotowy raport tygodnia
+(w dniu publikacji), dziesięć dni bez ważenia (19:00, co dziesiąty dzień).
+Wspólne mają to, że odzywają się **rzadko** i nie są ponagleniem: pierwszy łapie
+błąd, drugi niesie treść, trzeci mówi, że przestała napływać jedyna liczba
+mierząca skutek.
+
+Granica między tymi dwiema grupami żyje **w typach**: `dozwolony` przyjmuje
+wyłącznie `RodzajPrzelaczalny`, więc przepuszczenie rodzaju stałego przez listę
+`wlaczone` jest błędem kompilacji, a nie regułą w komentarzu. Ta sama lista stoi
+pod `zapiszRodzaje` i pod walidacją zod w trasie — gdyby stały pod dwiema,
+checkbox rodzaju stałego przeszedłby walidację i cicho znikał przy zapisie.
+
+**Główny wyłącznik** (`uzytkownicy.powiadomienia_wlaczone`) gasi wszystko, także
+rodzaje stałe. Odhaczenie trzech szczegółowych znaczy „nie chcę codziennych
+przypomnień", a nie „nie chcę wiedzieć, że otwarta sesja blokuje mi trening" —
+to dwa różne życzenia i mają dwa różne stany. Bez tego wyłącznika jedyną dźwignią
+byłaby blokada w ustawieniach przeglądarki, a ta zabiera wszystko i aplikacja nie
+ma jak jej cofnąć. Zapis subskrypcji **włącza** wyłącznik (użytkownik przed chwilą
+przeszedł przez zgodę), a ekran Konto odświeża subskrypcję tylko przy włączonym —
+inaczej samo wejście na ten ekran cofałoby przed chwilą wyłączony przełącznik.
+
+**Wisząca sesja wyklucza przypomnienia treningowe.** Otwarta sesja bez ani jednej
+serii świadomie nie gasi dzisiejszego zadania, więc bez tego wykluczenia sesja
+wisząca od wczoraj plus dzisiejszy dzień planu dawałyby o ósmej dwa powiadomienia
+o jednym treningu.
+
+**Raport nie sprawdza dnia tygodnia ani godziny** — oba warunki są zaszyte w tym,
+że wiersz raportu istnieje: tydzień biegnie niedziela–sobota, więc `tydzien_do + 1`
+JEST niedzielą publikacji, a przed 9:00 `zapewnijRaporty` wiersza nie tworzy.
+Treść nie niesie werdyktu „lepiej / gorzej": to jedyne pole raportu, które ocenia,
+a powiadomienie ma pokazywać.
+
+**Cisza na wadze idzie co dziesiąty dzień, nie po dziesiątym.** Warunek „minęło
+dziesięć dni" jest prawdziwy każdego kolejnego dnia, a ślad chroni tylko dobę —
+bez reszty z dzielenia byłoby to powiadomienie codzienne. Dolna granica jest
+równie konieczna, bo zero dzieli się bez reszty. Konto, które nigdy się nie
+ważyło, milczy: bez pomiaru nie ma ciszy do przerwania, jest brak nawyku.
 
 Poranne ma **górną** granicę godziny, nie tylko dolną. Bez niej telefon włączony
 pierwszy raz o 20:05 spełniałby oba warunki treningowe i dostawał dwa
@@ -683,10 +725,14 @@ wyjaśnienia. Zgoda musi paść w reakcji na stuknięcie: Safari egzekwuje to ci
 
 Świadomie odłożone: koniec przerwy między seriami (technicznie niepewny —
 `setTimeout` w service workerze bywa ubijany, a Notification Triggers API nie
-wyszło poza flagę), sygnał o zatrzymanej kolejce offline, wisząca otwarta sesja,
-raport tygodniowy push-em (przychodzi już zadaniem cyklicznym Claude'a), poranna
-waga i wszelkie serie oraz odznaki — te ostatnie kłócą się z zasadą „pokazuj,
-nie oceniaj".
+wyszło poza flagę), sygnał o zatrzymanej kolejce offline (jedyny, który chroni
+przed UTRATĄ wpisów, ale wymaga powiadomienia lokalnego — serwer nie wie nic
+o IndexedDB w telefonie), poranna waga **codziennie** oraz wszelkie serie
+i odznaki — te ostatnie kłócą się z zasadą „pokazuj, nie oceniaj".
+
+Budżet uwagi jest tu sufitem, nie kodem: trzy powiadomienia dzienne to maksimum,
+a każde kolejne musi być rzadkie. Siódmy rodzaj wymaga najpierw odpowiedzi, co
+z listy wypada.
 
 ## Po MVP (kolejność wg wartości)
 

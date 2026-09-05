@@ -750,6 +750,19 @@ describe("tik harmonogramu", () => {
     expect(uzytkownikPoId(rejestr, ania)?.powiadomienia_wlaczone).toBe(1);
   });
 
+  it("rodzaj stały wychodzi, choć nie ma go na liście przełączników", () => {
+    // Dowód end-to-end, że „bez przełącznika" znaczy naprawdę bez przełącznika:
+    // Ania ma włączone same kalorie, a i tak dostaje alarm o wiszącej sesji.
+    zapiszPowiadomienia(rejestr, ania, "kalorie");
+    const dziennik = pula.daj(ania);
+    rozpocznijTrening(dziennik, { kod: "A", ts: o(5), strefa: STREFA });
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+
+    expect(push.wyslane).toHaveLength(1);
+    expect(wyslaneDzis(rejestr, ania, PONIEDZIALEK)).toEqual(["sesja_wisi"]);
+  });
+
   it("nowe konto ma wyłącznik zgaszony, dopóki nie przejdzie przez włączanie", () => {
     const tomek = utworzKonto(rejestr, {
       login: "tomek-swiezy",
