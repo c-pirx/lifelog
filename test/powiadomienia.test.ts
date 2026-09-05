@@ -158,6 +158,92 @@ describe("przypomnienie o treningu", () => {
   });
 });
 
+describe("wisząca otwarta sesja", () => {
+  /** Otwarty trening bez zamknięcia — dokładnie to, co zostaje po wyjściu z siłowni. */
+  function otwartyTrening(ts: string, opcje: { bezPlanu?: boolean } = {}) {
+    planA();
+    rozpocznijTrening(db, {
+      ts,
+      strefa: STREFA,
+      ...(opcje.bezPlanu ? { bez_planu: true } : { kod: "A" }),
+    });
+  }
+
+  it("odzywa się, gdy sesja wisi dłużej niż próg", () => {
+    otwartyTrening(o(6));
+
+    const [powiadomienie] = sprawdz(o(10));
+
+    expect(powiadomienie?.rodzaj).toBe("sesja_wisi");
+    expect(powiadomienie?.tresc).toContain("06:00");
+    expect(powiadomienie?.tresc).toContain("4 godz");
+    expect(powiadomienie?.ekran).toBe("trening");
+  });
+
+  it("milczy, dopóki sesja nie przekroczy progu", () => {
+    otwartyTrening(o(8));
+
+    expect(rodzaje(o(10))).toEqual(["trening_rano"]);
+  });
+
+  it("milknie po zamknięciu treningu", () => {
+    // Jedyny scenariusz sprawdzający rzecz najważniejszą: zamknięcie sesji
+    // gasi alarm natychmiast.
+    otwartyTrening(o(6));
+    zapiszSerie(db, { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: o(7) }, { strefa: STREFA });
+    zakonczTrening(db, { ts: o(8), strefa: STREFA });
+
+    expect(rodzaje(o(10))).toEqual([]);
+  });
+
+  it("bez otwartej sesji nie ma o czym mówić", () => {
+    expect(rodzaje(o(10))).toEqual([]);
+  });
+
+  it("w nocy czeka do rana", () => {
+    // Sesja otwarta o 21:00 przekracza próg o północy. Alarm o tej porze nic
+    // nie daje — następny trening i tak nie zacznie się w nocy.
+    otwartyTrening(o(21));
+
+    // O 23:30 milczy sam alarm o sesji; wieczorne przypomnienie o niezrobionym
+    // treningu działa jak dotąd, bo pusta sesja go nie gasi.
+    expect(rodzaje("2026-08-17T23:30:00.000Z")).not.toContain("sesja_wisi");
+    expect(rodzaje("2026-08-18T08:00:00.000Z")).toEqual(["sesja_wisi"]);
+  });
+
+  it("sesja bez planu mówi o sobie, nie zostawia pustego miejsca po nazwie", () => {
+    otwartyTrening(o(6), { bezPlanu: true });
+
+    const [powiadomienie] = sprawdz(o(10));
+
+    expect(powiadomienie?.tresc).toContain("bez planu");
+    expect(powiadomienie?.tresc).not.toContain("undefined");
+    expect(powiadomienie?.tresc).not.toContain("null");
+  });
+
+  it("wyklucza przypomnienie treningowe o tej samej sprawie", () => {
+    // Otwarta sesja bez serii NIE gasi dzisiejszego zadania (tak ma być), więc
+    // bez wykluczenia poszłyby o ósmej dwa powiadomienia o tym samym treningu.
+    otwartyTrening(o(4));
+
+    expect(rodzaje(o(9))).toEqual(["sesja_wisi"]);
+  });
+
+  it("nie wychodzi bez przełącznika, bo go nie ma — wychodzi mimo pustej listy", () => {
+    otwartyTrening(o(6));
+
+    expect(sprawdz(o(10), { wlaczone: [] }).map((p) => p.rodzaj)).toEqual(["sesja_wisi"]);
+  });
+
+  it("ślad z dziś go wycisza, jak każdy inny rodzaj", () => {
+    otwartyTrening(o(6));
+
+    expect(sprawdz(o(10), { juzWyslane: ["sesja_wisi"] }).map((p) => p.rodzaj)).toEqual([
+      "trening_rano",
+    ]);
+  });
+});
+
 describe("przypomnienie o kaloriach", () => {
   it("przy budowaniu masy odzywa się poniżej progu", () => {
     ustawCele(db, { ...CELE, tryb: "masa", obowiazuje_od: "2026-08-01" });

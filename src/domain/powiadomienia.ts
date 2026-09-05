@@ -6,9 +6,11 @@
  * `trendWagi` i `czestePosilki`, bo test zależny od dzisiejszej daty zaczyna
  * padać sam z siebie po kilku miesiącach.
  *
- * Stan dnia czytamy WYŁĄCZNIE przez `planNaDzis` i `podsumowanieDnia` — te same
- * funkcje, którymi odpowiada ekran Dziś i czat. Drugie miejsce liczące „czy dziś
+ * Stan czytamy WYŁĄCZNIE przez funkcje domenowe (`planNaDzis`, `podsumowanieDnia`,
+ * `aktywnaSesja`, `ostatniaWaga`, `raport`), nigdy przez `repo` — to te same
+ * funkcje, którymi odpowiada aplikacja i czat. Drugie miejsce liczące „czy dziś
  * był trening" rozjechałoby się z ekranem Trening przy pierwszej poprawce.
+ * Wszystkie są czystymi odczytami; nic tutaj nie zapisuje.
  *
  * Zasada, której nie wolno tu złamać: powiadomienie MILKNIE, gdy warunek znika.
  * Odhaczony trening gasi wieczorne przypomnienie, dopisana kolacja gasi to
@@ -19,7 +21,7 @@
 import type { Baza } from "../db/index.js";
 import { dataLokalna, godzinaLokalna, STREFA_DOMYSLNA } from "../lib/time.js";
 import { podsumowanieDnia } from "./diet.js";
-import { planNaDzis } from "./workouts.js";
+import { aktywnaSesja, planNaDzis } from "./workouts.js";
 
 /** Rodzaje z własnym przełącznikiem na ekranie Konto. */
 export type RodzajPrzelaczalny = "trening_rano" | "trening_wieczor" | "kalorie";
@@ -61,6 +63,21 @@ export const RODZAJE_PRZELACZALNE: readonly RodzajPrzelaczalny[] = [
 export const GODZINA_RANO = 8;
 export const GODZINA_KALORII = 18;
 export const GODZINA_WIECZOR = 20;
+
+/**
+ * Po tej godzinie alarm o wiszącej sesji czeka do rana.
+ *
+ * Bez górnej granicy sesja otwarta o 21:00 dzwoniłaby o północy, a otwarta
+ * o 23:00 — o drugiej. Zwłoka nic nie kosztuje: wisząca sesja boli dopiero
+ * wtedy, gdy blokuje NASTĘPNY trening, a ten i tak nie zacznie się w nocy.
+ */
+export const GODZINA_NOCNA = 22;
+
+/**
+ * Ile godzin otwarta sesja musi wisieć, żeby to znaczyło „zapomniał zamknąć".
+ * Realny trening z rozgrzewką i przerwami mieści się w dwóch.
+ */
+export const GODZIN_WISZACEJ_SESJI = 3;
 
 /**
  * Progi jako UŁAMEK celu dziennego, nie sztywne kalorie.
@@ -123,6 +140,14 @@ export function powiadomieniaNaTeraz(db: Baza, opcje: OpcjePowiadomien): DoWysla
 
   const wynik: DoWyslania[] = [];
 
+  // Wisząca sesja idzie PRZED przypomnieniami treningowymi i je wyklucza.
+  // Otwarta sesja bez ani jednej serii nie gasi dzisiejszego zadania (tak ma
+  // być — pusta sesja to ślad po pomyłce), więc bez tego wykluczenia sesja
+  // wisząca od wczoraj plus dzisiejszy dzień planu dałyby o ósmej dwa
+  // powiadomienia o tym samym treningu.
+  const wisi = nieBylo("sesja_wisi") ? trescWiszacejSesji(db, opcje.teraz, strefa, godzina) : null;
+  if (wisi) wynik.push(wisi);
+
   const poraTreningu =
     godzina >= GODZINA_WIECZOR
       ? "trening_wieczor"
@@ -130,7 +155,7 @@ export function powiadomieniaNaTeraz(db: Baza, opcje: OpcjePowiadomien): DoWysla
         ? "trening_rano"
         : null;
 
-  if (poraTreningu !== null && dozwolony(poraTreningu)) {
+  if (!wisi && poraTreningu !== null && dozwolony(poraTreningu)) {
     const trening = trescTreningu(db, poraTreningu, opcje.teraz, strefa);
     if (trening) wynik.push(trening);
   }
@@ -168,6 +193,49 @@ function trescTreningu(
         tresc: `${opis}. Dzień się kończy.`,
         ekran: "trening",
       };
+}
+
+/**
+ * Otwarta sesja treningowa, która wisi od godzin.
+ *
+ * To jedyne powiadomienie łapiące BŁĄD, a nie przypominające o zamiarze:
+ * `idx_sesja_aktywna` dopuszcza jedną otwartą sesję naraz, więc zapomniana
+ * blokuje następny trening, a historia dostaje sesję trwającą kilkanaście
+ * godzin. Gaśnie w chwili zamknięcia treningu.
+ *
+ * Ślad wysyłki jest per doba lokalna, więc sesja wisząca przez dwa dni odezwie
+ * się dwa razy — i tak ma być: drugiego dnia blokada zdążyła już kosztować
+ * trening.
+ */
+function trescWiszacejSesji(
+  db: Baza,
+  teraz: string,
+  strefa: string,
+  godzina: number,
+): DoWyslania | null {
+  if (godzina < GODZINA_RANO || godzina >= GODZINA_NOCNA) return null;
+
+  const sesja = aktywnaSesja(db);
+  if (!sesja) return null;
+
+  const godzin = (Date.parse(teraz) - Date.parse(sesja.start_ts)) / 3_600_000;
+  if (godzin < GODZIN_WISZACEJ_SESJI) return null;
+
+  // Sesja otwarta „bez planu" nie ma kodu ani nazwy dnia — wtedy mówimy o niej
+  // tym, czym jest, zamiast wstawiać puste miejsce po nazwie.
+  const co =
+    sesja.dzien_kod !== null
+      ? `Dzień ${sesja.dzien_kod}${sesja.dzien_nazwa ? ` — ${sesja.dzien_nazwa}` : ""}`
+      : "Trening bez planu";
+
+  return {
+    rodzaj: "sesja_wisi",
+    tytul: "Trening wciąż otwarty",
+    tresc:
+      `${co}, start ${godzinaLokalna(sesja.start_ts, strefa)} — ` +
+      `trwa ${Math.floor(godzin)} godz. Otwarta sesja blokuje kolejny trening.`,
+    ekran: "trening",
+  };
 }
 
 /**
