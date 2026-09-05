@@ -132,6 +132,7 @@ export function przeslijPowiadomienia(
               tytul: powiadomienie.tytul,
               tresc: powiadomienie.tresc,
               ekran: powiadomienie.ekran,
+              rodzaj: powiadomienie.rodzaj,
             })
             .catch((blad: unknown) => {
               if (czySubskrypcjaMartwa(blad)) {

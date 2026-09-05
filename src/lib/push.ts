@@ -45,6 +45,8 @@ export type Ladunek = {
   tresc: string;
   /** Zakładka otwierana po stuknięciu — service worker składa z niej adres. */
   ekran: string;
+  /** Grupuje powiadomienia w systemie: to samo przypomnienie podmienia poprzednie. */
+  rodzaj: string;
 };
 
 export type Push = {

@@ -32,7 +32,25 @@ const stanSieci = document.getElementById("stan-sieci");
 const ekranLogowania = document.getElementById("logowanie");
 const aplikacja = document.getElementById("aplikacja");
 
-let ekran = "dzis";
+/** Zakładki, na które wolno wskoczyć z zewnątrz — nazwy z `data-ekran` w powłoce. */
+const EKRANY = [
+  "dzis",
+  "trening",
+  "postepy",
+  "dieta",
+  "aktywnosci",
+  "plany",
+  "raporty",
+  "notatki",
+  "konto",
+];
+
+// Stuknięcie w powiadomienie otwiera /app#trening albo /app#dzis. Bez tej linii
+// service worker prowadziłby na właściwy adres, a aplikacja i tak startowałaby
+// od ekranu Dziś — czyli przypomnienie o treningu kończyłoby się nie tam,
+// gdzie obiecuje.
+const zHasza = location.hash.slice(1);
+let ekran = EKRANY.includes(zHasza) ? zHasza : "dzis";
 let stan = {};
 
 /** Id serii otwartej do poprawki. Przeżywa odswiez(), bo widok jest bezstanowy. */
@@ -1662,6 +1680,13 @@ async function odswiez() {
     const konto = await api("/konto");
     dataEkranu.textContent = "";
     widok.innerHTML = ekranKonto(konto, tokenPokazany);
+
+    // Odświeżenie subskrypcji obok renderu, nie przed nim: ekran ma się pokazać
+    // od razu, a nieudany zapis nie może go zasłonić. Cisza w razie błędu jest
+    // tu właściwa — użytkownik niczego nie prosił.
+    if (konto.powiadomienia.dziala && przegladarkaUmiePush() && Notification.permission === "granted") {
+      zapewnijSubskrypcje(konto.powiadomienia.klucz_publiczny).catch(() => {});
+    }
     return;
   }
 
@@ -1671,6 +1696,107 @@ async function odswiez() {
 }
 
 // === Ekran Konto ========================================================
+
+/** Opisy przełączników — kolejność ta sama, co w RODZAJE_POWIADOMIEN na serwerze. */
+const RODZAJE_POWIADOMIEN = [
+  { rodzaj: "trening_rano", nazwa: "Rano w dzień treningowy", kiedy: "8:00" },
+  { rodzaj: "trening_wieczor", nazwa: "Ostatnia szansa na trening", kiedy: "20:00" },
+  { rodzaj: "kalorie", nazwa: "Bilans kalorii", kiedy: "18:00" },
+];
+
+const TRYBY = [
+  { tryb: "redukcja", nazwa: "Redukcja" },
+  { tryb: "utrzymanie", nazwa: "Utrzymanie" },
+  { tryb: "masa", nazwa: "Masa" },
+];
+
+/** Czy przeglądarka w ogóle umie odebrać powiadomienie push. */
+function przegladarkaUmiePush() {
+  return "Notification" in window && "serviceWorker" in navigator && "PushManager" in window;
+}
+
+/** Czy aplikacja działa jako zainstalowana — na iPhonie warunek konieczny. */
+function zainstalowana() {
+  return window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+}
+
+/**
+ * Sekcja powiadomień ma cztery stany i każdy mówi wprost, czego brakuje.
+ *
+ * Najważniejszy jest iPhone: tam push działa WYŁĄCZNIE w aplikacji dodanej do
+ * ekranu głównego (iOS 16.4+). Sam przycisk „Włącz" wyglądałby na zepsuty,
+ * bo `requestPermission` odmawia bez słowa wyjaśnienia.
+ */
+function sekcjaPowiadomien(stan) {
+  if (!stan.dziala) {
+    return `<p class="cel">Ten serwer nie ma skonfigurowanej wysyłki powiadomień.</p>`;
+  }
+
+  if (!przegladarkaUmiePush()) {
+    return zainstalowana()
+      ? `<p class="cel">Ta przeglądarka nie obsługuje powiadomień.</p>`
+      : `<p class="cel">Na iPhonie powiadomienia działają dopiero po dodaniu aplikacji
+         do ekranu głównego: przycisk „Udostępnij" → „Dodaj do ekranu początkowego".
+         Potem wróć tutaj.</p>`;
+  }
+
+  if (Notification.permission === "denied") {
+    return `<p class="cel">Powiadomienia są zablokowane w ustawieniach przeglądarki dla tej
+      strony. Odblokuj je tam, a potem wróć tutaj.</p>`;
+  }
+
+  if (Notification.permission !== "granted") {
+    return `
+      <p class="cel">Trzy przypomnienia, każde milknie samo, gdy przestaje mieć sens:
+      rano o dniu treningowym, o 20:00 gdy trening wciąż niezrobiony, o 18:00 o bilansie
+      kalorii.</p>
+      <button class="przycisk glowny" type="button" data-akcja="powiadomienia-wlacz">
+        Włącz powiadomienia
+      </button>`;
+  }
+
+  const przelaczniki = RODZAJE_POWIADOMIEN.map(
+    ({ rodzaj, nazwa, kiedy }) => `
+      <label class="przelacznik">
+        <input type="checkbox" data-rodzaj="${rodzaj}"
+               ${stan.wlaczone.includes(rodzaj) ? "checked" : ""} />
+        <span>${esc(nazwa)} <span class="cel">· ${esc(kiedy)}</span></span>
+      </label>`,
+  ).join("");
+
+  const cisza =
+    stan.wlaczone.length === 0
+      ? `<p class="cel">Wszystkie wyłączone — nic nie przyjdzie.</p>`
+      : "";
+
+  // Tryb bez ustawionych celów nie ma do czego się odnosić: próg liczy się jako
+  // procent celu dziennego. Zamiast martwego przełącznika mówimy, czego brakuje.
+  const tryb =
+    stan.tryb === null
+      ? `<p class="cel">Ustaw najpierw cele dzienne w rozmowie z Claude'em — bez nich
+         przypomnienie o kaloriach nie ma z czym porównywać.</p>`
+      : `<div class="tryby">
+          ${TRYBY.map(
+            ({ tryb: kod, nazwa }) => `
+            <button class="przycisk${kod === stan.tryb ? " glowny" : ""}" type="button"
+                    data-tryb="${kod}">${esc(nazwa)}</button>`,
+          ).join("")}
+        </div>
+        <p class="cel">${esc(opisTrybu(stan.tryb))}</p>`;
+
+  return `
+    <div class="przelaczniki">${przelaczniki}</div>
+    ${cisza}
+    <h3>Kierunek</h3>
+    ${tryb}`;
+}
+
+/** Co konkretnie zrobi wieczorne przypomnienie w tym trybie. */
+function opisTrybu(tryb) {
+  if (tryb === "masa") return "O 18:00 przypomni, gdy zjadłeś za mało jak na cel.";
+  if (tryb === "redukcja") return "O 18:00 ostrzeże, gdy zostało już mało kalorii na wieczór.";
+  return "O 18:00 odezwie się w obie strony — i przy zbyt małej, i przy zbyt dużej sumie.";
+}
 
 function ekranKonto(konto, token) {
   const slad = konto.ostatnie_uzycie_konektora
@@ -1724,6 +1850,11 @@ function ekranKonto(konto, token) {
           <li>Wróć tutaj: napis powyżej zmieni się na „✓ połączono".</li>
         </ol>
       </details>
+    </section>
+
+    <section class="karta">
+      <h2>Powiadomienia</h2>
+      ${sekcjaPowiadomien(konto.powiadomienia)}
     </section>
 
     <section class="karta">
@@ -1917,8 +2048,85 @@ function zakonczGest(zdarzenie) {
 document.addEventListener("touchend", zakonczGest);
 document.addEventListener("touchcancel", zakonczGest);
 
+// === Powiadomienia push =================================================
+
+/** Klucz VAPID jedzie jako base64url, a `pushManager` chce surowych bajtów. */
+function base64UrlDoUint8Array(klucz) {
+  const uzupelniony = (klucz + "=".repeat((4 - (klucz.length % 4)) % 4))
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const surowe = atob(uzupelniony);
+  return Uint8Array.from([...surowe].map((znak) => znak.charCodeAt(0)));
+}
+
+/**
+ * Odsyła serwerowi aktualną subskrypcję tej przeglądarki.
+ *
+ * Wołane przy każdym wejściu na ekran Konto, nie tylko przy włączaniu: klucze
+ * subskrypcji rotują same z siebie, a zapis po stronie serwera jest UPSERT-em,
+ * więc powtórzenie nic nie kosztuje. Bez tego przeglądarka po rotacji miałaby
+ * zgodę i ciszę naraz — najgorszy możliwy stan, bo wygląda jak działający.
+ */
+async function zapewnijSubskrypcje(kluczPubliczny) {
+  const rejestracja = await navigator.serviceWorker.ready;
+  const subskrypcja =
+    (await rejestracja.pushManager.getSubscription()) ??
+    (await rejestracja.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: base64UrlDoUint8Array(kluczPubliczny),
+    }));
+
+  await api("/powiadomienia/subskrypcja", {
+    method: "POST",
+    dane: subskrypcja.toJSON(),
+    kolejkuj: false,
+  });
+}
+
+/** Przełączniki i tryb — bez kolejki, jak wszystkie ustawienia konta. */
+async function zapiszUstawieniaPowiadomien(dane) {
+  await api("/powiadomienia", { method: "POST", dane, kolejkuj: false });
+}
+
+// Checkboxy obsługujemy przez `change`, a nie przez wspólny handler kliknięć:
+// stuknięcie w etykietę wywołuje click dwa razy (raz na niej, raz na polu),
+// a `change` odpala się dokładnie raz i niesie już nowy stan.
+widok.addEventListener("change", (zdarzenie) => {
+  const pole = zdarzenie.target.closest("[data-rodzaj]");
+  if (!pole) return;
+
+  const wlaczone = [...widok.querySelectorAll("[data-rodzaj]")]
+    .filter((p) => p.checked)
+    .map((p) => p.dataset.rodzaj);
+
+  akcja(() => zapiszUstawieniaPowiadomien({ wlaczone }), "Zapisano");
+});
+
 widok.addEventListener("click", (zdarzenie) => {
   const cel = zdarzenie.target;
+
+  // Zgoda MUSI paść w reakcji na stuknięcie — Safari odmawia poza gestem
+  // użytkownika i robi to bez słowa wyjaśnienia.
+  const wlacz = cel.closest('[data-akcja="powiadomienia-wlacz"]');
+  if (wlacz) {
+    akcjaPrzycisku(wlacz, async () => {
+      if ((await Notification.requestPermission()) !== "granted") {
+        throw new Error("Bez zgody przeglądarki powiadomienia nie przyjdą");
+      }
+      const konto = await api("/konto");
+      await zapewnijSubskrypcje(konto.powiadomienia.klucz_publiczny);
+      // Po włączeniu działają wszystkie trzy — wyłączanie pojedynczych jest
+      // wtedy decyzją, a nie kolejnym krokiem konfiguracji.
+      await zapiszUstawieniaPowiadomien({ wlaczone: RODZAJE_POWIADOMIEN.map((r) => r.rodzaj) });
+    });
+    return;
+  }
+
+  const tryb = cel.closest("[data-tryb]");
+  if (tryb) {
+    akcjaPrzycisku(tryb, () => zapiszUstawieniaPowiadomien({ tryb: tryb.dataset.tryb }));
+    return;
+  }
 
   // Rotacja tokenu konektora. Bez kolejki: bez sieci nowy adres i tak nie
   // miałby czego obsłużyć, a stary zdążyłby zgasnąć.
@@ -2705,6 +2913,14 @@ formularzLogowania?.addEventListener("submit", async (zdarzenie) => {
 // nadal działa, tyle że wymaga sieci.
 navigator.serviceWorker?.register("/sw.js").catch(() => {
   /* np. przeglądarka bez obsługi albo strona po http */
+});
+
+// Stuknięcie w powiadomienie przy JUŻ otwartej aplikacji. `client.navigate()`
+// nie przeładowałoby dokumentu przy różnicy samego fragmentu adresu, więc kod
+// startowy by nie pobiegł — service worker mówi więc wprost, co otworzyć.
+navigator.serviceWorker?.addEventListener("message", (zdarzenie) => {
+  const cel = zdarzenie.data?.ekran;
+  if (EKRANY.includes(cel)) przejdzDo(cel);
 });
 
 (async () => {

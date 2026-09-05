@@ -10,7 +10,7 @@
  * umiałby najwyżej udać, że się udało.
  */
 
-const WERSJA = "v16";
+const WERSJA = "v17";
 const CACHE_POWLOKI = `powloka-${WERSJA}`;
 const CACHE_API = `api-${WERSJA}`;
 
@@ -57,6 +57,61 @@ self.addEventListener("activate", (zdarzenie) => {
         Promise.all(klucze.filter((k) => !k.endsWith(WERSJA)).map((k) => caches.delete(k))),
       )
       .then(() => self.clients.claim()),
+  );
+});
+
+// === Powiadomienia push ==================================================
+
+/**
+ * Ładunek jest w całości od naszego serwera i to on decyduje o treści —
+ * service worker niczego nie dopisuje ani nie tłumaczy.
+ *
+ * `tag` po rodzaju powiadomienia: to samo przypomnienie przysłane dwa razy ma
+ * podmienić poprzednie, a nie ułożyć się w stos. Ślad wysyłki w rejestrze
+ * powinien to wykluczyć, ale duplikat na ekranie jest gorszy niż jego brak.
+ */
+self.addEventListener("push", (zdarzenie) => {
+  if (!zdarzenie.data) return;
+
+  let ladunek;
+  try {
+    ladunek = zdarzenie.data.json();
+  } catch {
+    return;
+  }
+
+  zdarzenie.waitUntil(
+    self.registration.showNotification(ladunek.tytul, {
+      body: ladunek.tresc,
+      icon: "/icons/ikona-192.png",
+      badge: "/icons/ikona-192.png",
+      tag: ladunek.rodzaj ?? "lifelog",
+      data: { ekran: ladunek.ekran ?? "dzis" },
+    }),
+  );
+});
+
+/**
+ * Stuknięcie otwiera zakładkę, o której mówi powiadomienie.
+ *
+ * Otwarte okno dostaje `postMessage`, a nie `navigate`: przy różnicy samego
+ * fragmentu adresu nawigacja nie przeładowałaby dokumentu, więc kod startowy
+ * czytający hash nigdy by nie pobiegł, a użytkownik zostałby na ekranie,
+ * który akurat miał przed sobą.
+ */
+self.addEventListener("notificationclick", (zdarzenie) => {
+  zdarzenie.notification.close();
+  const ekran = zdarzenie.notification.data?.ekran ?? "dzis";
+
+  zdarzenie.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((okna) => {
+      const otwarte = okna.find((okno) => new URL(okno.url).pathname.startsWith("/app"));
+      if (otwarte) {
+        otwarte.postMessage({ ekran });
+        return otwarte.focus();
+      }
+      return self.clients.openWindow(`/app#${ekran}`);
+    }),
   );
 });
 

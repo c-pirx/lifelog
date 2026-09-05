@@ -1899,3 +1899,75 @@ textarea {
   gap: 6px;
   font-size: 0.9rem;
 }
+
+/* Przełączniki powiadomień: pole i etykieta jako jeden cel dotyku — na telefonie
+   celowanie w sam kwadracik checkboxa jest loterią. */
+.przelaczniki {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.przelacznik {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.przelacznik:hover {
+  background: var(--powierzchnia-2);
+}
+
+/* Zeruje padding i obramowanie z globalnej reguły dla pól formularza — bez tego
+   kwadracik rośnie do wysokości pola tekstowego i wiersze rozjeżdżają się
+   na pół ekranu. */
+.przelacznik input {
+  width: 20px;
+  height: 20px;
+  min-height: 0;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--akcent);
+}
+
+/* Etykieta przełącznika jest zdaniem, nie podpisem pola — globalne `label`
+   ścisza je do 0.8rem i to samo, co dobre nad polem tekstowym, tutaj byłoby
+   nieczytelne. */
+.przelacznik > span {
+  font-size: 0.95rem;
+  color: var(--tekst);
+}
+
+.przelacznik .cel {
+  font-size: 0.85rem;
+}
+
+/* Trzy stany kierunku w jednym rzędzie: wybrany jest jedyny wyróżniony, więc
+   widać go bez czytania. Rząd MUSI zostać jednym rzędem — przy zawinięciu
+   ostatni przycisk rozpycha się na całą szerokość i zaczyna wyglądać jak
+   główna akcja karty, a nie jak jedna z trzech równorzędnych opcji.
+   Stąd `min-width: 0` i węższy padding zamiast domyślnego z `.przycisk`. */
+.tryby {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.tryby .przycisk {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-left: 6px;
+  padding-right: 6px;
+  font-size: 0.9rem;
+}
+
+.karta h3 {
+  margin: 16px 0 8px;
+  font-size: 1rem;
+}
