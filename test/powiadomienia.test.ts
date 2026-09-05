@@ -18,6 +18,7 @@ import {
   zapiszSubskrypcje,
 } from "../src/db/rejestr.js";
 import { przeslijPowiadomienia } from "../src/harmonogram.js";
+import { zapewnijRaporty } from "../src/domain/raporty.js";
 import type { Ladunek, Push } from "../src/lib/push.js";
 import { ustawCele, zapiszPosilek } from "../src/domain/diet.js";
 import { utworzKonto } from "../src/domain/konta.js";
@@ -306,6 +307,93 @@ describe("przypomnienie o kaloriach", () => {
     zjedzone(500, o(14));
 
     expect(rodzaje(o(17))).toEqual([]);
+  });
+});
+
+describe("raport tygodnia", () => {
+  /**
+   * Tydzień biegnie niedziela–sobota, więc raport za 09–15 sierpnia publikuje
+   * się w niedzielę 16 sierpnia o 9:00.
+   */
+  const NIEDZIELA_PUBLIKACJI = "2026-08-16";
+  const chwila = (data: string, godzina: number): string =>
+    `${data}T${String(godzina).padStart(2, "0")}:30:00.000Z`;
+
+  /** Tydzień z jednym treningiem i jednym dniem jedzenia — dość, żeby raport powstał. */
+  function tydzienZDanymi() {
+    ustawCele(db, { ...CELE, obowiazuje_od: "2026-08-01" });
+    zapiszPosilek(db, { opis: "obiad", kcal: 2800, ts: "2026-08-12T12:00:00.000Z" }, { strefa: STREFA });
+    planA();
+    rozpocznijTrening(db, { kod: "A", ts: "2026-08-12T17:00:00.000Z", strefa: STREFA });
+    zapiszSerie(
+      db,
+      { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: "2026-08-12T17:10:00.000Z" },
+      { strefa: STREFA },
+    );
+    zakonczTrening(db, { ts: "2026-08-12T18:00:00.000Z", strefa: STREFA });
+  }
+
+  function wygenerujRaport(teraz: string) {
+    zapewnijRaporty(db, { strefa: STREFA, teraz });
+  }
+
+  it("odzywa się w dniu publikacji, gdy raport już istnieje", () => {
+    tydzienZDanymi();
+    wygenerujRaport(chwila(NIEDZIELA_PUBLIKACJI, 9));
+
+    const [powiadomienie] = sprawdz(chwila(NIEDZIELA_PUBLIKACJI, 9));
+
+    expect(powiadomienie?.rodzaj).toBe("raport");
+    expect(powiadomienie?.ekran).toBe("raporty");
+    expect(powiadomienie?.tresc).toContain("1 trening");
+    expect(powiadomienie?.tresc).toContain("2026-08-09");
+  });
+
+  it("przed dziewiątą milczy, bo raportu jeszcze nie ma", () => {
+    // Progu 9:00 nie duplikujemy — dziedziczy się z tego, że `zapewnijRaporty`
+    // przed tą godziną wiersza nie tworzy.
+    tydzienZDanymi();
+    wygenerujRaport(chwila(NIEDZIELA_PUBLIKACJI, 8));
+
+    expect(rodzaje(chwila(NIEDZIELA_PUBLIKACJI, 8))).toEqual([]);
+  });
+
+  it("nazajutrz już nie wraca", () => {
+    tydzienZDanymi();
+    wygenerujRaport(chwila(NIEDZIELA_PUBLIKACJI, 9));
+
+    expect(rodzaje(chwila("2026-08-17", 10))).not.toContain("raport");
+  });
+
+  it("bez ani jednego raportu w bazie nie ma o czym mówić", () => {
+    expect(rodzaje(chwila(NIEDZIELA_PUBLIKACJI, 9))).toEqual([]);
+  });
+
+  it("ślad z dziś go wycisza", () => {
+    tydzienZDanymi();
+    wygenerujRaport(chwila(NIEDZIELA_PUBLIKACJI, 9));
+
+    expect(
+      sprawdz(chwila(NIEDZIELA_PUBLIKACJI, 9), { juzWyslane: ["raport"] }).map((p) => p.rodzaj),
+    ).not.toContain("raport");
+  });
+
+  it("wychodzi mimo pustej listy przełączników", () => {
+    tydzienZDanymi();
+    wygenerujRaport(chwila(NIEDZIELA_PUBLIKACJI, 9));
+
+    expect(
+      sprawdz(chwila(NIEDZIELA_PUBLIKACJI, 9), { wlaczone: [] }).map((p) => p.rodzaj),
+    ).toEqual(["raport"]);
+  });
+
+  it("nie ocenia tygodnia — o tym jest komentarz w raporcie, nie powiadomienie", () => {
+    tydzienZDanymi();
+    wygenerujRaport(chwila(NIEDZIELA_PUBLIKACJI, 9));
+
+    const [powiadomienie] = sprawdz(chwila(NIEDZIELA_PUBLIKACJI, 9));
+
+    expect(powiadomienie?.tresc).not.toMatch(/lepiej|gorzej|podobnie/);
   });
 });
 

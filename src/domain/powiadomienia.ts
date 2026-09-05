@@ -19,8 +19,9 @@
  */
 
 import type { Baza } from "../db/index.js";
-import { dataLokalna, godzinaLokalna, STREFA_DOMYSLNA } from "../lib/time.js";
+import { dataLokalna, godzinaLokalna, przesunDate, STREFA_DOMYSLNA } from "../lib/time.js";
 import { podsumowanieDnia } from "./diet.js";
+import { raport } from "./raporty.js";
 import { aktywnaSesja, planNaDzis } from "./workouts.js";
 
 /** Rodzaje z własnym przełącznikiem na ekranie Konto. */
@@ -165,6 +166,11 @@ export function powiadomieniaNaTeraz(db: Baza, opcje: OpcjePowiadomien): DoWysla
     if (kalorie) wynik.push(kalorie);
   }
 
+  if (nieBylo("raport")) {
+    const gotowy = trescRaportu(db, opcje.teraz, strefa);
+    if (gotowy) wynik.push(gotowy);
+  }
+
   return wynik;
 }
 
@@ -235,6 +241,57 @@ function trescWiszacejSesji(
       `${co}, start ${godzinaLokalna(sesja.start_ts, strefa)} — ` +
       `trwa ${Math.floor(godzin)} godz. Otwarta sesja blokuje kolejny trening.`,
     ekran: "trening",
+  };
+}
+
+/** Polska odmiana po liczbie: 1 trening, 2–4 treningi, 5+ treningów. */
+function odmien(ile: number, jeden: string, kilka: string, wiele: string): string {
+  const dziesiatki = ile % 100;
+  if (ile === 1) return `${ile} ${jeden}`;
+  const jednosci = ile % 10;
+  if (jednosci >= 2 && jednosci <= 4 && (dziesiatki < 12 || dziesiatki > 14)) {
+    return `${ile} ${kilka}`;
+  }
+  return `${ile} ${wiele}`;
+}
+
+/**
+ * Raport zamkniętego tygodnia, dokładnie w dniu jego publikacji.
+ *
+ * Ani dnia tygodnia, ani godziny nie sprawdzamy tu wprost — oba warunki są już
+ * zaszyte w tym, że wiersz raportu w ogóle istnieje. Tydzień biegnie niedziela–
+ * sobota, więc `tydzien_do + 1` JEST niedzielą publikacji, a przed 9:00
+ * `zapewnijRaporty` tego wiersza nie tworzy. Duplikowanie tych progów tutaj
+ * dałoby dwa miejsca, które trzeba by zmieniać razem.
+ *
+ * To jedyne z sześciu powiadomień, którego użytkownik nie zgasi działaniem —
+ * raport nie przestaje istnieć w ciągu dnia. Uzasadnia to częstotliwość (raz na
+ * tydzień) i to, że niesie treść, a nie ponaglenie.
+ *
+ * Po dłuższym przestoju serwera raport dogeneruje się z opóźnieniem i wtedy
+ * powiadomienie nie pójdzie — data się nie zgodzi. Świadomie: raport odzyskany
+ * po fakcie czeka w archiwum i nie jest pilny.
+ */
+function trescRaportu(db: Baza, teraz: string, strefa: string): DoWyslania | null {
+  const najnowszy = raport(db);
+  if (!najnowszy) return null;
+  if (dataLokalna(teraz, strefa) !== przesunDate(najnowszy.tydzien_do, 1)) return null;
+
+  const czesci = [
+    odmien(najnowszy.trening.sesje, "trening", "treningi", "treningów"),
+    odmien(najnowszy.trening.serie, "seria", "serie", "serii"),
+    // Bez ustawionych celów nie ma czego trafiać — człon znika zamiast pokazywać
+    // „0 z 7", które wyglądałoby na porażkę, a jest brakiem odniesienia.
+    najnowszy.dieta.cel_dzienny ? `${najnowszy.dieta.dni_w_celu} z 7 dni w celu` : null,
+  ].filter((c): c is string => c !== null);
+
+  return {
+    rodzaj: "raport",
+    tytul: "Raport tygodnia gotowy",
+    // Bez werdyktu „lepiej / gorzej" — to jedyne pole raportu, które ocenia,
+    // a powiadomienie ma pokazywać. Od interpretacji jest komentarz w raporcie.
+    tresc: `${najnowszy.tydzien_od} – ${najnowszy.tydzien_do}: ${czesci.join(", ")}.`,
+    ekran: "raporty",
   };
 }
 
