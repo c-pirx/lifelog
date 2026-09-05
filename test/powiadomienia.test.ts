@@ -1,16 +1,23 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { otworzBaze, type Baza } from "../src/db/index.js";
+import { utworzPule, type PulaBaz } from "../src/db/pula.js";
 import {
   oznaczWyslane,
   subskrypcjeUzytkownika,
   usunSubskrypcje,
   uzytkownikPoId,
   wyslaneDzis,
+  zapiszPowiadomienia,
   zapiszSubskrypcje,
 } from "../src/db/rejestr.js";
+import { przeslijPowiadomienia } from "../src/harmonogram.js";
+import type { Ladunek, Push } from "../src/lib/push.js";
 import { ustawCele, zapiszPosilek } from "../src/domain/diet.js";
 import { utworzKonto } from "../src/domain/konta.js";
 import {
@@ -367,5 +374,186 @@ describe("zapis rodzajów w rejestrze", () => {
 
   it("zapis i odczyt są swoją odwrotnością", () => {
     expect(odczytajRodzaje(zapiszRodzaje(WSZYSTKIE))).toEqual(WSZYSTKIE);
+  });
+});
+
+describe("tik harmonogramu", () => {
+  let rejestr: Baza;
+  let katalogPuli: string;
+  let pula: PulaBaz;
+  let ania: number;
+  let push: Push & { wyslane: Array<{ endpoint: string; ladunek: Ladunek }> };
+  let bledy: unknown[];
+
+  const ENDPOINT = "https://push.example/ania";
+
+  function atrapaPushu(
+    zachowanie: (endpoint: string) => Promise<void> = async () => undefined,
+  ): typeof push {
+    const wyslane: Array<{ endpoint: string; ladunek: Ladunek }> = [];
+    return {
+      wyslane,
+      wlaczona: true,
+      kluczPubliczny: "klucz-testowy",
+      async wyslij(subskrypcja, ladunek) {
+        wyslane.push({ endpoint: subskrypcja.endpoint, ladunek });
+        await zachowanie(subskrypcja.endpoint);
+      },
+    };
+  }
+
+  /** Wysyłka jest fire-and-forget — jej skutki uboczne widać dopiero po mikrotaskach. */
+  const poWysylce = () => new Promise((gotowe) => setTimeout(gotowe, 0));
+
+  beforeEach(() => {
+    rejestr = otworzBaze({ sciezka: ":memory:", katalogMigracji: MIGRACJE_REJESTRU });
+    katalogPuli = mkdtempSync(join(tmpdir(), "tik-test-"));
+    pula = utworzPule({ katalog: katalogPuli });
+    push = atrapaPushu();
+    bledy = [];
+
+    ania = utworzKonto(rejestr, {
+      login: "ania",
+      haslo: "haslo-testowe-1",
+      zgoda: true,
+      strefa: STREFA,
+    }).id;
+
+    // Plan trafia do dziennika konta, nie do bazy `db` z pozostałych bloków.
+    const dziennik = pula.daj(ania);
+    dodajDzienPlanu(dziennik, {
+      kod: "A",
+      nazwa: "Nogi i klatka",
+      dzien_tygodnia: 1,
+      cwiczenia: [{ nazwa: "przysiad", typ: "silowe", serie_cel: 5, powt_cel: "5" }],
+    });
+
+    zapiszPowiadomienia(rejestr, ania, "trening_rano,trening_wieczor,kalorie");
+    zapiszSubskrypcje(rejestr, {
+      uzytkownik_id: ania,
+      endpoint: ENDPOINT,
+      p256dh: "klucz",
+      auth: "sekret",
+      utworzono: o(6),
+    });
+  });
+
+  afterEach(() => {
+    pula.zamknij();
+    rmSync(katalogPuli, { recursive: true, force: true });
+  });
+
+  it("wysyła poranne przypomnienie i zostawia ślad", () => {
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+
+    expect(push.wyslane).toHaveLength(1);
+    expect(push.wyslane[0]?.endpoint).toBe(ENDPOINT);
+    expect(push.wyslane[0]?.ladunek.ekran).toBe("trening");
+    expect(wyslaneDzis(rejestr, ania, PONIEDZIALEK)).toEqual(["trening_rano"]);
+  });
+
+  it("drugi przebieg tego samego dnia nie wysyła nic ponownie", () => {
+    // Tik chodzi co pięć minut — bez tego użytkownik dostałby to samo
+    // powiadomienie dwanaście razy na godzinę.
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+    przeslijPowiadomienia({ rejestr, pula }, push, o(10));
+
+    expect(push.wyslane).toHaveLength(1);
+  });
+
+  it("konto z wyłączonymi powiadomieniami jest pomijane", () => {
+    zapiszPowiadomienia(rejestr, ania, "");
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+
+    expect(push.wyslane).toEqual([]);
+    expect(wyslaneDzis(rejestr, ania, PONIEDZIALEK)).toEqual([]);
+  });
+
+  it("konto bez subskrypcji nie zostawia śladu — inaczej straciłoby pierwsze powiadomienie", () => {
+    // Ślad postawiony przed subskrypcją oznaczałby, że dzień włączenia
+    // powiadomień jest zawsze dniem bez powiadomień.
+    const tomek = utworzKonto(rejestr, {
+      login: "tomek",
+      haslo: "haslo-testowe-2",
+      zgoda: true,
+      strefa: STREFA,
+    }).id;
+    zapiszPowiadomienia(rejestr, tomek, "trening_rano");
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+
+    expect(wyslaneDzis(rejestr, tomek, PONIEDZIALEK)).toEqual([]);
+  });
+
+  it("odhaczony trening gasi wieczorne przypomnienie", () => {
+    const dziennik = pula.daj(ania);
+    rozpocznijTrening(dziennik, { kod: "A", ts: o(17), strefa: STREFA });
+    zapiszSerie(
+      dziennik,
+      { cwiczenie: "przysiad", powtorzenia: 5, ciezar_kg: 100, ts: o(17) },
+      { strefa: STREFA },
+    );
+    zakonczTrening(dziennik, { ts: o(18), strefa: STREFA });
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(21));
+
+    expect(push.wyslane).toEqual([]);
+  });
+
+  it("martwa subskrypcja znika z bazy po odpowiedzi 410", async () => {
+    push = atrapaPushu(async () => {
+      throw Object.assign(new Error("Gone"), { statusCode: 410 });
+    });
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+    await poWysylce();
+
+    expect(subskrypcjeUzytkownika(rejestr, ania)).toEqual([]);
+  });
+
+  it("zwykły błąd wysyłki nie kasuje subskrypcji", async () => {
+    const cisza = console.error;
+    console.error = (...co: unknown[]) => bledy.push(co);
+    push = atrapaPushu(async () => {
+      throw Object.assign(new Error("push service padł"), { statusCode: 503 });
+    });
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+    await poWysylce();
+    console.error = cisza;
+
+    expect(subskrypcjeUzytkownika(rejestr, ania)).toHaveLength(1);
+    expect(bledy).toHaveLength(1);
+  });
+
+  it("każde konto liczy godzinę we własnej strefie", () => {
+    // Ania w UTC ma dziewiątą rano, konto z Auckland — dwudziestą pierwszą.
+    const zaOceanem = utworzKonto(rejestr, {
+      login: "kiwi",
+      haslo: "haslo-testowe-3",
+      zgoda: true,
+      strefa: "Pacific/Auckland",
+    }).id;
+    zapiszPowiadomienia(rejestr, zaOceanem, "trening_rano,trening_wieczor");
+    zapiszSubskrypcje(rejestr, {
+      uzytkownik_id: zaOceanem,
+      endpoint: "https://push.example/kiwi",
+      p256dh: "klucz",
+      auth: "sekret",
+      utworzono: o(6),
+    });
+    dodajDzienPlanu(pula.daj(zaOceanem), {
+      kod: "A",
+      nazwa: "Nogi i klatka",
+      dzien_tygodnia: 1,
+      cwiczenia: [{ nazwa: "przysiad", typ: "silowe" }],
+    });
+
+    przeslijPowiadomienia({ rejestr, pula }, push, o(9));
+
+    expect(wyslaneDzis(rejestr, ania, PONIEDZIALEK)).toEqual(["trening_rano"]);
+    expect(wyslaneDzis(rejestr, zaOceanem, PONIEDZIALEK)).toEqual(["trening_wieczor"]);
   });
 });

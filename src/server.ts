@@ -97,7 +97,7 @@ const app = utworzApp(zrodla, {
 
 // Wołane tylko tutaj, nigdy z utworzApp() — inaczej każdy test stawiający
 // aplikację zostawiałby po sobie działający timer.
-uruchomHarmonogram(zrodla);
+uruchomHarmonogram(zrodla, push ?? undefined);
 
 serve({ fetch: app.fetch, port: konfiguracja.port, hostname: konfiguracja.host }, (info) => {
   console.log(`Asystent słucha na ${konfiguracja.host}:${info.port}`);

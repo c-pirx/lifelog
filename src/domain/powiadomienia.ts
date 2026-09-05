@@ -65,8 +65,12 @@ export type OpcjePowiadomien = {
   strefa?: string;
   /** Rodzaje włączone przez użytkownika. Pusta lista = cisza. */
   wlaczone: readonly RodzajPowiadomienia[];
-  /** Rodzaje już wysłane tego dnia lokalnego. */
-  juzWyslane: readonly RodzajPowiadomienia[];
+  /**
+   * Rodzaje już wysłane tego dnia lokalnego. Zwykłe napisy, bo ślad w rejestrze
+   * może pamiętać rodzaj usunięty z kodu — do sprawdzenia zawierania to bez
+   * różnicy, a przepuszczanie takiego zapisu przez walidację nic nie wnosi.
+   */
+  juzWyslane: readonly string[];
 };
 
 /** „utrzymanie" pilnuje obu stron; masa tylko dolnej, redukcja tylko górnej. */
