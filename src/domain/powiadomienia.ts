@@ -21,9 +21,30 @@ import { dataLokalna, godzinaLokalna, STREFA_DOMYSLNA } from "../lib/time.js";
 import { podsumowanieDnia } from "./diet.js";
 import { planNaDzis } from "./workouts.js";
 
-export type RodzajPowiadomienia = "trening_rano" | "trening_wieczor" | "kalorie";
+/** Rodzaje z własnym przełącznikiem na ekranie Konto. */
+export type RodzajPrzelaczalny = "trening_rano" | "trening_wieczor" | "kalorie";
 
-export const RODZAJE_POWIADOMIEN: readonly RodzajPowiadomienia[] = [
+/**
+ * Rodzaje bez przełącznika — gasi je wyłącznie główny wyłącznik powiadomień.
+ *
+ * Wspólne mają to, że odzywają się RZADKO i nie są ponagleniem: dwa pierwsze
+ * łapią błąd albo niosą treść, trzeci mówi, że przestała napływać jedyna liczba
+ * mierząca skutek. Osobne checkboxy byłyby zaproszeniem do wyłączenia dokładnie
+ * tego, co ma działać zawsze.
+ */
+export type RodzajZawsze = "sesja_wisi" | "raport" | "waga_cisza";
+
+export type RodzajPowiadomienia = RodzajPrzelaczalny | RodzajZawsze;
+
+/**
+ * Jedyna lista rodzajów w tym pliku — celowo obejmuje TYLKO przełączalne.
+ *
+ * Tylko te nazwy trafiają do kolumny `uzytkownicy.powiadomienia` i tylko ich
+ * dotyczy walidacja `POST /powiadomienia`: kolumna opisuje wyłącznie to, co
+ * użytkownik odhacza. Listy rodzajów stałych nie ma, bo nie miałaby odbiorcy —
+ * pilnuje ich typ, nie tablica.
+ */
+export const RODZAJE_PRZELACZALNE: readonly RodzajPrzelaczalny[] = [
   "trening_rano",
   "trening_wieczor",
   "kalorie",
@@ -55,8 +76,11 @@ export type DoWyslania = {
   rodzaj: RodzajPowiadomienia;
   tytul: string;
   tresc: string;
-  /** Zakładka do otwarcia po stuknięciu. Adres składa service worker. */
-  ekran: "dzis" | "trening";
+  /**
+   * Zakładka do otwarcia po stuknięciu. Adres składa service worker; wszystkie
+   * te nazwy stoją już w `EKRANY` w `public/app.js`.
+   */
+  ekran: "dzis" | "trening" | "postepy" | "raporty";
 };
 
 export type OpcjePowiadomien = {
@@ -86,8 +110,16 @@ export function powiadomieniaNaTeraz(db: Baza, opcje: OpcjePowiadomien): DoWysla
   const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
   const godzina = Number(godzinaLokalna(opcje.teraz, strefa).slice(0, 2));
 
-  const dozwolony = (rodzaj: RodzajPowiadomienia): boolean =>
-    opcje.wlaczone.includes(rodzaj) && !opcje.juzWyslane.includes(rodzaj);
+  // Ślad wysyłki obowiązuje WSZYSTKIE rodzaje — raz dziennie znaczy raz dziennie.
+  const nieBylo = (rodzaj: RodzajPowiadomienia): boolean =>
+    !opcje.juzWyslane.includes(rodzaj);
+
+  // Przełącznik dotyczy wyłącznie rodzajów, które go mają. Zawężenie parametru
+  // do `RodzajPrzelaczalny` nie jest ozdobnikiem: dzięki niemu przepuszczenie
+  // rodzaju stałego przez listę `wlaczone` jest błędem kompilacji, a nie
+  // regułą zapisaną w komentarzu, którą ktoś kiedyś przeoczy.
+  const dozwolony = (rodzaj: RodzajPrzelaczalny): boolean =>
+    opcje.wlaczone.includes(rodzaj) && nieBylo(rodzaj);
 
   const wynik: DoWyslania[] = [];
 
@@ -178,21 +210,25 @@ function trescKalorii(db: Baza, teraz: string, strefa: string): DoWyslania | nul
 }
 
 /**
- * Kolumna `powiadomienia` w rejestrze ↔ lista rodzajów.
+ * Kolumna `powiadomienia` w rejestrze ↔ lista rodzajów PRZEŁĄCZALNYCH.
  *
- * Tekst po przecinku zamiast trzech kolumn boolowskich: czwarty rodzaj ma być
+ * Tekst po przecinku zamiast kolumn boolowskich: kolejny przełącznik ma być
  * jedną linią w TypeScripcie, nie migracją. Nieznane nazwy odpadają po cichu —
  * to jedyne miejsce, w którym stara wersja kodu spotyka nowy rodzaj.
+ *
+ * Kluczowych rodzajów tu NIE MA i mieć nie może: gdyby dało się je zapisać,
+ * dałoby się je też skasować, a wtedy „bez przełącznika" znaczyłoby tylko tyle,
+ * że wyłącznik jest schowany głębiej.
  */
-export function odczytajRodzaje(zapis: string): RodzajPowiadomienia[] {
+export function odczytajRodzaje(zapis: string): RodzajPrzelaczalny[] {
   return zapis
     .split(",")
     .map((s) => s.trim())
-    .filter((s): s is RodzajPowiadomienia =>
-      RODZAJE_POWIADOMIEN.includes(s as RodzajPowiadomienia),
+    .filter((s): s is RodzajPrzelaczalny =>
+      RODZAJE_PRZELACZALNE.includes(s as RodzajPrzelaczalny),
     );
 }
 
-export function zapiszRodzaje(rodzaje: readonly RodzajPowiadomienia[]): string {
-  return RODZAJE_POWIADOMIEN.filter((r) => rodzaje.includes(r)).join(",");
+export function zapiszRodzaje(rodzaje: readonly RodzajPrzelaczalny[]): string {
+  return RODZAJE_PRZELACZALNE.filter((r) => rodzaje.includes(r)).join(",");
 }

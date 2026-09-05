@@ -45,8 +45,8 @@ import { zapiszPowiadomienia, zapiszSubskrypcje } from "../db/rejestr.js";
 import {
   odczytajRodzaje,
   zapiszRodzaje,
-  RODZAJE_POWIADOMIEN,
-  type RodzajPowiadomienia,
+  RODZAJE_PRZELACZALNE,
+  type RodzajPrzelaczalny,
 } from "../domain/powiadomienia.js";
 import {
   celeNaDzien,
@@ -200,7 +200,10 @@ const schematSubskrypcji = z.object({
 });
 
 const schematPowiadomien = z.object({
-  wlaczone: z.array(z.enum(RODZAJE_POWIADOMIEN as unknown as [string, ...string[]])).optional(),
+  // Ta sama lista, na której stoi `zapiszRodzaje`. Gdyby walidacja i zapis stały
+  // na dwóch różnych, checkbox rodzaju stałego przeszedłby walidację i cicho
+  // znikał przy zapisie — użytkownik widziałby przełącznik odznaczający się sam.
+  wlaczone: z.array(z.enum(RODZAJE_PRZELACZALNE as unknown as [string, ...string[]])).optional(),
   tryb: z.enum(TRYBY_CELU as unknown as [string, ...string[]]).optional(),
 });
 
@@ -550,7 +553,7 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
     const { wlaczone, tryb } = schematPowiadomien.parse(await c.req.json());
 
     if (wlaczone) {
-      zapiszPowiadomienia(rejestr, c.var.konto.id, zapiszRodzaje(wlaczone as RodzajPowiadomienia[]));
+      zapiszPowiadomienia(rejestr, c.var.konto.id, zapiszRodzaje(wlaczone as RodzajPrzelaczalny[]));
     }
     if (tryb) zmienTryb(c.var.db, tryb as TrybCelu, { strefa: c.var.strefa });
 

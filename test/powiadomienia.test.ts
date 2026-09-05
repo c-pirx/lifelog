@@ -24,7 +24,7 @@ import {
   odczytajRodzaje,
   powiadomieniaNaTeraz,
   zapiszRodzaje,
-  type RodzajPowiadomienia,
+  type RodzajPrzelaczalny,
 } from "../src/domain/powiadomienia.js";
 import {
   dodajDzienPlanu,
@@ -54,7 +54,7 @@ const PONIEDZIALEK = "2026-08-17";
 const o = (godzina: number): string =>
   `${PONIEDZIALEK}T${String(godzina).padStart(2, "0")}:00:00.000Z`;
 
-const WSZYSTKIE: RodzajPowiadomienia[] = ["trening_rano", "trening_wieczor", "kalorie"];
+const WSZYSTKIE: RodzajPrzelaczalny[] = ["trening_rano", "trening_wieczor", "kalorie"];
 
 const CELE = { kcal: 2800, bialko_g: 180, wegle_g: 300, tluszcz_g: 90 };
 
@@ -366,6 +366,18 @@ describe("zapis rodzajów w rejestrze", () => {
     // Stara wersja kodu spotykająca rodzaj dodany później — ma go pominąć,
     // a nie wywrócić się przy odczycie konta.
     expect(odczytajRodzaje("kalorie,waga_rano")).toEqual(["kalorie"]);
+  });
+
+  it("rodzaj bez przełącznika nie wraca z bazy, nawet wpisany tam ręcznie", () => {
+    expect(odczytajRodzaje("kalorie,sesja_wisi,raport")).toEqual(["kalorie"]);
+  });
+
+  it("rodzaju bez przełącznika nie da się zapisać nawet przez rzutowanie", () => {
+    // Gdyby dało się go zapisać, dałoby się go też skasować — a wtedy „bez
+    // przełącznika" znaczyłoby tylko tyle, że wyłącznik jest schowany głębiej.
+    expect(zapiszRodzaje(["kalorie", "waga_cisza"] as unknown as RodzajPrzelaczalny[])).toBe(
+      "kalorie",
+    );
   });
 
   it("zapisuje w stałej kolejności, niezależnie od kolejności wejścia", () => {
