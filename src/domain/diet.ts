@@ -16,8 +16,10 @@ import {
   terazUtc,
   STREFA_DOMYSLNA,
 } from "../lib/time.js";
+import { BladDomeny } from "./bledy.js";
 import {
   MAKRO_ZERO,
+  TRYB_DOMYSLNY,
   dodajMakro,
   odejmijMakro,
   type Cele,
@@ -27,6 +29,7 @@ import {
   type Pora,
   type Posilek,
   type PozycjaPosilku,
+  type TrybCelu,
 } from "./typy.js";
 
 export type Opcje = { strefa?: string };
@@ -46,11 +49,18 @@ export function wywnioskujPore(iso: string, strefa: string = STREFA_DOMYSLNA): P
 
 // === CELE ===============================================================
 
-export type NoweCele = Makro & { obowiazuje_od?: string; opis?: string };
+export type NoweCele = Makro & { obowiazuje_od?: string; opis?: string; tryb?: TrybCelu };
 
 export function ustawCele(db: Baza, dane: NoweCele, opcje: Opcje = {}): Cele {
   const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
   const obowiazujeOd = dane.obowiazuje_od ?? dzisiaj(strefa);
+
+  // Pominięty tryb DZIEDZICZY z celów obowiązujących tego dnia, a nie spada na
+  // domyślny. Inaczej najzwyklejsza prośba „obniż mi kalorie o 200" cicho
+  // przestawiałaby redukcję na utrzymanie — a wieczorne powiadomienie zmieniałoby
+  // przez to stronę, o czym użytkownik dowiedziałby się dopiero z jego treści.
+  const poprzednie = repo.celeNaDzien(db, obowiazujeOd);
+  const tryb = dane.tryb ?? poprzednie?.tryb ?? TRYB_DOMYSLNY;
 
   const id = repo.wstawCele(db, {
     obowiazuje_od: obowiazujeOd,
@@ -59,6 +69,7 @@ export function ustawCele(db: Baza, dane: NoweCele, opcje: Opcje = {}): Cele {
     wegle_g: dane.wegle_g,
     tluszcz_g: dane.tluszcz_g,
     opis: dane.opis ?? null,
+    tryb,
     utworzono: terazUtc(),
   });
 
@@ -70,7 +81,42 @@ export function ustawCele(db: Baza, dane: NoweCele, opcje: Opcje = {}): Cele {
     wegle_g: dane.wegle_g,
     tluszcz_g: dane.tluszcz_g,
     opis: dane.opis ?? null,
+    tryb,
   };
+}
+
+/**
+ * Zmiana samego trybu — nowy wiersz celów z NIEZMIENIONYM makro.
+ *
+ * Liczy to domena, bo inaczej aplikacja musiałaby odesłać cztery liczby, których
+ * wcale nie zmienia; każda przekłamana po drodze fałszowałaby cel. Nowy wiersz,
+ * a nie UPDATE — historia celów zostaje nietknięta tak samo jak przy zmianie kcal.
+ */
+export function zmienTryb(db: Baza, tryb: TrybCelu, opcje: Opcje = {}): Cele {
+  const strefa = opcje.strefa ?? STREFA_DOMYSLNA;
+  const biezace = repo.celeNaDzien(db, dzisiaj(strefa));
+
+  if (!biezace) {
+    throw new BladDomeny(
+      "Nie ma jeszcze celów dziennych — tryb opisuje kierunek względem nich. Ustaw cele w rozmowie z Claude'em.",
+      "brak_celow",
+    );
+  }
+
+  if (biezace.tryb === tryb) return biezace;
+
+  return ustawCele(
+    db,
+    {
+      kcal: biezace.kcal,
+      bialko_g: biezace.bialko_g,
+      wegle_g: biezace.wegle_g,
+      tluszcz_g: biezace.tluszcz_g,
+      tryb,
+      ...(biezace.opis === null ? {} : { opis: biezace.opis }),
+    },
+    opcje,
+  );
 }
 
 export function celeNaDzien(db: Baza, data: string): Cele | null {

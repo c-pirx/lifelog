@@ -12,6 +12,7 @@ import type {
   Pewnosc,
   Pora,
   StatusSesji,
+  TrybCelu,
   TypCwiczenia,
   ZrodloWpisu,
 } from "../domain/typy.js";
@@ -26,6 +27,7 @@ export type WierszCele = {
   wegle_g: number;
   tluszcz_g: number;
   opis: string | null;
+  tryb: TrybCelu;
 };
 
 export type WierszPosilku = {
@@ -157,8 +159,8 @@ export function wstawCele(
 ): number {
   const wynik = db
     .prepare(
-      `INSERT INTO cele (obowiazuje_od, kcal, bialko_g, wegle_g, tluszcz_g, opis, utworzono)
-       VALUES (@obowiazuje_od, @kcal, @bialko_g, @wegle_g, @tluszcz_g, @opis, @utworzono)`,
+      `INSERT INTO cele (obowiazuje_od, kcal, bialko_g, wegle_g, tluszcz_g, opis, tryb, utworzono)
+       VALUES (@obowiazuje_od, @kcal, @bialko_g, @wegle_g, @tluszcz_g, @opis, @tryb, @utworzono)`,
     )
     .run(dane);
   return Number(wynik.lastInsertRowid);
@@ -168,7 +170,7 @@ export function wstawCele(
 export function celeNaDzien(db: Baza, data: string): WierszCele | undefined {
   return db
     .prepare<[string], WierszCele>(
-      `SELECT id, obowiazuje_od, kcal, bialko_g, wegle_g, tluszcz_g, opis
+      `SELECT id, obowiazuje_od, kcal, bialko_g, wegle_g, tluszcz_g, opis, tryb
        FROM cele
        WHERE obowiazuje_od <= ?
        ORDER BY obowiazuje_od DESC, id DESC

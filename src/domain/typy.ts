@@ -85,10 +85,29 @@ export type NowyPosilek = Partial<Makro> & {
   pozycje?: NowaPozycja[];
 };
 
+/**
+ * W którą stronę system ma się odzywać o kaloriach.
+ *
+ * Wąsko i wyłącznie dla powiadomień: „za mało" przy budowaniu masy jest
+ * ostrzeżeniem, przy redukcji sukcesem. Ocena tygodnia i raporty trybu NIE
+ * czytają — tam dalej obowiązuje zasada, że system nie zna zamiaru użytkownika
+ * i mierzy wyłącznie trafienia w cel.
+ *
+ * Zamknięty w TypeScripcie, nie w SQL — jak KATEGORIE_NOTATEK i z tego samego
+ * powodu: więz CHECK unieruchomiłby listę do czasu przepisania tabeli.
+ */
+export type TrybCelu = "redukcja" | "utrzymanie" | "masa";
+
+export const TRYBY_CELU: readonly TrybCelu[] = ["redukcja", "utrzymanie", "masa"];
+
+/** Bez deklaracji nie zgadujemy — brak trybu znaczy „nie odzywaj się o kierunku". */
+export const TRYB_DOMYSLNY: TrybCelu = "utrzymanie";
+
 export type Cele = Makro & {
   id: number;
   obowiazuje_od: string;
   opis: string | null;
+  tryb: TrybCelu;
 };
 
 export type PodsumowanieDnia = {

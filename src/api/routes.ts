@@ -53,7 +53,7 @@ import { zmienWpis } from "../domain/edits.js";
 import { ostatniaWaga, trendWagi, zapiszWage } from "../domain/metrics.js";
 import { historiaNotatek, zapiszNotatke } from "../domain/notatki.js";
 import { raporty, tydzienWToku, zapewnijRaporty } from "../domain/raporty.js";
-import { KATEGORIE_NOTATEK, PORY, TYPY_CWICZEN } from "../domain/typy.js";
+import { KATEGORIE_NOTATEK, PORY, TRYBY_CELU, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
@@ -165,6 +165,10 @@ const schematCelow = z.object({
   tluszcz_g: z.number().nonnegative(),
   obowiazuje_od: z.string().optional(),
   opis: z.string().optional(),
+  // Pominięty dziedziczy z poprzednich celów — patrz `ustawCele`. Musi tu stać
+  // jawnie: `z.object` usuwa nieznane klucze po cichu, więc bez tej linii
+  // przełącznik trybu wyglądałby, jakby działał.
+  tryb: z.enum(TRYBY_CELU as unknown as [string, ...string[]]).optional(),
 });
 
 const schematAktywnosci = z.object({
@@ -589,7 +593,10 @@ export function utworzRouterApi(zrodla: ZrodlaDanych, ustawienia: UstawieniaApi)
 
   api.post("/cele", async (c) => {
     const dane = schematCelow.parse(await c.req.json());
-    return c.json(ustawCele(c.var.db, dane, { strefa: c.var.strefa }), 201);
+    return c.json(
+      ustawCele(c.var.db, { ...dane, tryb: dane.tryb as never }, { strefa: c.var.strefa }),
+      201,
+    );
   });
 
   // === Notatki ==========================================================

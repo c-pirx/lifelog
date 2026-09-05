@@ -8,6 +8,7 @@ import {
   sumyDzienne,
   ustawCele,
   zapiszPosilek,
+  zmienTryb,
 } from "../src/domain/diet.js";
 
 let db: Baza;
@@ -264,6 +265,70 @@ describe("cele w czasie", () => {
     ustawCele(db, { ...CELE, kcal: 1800, obowiazuje_od: "2026-08-15" });
 
     expect(podsumowanieDnia(db, "2026-08-20").cele?.kcal).toBe(1800);
+  });
+});
+
+describe("tryb celu", () => {
+  it("bez podania trybu pierwsze cele stoją na utrzymaniu", () => {
+    const cele = ustawCele(db, { ...CELE, obowiazuje_od: "2026-08-01" });
+
+    expect(cele.tryb).toBe("utrzymanie");
+  });
+
+  it("pominięty tryb dziedziczy po poprzednich celach", () => {
+    // Najgroźniejsza cicha regresja: prośba „obniż mi kalorie” nie może przestawić
+    // redukcji na utrzymanie, bo wieczorne powiadomienie zmieniłoby wtedy stronę.
+    ustawCele(db, { ...CELE, tryb: "redukcja", obowiazuje_od: "2026-08-01" });
+
+    const poprawione = ustawCele(db, { ...CELE, kcal: 2200, obowiazuje_od: "2026-08-10" });
+
+    expect(poprawione.tryb).toBe("redukcja");
+    expect(podsumowanieDnia(db, "2026-08-20").cele?.tryb).toBe("redukcja");
+  });
+
+  it("tryb podany jawnie wygrywa z odziedziczonym", () => {
+    ustawCele(db, { ...CELE, tryb: "redukcja", obowiazuje_od: "2026-08-01" });
+
+    const nowe = ustawCele(db, { ...CELE, tryb: "masa", obowiazuje_od: "2026-08-10" });
+
+    expect(nowe.tryb).toBe("masa");
+  });
+
+  it("dziedziczy stan z DNIA WEJŚCIA W ŻYCIE, a nie z najnowszych celów", () => {
+    // Cele dopisane wstecz mają odziedziczyć tryb, który wtedy obowiązywał —
+    // inaczej poprawka sierpniowego wpisu przenosiłaby na niego dzisiejszy kierunek.
+    ustawCele(db, { ...CELE, tryb: "masa", obowiazuje_od: "2026-08-01" });
+    ustawCele(db, { ...CELE, tryb: "redukcja", obowiazuje_od: "2026-09-01" });
+
+    const wstecz = ustawCele(db, { ...CELE, kcal: 2600, obowiazuje_od: "2026-08-10" });
+
+    expect(wstecz.tryb).toBe("masa");
+  });
+
+  it("zmienTryb zapisuje nowy wiersz z niezmienionym makro", () => {
+    ustawCele(db, { ...CELE, opis: "start", obowiazuje_od: "2026-08-01" });
+
+    const po = zmienTryb(db, "masa");
+
+    expect(po.tryb).toBe("masa");
+    expect(po.kcal).toBe(CELE.kcal);
+    expect(po.bialko_g).toBe(CELE.bialko_g);
+    expect(po.wegle_g).toBe(CELE.wegle_g);
+    expect(po.tluszcz_g).toBe(CELE.tluszcz_g);
+    expect(po.opis).toBe("start");
+    // Nowy wiersz, nie UPDATE — historia celów zostaje nietknięta.
+    expect(po.id).toBeGreaterThan(1);
+    expect(podsumowanieDnia(db, "2026-08-01").cele?.tryb).toBe("utrzymanie");
+  });
+
+  it("zmienTryb na ten sam tryb nie mnoży wierszy", () => {
+    const przed = ustawCele(db, { ...CELE, tryb: "masa", obowiazuje_od: "2026-08-01" });
+
+    expect(zmienTryb(db, "masa").id).toBe(przed.id);
+  });
+
+  it("zmienTryb bez ustawionych celów odmawia z czytelnym powodem", () => {
+    expect(() => zmienTryb(db, "masa")).toThrowError(/cel/i);
   });
 });
 

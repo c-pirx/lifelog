@@ -18,7 +18,7 @@ import { trendWagi, zapiszWage } from "../domain/metrics.js";
 import { historiaNotatek, zapiszNotatke } from "../domain/notatki.js";
 import { dopiszKomentarz, raport, zapewnijRaporty } from "../domain/raporty.js";
 import type { PostepCwiczenia } from "../domain/typy.js";
-import { KATEGORIE_NOTATEK, PEWNOSCI, PORY, TYPY_CWICZEN } from "../domain/typy.js";
+import { KATEGORIE_NOTATEK, PEWNOSCI, PORY, TRYBY_CELU, TYPY_CWICZEN } from "../domain/typy.js";
 import {
   dodajDzienPlanu,
   historiaCwiczenia,
@@ -266,7 +266,10 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
       title: "Ustaw cele dzienne",
       description:
         "Ustawia dzienne cele kaloryczne i makroskładnikowe. Cele obowiązują od podanego dnia " +
-        "w przód — wcześniejsze podsumowania zachowują stare wartości, więc historia nie jest fałszowana.",
+        "w przód — wcześniejsze podsumowania zachowują stare wartości, więc historia nie jest fałszowana. " +
+        "Parametr `tryb` podawaj tylko wtedy, gdy użytkownik mówi o zmianie kierunku " +
+        "(„przechodzę na redukcję”, „buduję masę”); pominięty dziedziczy po poprzednich celach, " +
+        "więc zwykła korekta kalorii go nie zeruje.",
       inputSchema: {
         kcal: z.number(),
         bialko_g: z.number(),
@@ -274,14 +277,21 @@ export function zarejestrujNarzedzia(server: McpServer, db: Baza, strefa = STREF
         tluszcz_g: z.number(),
         obowiazuje_od: z.string().optional().describe("YYYY-MM-DD. Pomiń, aby obowiązywały od dzisiaj."),
         opis: z.string().optional().describe("Np. „redukcja 0,5 kg/tydzień”"),
+        tryb: z
+          .enum(TRYBY_CELU as unknown as [string, ...string[]])
+          .optional()
+          .describe(
+            "Kierunek: redukcja / utrzymanie / masa. Decyduje wyłącznie o tym, w którą stronę " +
+              "odzywa się wieczorne powiadomienie o kaloriach — ocena tygodnia go nie czyta.",
+          ),
       },
     },
     async (args) =>
       zBezpiecznikiem(() => {
-        const cele = ustawCele(db, args, { strefa });
+        const cele = ustawCele(db, { ...args, tryb: args.tryb as never }, { strefa });
         return (
           `Cele od ${cele.obowiazuje_od}: ${cele.kcal} kcal, ` +
-          `B ${cele.bialko_g} g, W ${cele.wegle_g} g, T ${cele.tluszcz_g} g.`
+          `B ${cele.bialko_g} g, W ${cele.wegle_g} g, T ${cele.tluszcz_g} g (${cele.tryb}).`
         );
       }),
   );

@@ -1,0 +1,22 @@
+-- Tryb celu: w którą stronę system ma się odzywać o kaloriach.
+--
+-- Powiadomienie „za mało zjedzone" jest ostrzeżeniem przy budowaniu masy
+-- i sukcesem przy redukcji, więc bez tej kolumny nie da się go napisać ani
+-- w jedną, ani w drugą stronę. Dotąd system zamiaru użytkownika nie znał i było
+-- to świadome — zniesienie jest wąskie: tryb czytają wyłącznie powiadomienia,
+-- ocena tygodnia i raporty dalej mierzą same trafienia w cel.
+--
+-- Kolumna siedzi w `cele`, a nie w planie treningowym ani na koncie, bo tryb
+-- zmienia się dokładnie wtedy, kiedy zmieniają się kalorie — to jedno zdarzenie.
+-- Tabela ma już `obowiazuje_od`, więc przejście z masy na redukcję nie fałszuje
+-- historii, tak samo jak nie fałszuje jej zmiana samego kcal.
+--
+-- Bez więzu CHECK: lista wartości żyje w `src/domain/typy.ts` (TRYBY_CELU),
+-- tak jak KATEGORIE_NOTATEK. CHECK na kolumnie unieruchomiłby ją do czasu
+-- przepisania tabeli — patrz migracja 0005.
+--
+-- ADD COLUMN ze stałą domyślną nie przepisuje tabeli i jest zgodne wstecz:
+-- poprzednia wersja kodu działa dalej, bo `repo.wstawCele` i `repo.celeNaDzien`
+-- wymieniają kolumny jawnie, bez SELECT *.
+
+ALTER TABLE cele ADD COLUMN tryb TEXT NOT NULL DEFAULT 'utrzymanie';
